@@ -1,0 +1,362 @@
+// ==UserScript==
+// @name         Neopets - User Vibe Rater (Pill & Label Edition)
+// @namespace    http://tampermonkey.net/
+// @version      4.1
+// @description  Rate users with custom colors and text labels via a clickable pill interface.
+// @author       Ryan
+// @match        https://www.neopets.com/*
+// @match        http://www.neopets.com/*
+// @grant        GM_setValue
+// @grant        GM_getValue
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // 4.1 changelog:
+    //  - Debounced the MutationObserver scan (was firing a full-page
+    //    querySelectorAll on every single DOM mutation, unthrottled).
+    //  - Links that don't qualify for a pill (avatar-only links, text that
+    //    doesn't match the username, etc.) are now marked processed too, so
+    //    they don't get endlessly re-checked on every future mutation.
+    //  - Popup menu position now clamps to the viewport instead of
+    //    potentially rendering off-screen on narrow/mobile widths.
+    //  - Vibe lookups now use a data-username attribute selector instead of
+    //    a dynamically-built class name, so usernames with characters that
+    //    aren't valid in a CSS class selector can't break anything.
+    //  - Exposes window.VibeRater = { getVibe, onChange } so other
+    //    userscripts (e.g. a Neomail add-on) can read vibe data. Tampermonkey
+    //    sandboxes GM_getValue/GM_setValue per-script, so this is the only
+    //    way another script can see this data.
+
+    // Curated default palette for quick selecting
+    const PALETTE = [
+        '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e',
+        '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#64748b'
+    ];
+
+    let userVibes = GM_getValue('userVibes', {});
+    let changeListeners = [];
+
+    function debounce(fn, wait) {
+        let timer = null;
+        return function debounced(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), wait);
+        };
+    }
+
+    function extractUsername(href) {
+        try {
+            const url = new URL(href, window.location.origin);
+            let user = url.searchParams.get('user');
+            if (!user) {
+                const match = href.match(/userlookup\.phtml\?user=([^&]+)/i);
+                user = match ? match[1] : null;
+            }
+            return user ? user.toLowerCase().trim() : null;
+        } catch(e) {
+            return null;
+        }
+    }
+
+    // High-contrast text color calculation for the pills
+    function getContrastYIQ(hexcolor){
+        hexcolor = hexcolor.replace("#", "");
+        if (hexcolor.length === 3) hexcolor = hexcolor.split('').map(x => x + x).join('');
+        const r = parseInt(hexcolor.substr(0,2),16);
+        const g = parseInt(hexcolor.substr(2,2),16);
+        const b = parseInt(hexcolor.substr(4,2),16);
+        const yiq = ((r*299)+(g*587)+(b*114))/1000;
+        return (yiq >= 128) ? '#000000' : '#ffffff';
+    }
+
+    function updatePillStyle(pill, vibeData) {
+        if (!vibeData || !vibeData.color) {
+            pill.style.backgroundColor = '#f3f4f6';
+            pill.style.color = '#9ca3af';
+            pill.style.border = '1px solid #d1d5db';
+            pill.textContent = 'VIBE';
+        } else {
+            pill.style.backgroundColor = vibeData.color;
+            pill.style.color = getContrastYIQ(vibeData.color);
+            pill.style.border = `1px solid ${vibeData.color}`;
+            pill.textContent = vibeData.label ? vibeData.label.toUpperCase() : 'VIBE';
+        }
+    }
+
+    function applyVibePill(link, username) {
+        if (link.dataset.vibeProcessed === "true") return;
+        link.dataset.vibeProcessed = "true";
+
+        const currentVibe = userVibes[username];
+
+        const pill = document.createElement('span');
+        pill.className = 'vibe-pill';
+        pill.dataset.username = username;
+
+        Object.assign(pill.style, {
+            display: 'inline-block',
+            padding: '3px 8px',
+            borderRadius: '12px',
+            marginLeft: '6px',
+            fontSize: '10px',
+            fontWeight: 'bold',
+            letterSpacing: '0.5px',
+            cursor: 'pointer',
+            verticalAlign: 'middle',
+            maxWidth: '100px',
+            minHeight: '18px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            userSelect: 'none',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            transition: 'all 0.1s ease'
+        });
+
+        updatePillStyle(pill, currentVibe);
+
+        const triggerMenu = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = pill.getBoundingClientRect();
+            showVibeMenu(rect.left + window.scrollX, rect.bottom + window.scrollY, username, currentVibe);
+        };
+
+        pill.addEventListener('click', triggerMenu);
+        pill.addEventListener('touchstart', triggerMenu, {passive: false});
+
+        pill.addEventListener('mouseover', () => pill.style.filter = 'brightness(0.95)');
+        pill.addEventListener('mouseout', () => pill.style.filter = 'none');
+
+        link.parentNode.insertBefore(pill, link.nextSibling);
+    }
+
+    function showVibeMenu(x, y, username, currentVibe) {
+        const existingMenu = document.getElementById('vibe-popup-menu');
+        if (existingMenu) existingMenu.remove();
+
+        let selectedColor = currentVibe ? currentVibe.color : PALETTE[0];
+
+        const menu = document.createElement('div');
+        menu.id = 'vibe-popup-menu';
+        const MENU_WIDTH = 220;
+        const clampedLeft = Math.min(
+            Math.max(10, x - 100),
+            window.scrollX + document.documentElement.clientWidth - MENU_WIDTH - 10
+        );
+        Object.assign(menu.style, {
+            position: 'absolute',
+            zIndex: '999999',
+            backgroundColor: '#ffffff',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            padding: '16px',
+            width: `${MENU_WIDTH}px`,
+            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)',
+            fontFamily: 'sans-serif',
+            fontSize: '13px',
+            color: '#374151',
+            top: `${y + 8}px`,
+            left: `${clampedLeft}px`
+        });
+
+        // Header
+        const header = document.createElement('div');
+        header.textContent = `Vibe: ${username}`;
+        header.style.fontWeight = 'bold';
+        header.style.marginBottom = '12px';
+        menu.appendChild(header);
+
+        // Label Input
+        const inputWrap = document.createElement('div');
+        inputWrap.style.marginBottom = '12px';
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.placeholder = 'e.g., Trusted Trader';
+        labelInput.value = currentVibe && currentVibe.label ? currentVibe.label : '';
+        Object.assign(labelInput.style, {
+            width: '100%',
+            padding: '6px 8px',
+            boxSizing: 'border-box',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            fontSize: '12px'
+        });
+        inputWrap.appendChild(labelInput);
+        menu.appendChild(inputWrap);
+
+        // Palette Grid
+        const grid = document.createElement('div');
+        grid.style.display = 'flex';
+        grid.style.flexWrap = 'wrap';
+        grid.style.gap = '6px';
+        grid.style.marginBottom = '12px';
+
+        // Custom Color Input Element
+        const customColorInput = document.createElement('input');
+        customColorInput.type = 'color';
+        customColorInput.value = selectedColor;
+        Object.assign(customColorInput.style, {
+            width: '24px',
+            height: '24px',
+            padding: '0',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            cursor: 'pointer'
+        });
+
+        const colorOptions = [];
+
+        // Build predefined colors
+        PALETTE.forEach(hex => {
+            const option = document.createElement('div');
+            Object.assign(option.style, {
+                width: '24px',
+                height: '24px',
+                borderRadius: '4px',
+                backgroundColor: hex,
+                cursor: 'pointer',
+                border: selectedColor === hex ? '2px solid #111827' : '1px solid transparent',
+                boxSizing: 'border-box'
+            });
+
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectedColor = hex;
+                customColorInput.value = hex; // Sync custom input
+                colorOptions.forEach(opt => opt.style.border = '1px solid transparent');
+                option.style.border = '2px solid #111827';
+            });
+            colorOptions.push(option);
+            grid.appendChild(option);
+        });
+
+        // Handle custom color changes
+        customColorInput.addEventListener('input', (e) => {
+            selectedColor = e.target.value;
+            colorOptions.forEach(opt => opt.style.border = '1px solid transparent');
+        });
+        grid.appendChild(customColorInput);
+
+        menu.appendChild(grid);
+
+        // Action Buttons
+        const btnRow = document.createElement('div');
+        btnRow.style.display = 'flex';
+        btnRow.style.justifyContent = 'space-between';
+
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = 'Clear';
+        Object.assign(clearBtn.style, {
+            padding: '4px 10px',
+            backgroundColor: '#f3f4f6',
+            border: '1px solid #d1d5db',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            color: '#ef4444'
+        });
+        clearBtn.addEventListener('click', () => {
+            updateUserVibe(username, null);
+            menu.remove();
+        });
+
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save';
+        Object.assign(saveBtn.style, {
+            padding: '4px 14px',
+            backgroundColor: '#3b82f6',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            color: '#ffffff',
+            fontWeight: 'bold'
+        });
+        saveBtn.addEventListener('click', () => {
+            updateUserVibe(username, {
+                color: selectedColor,
+                label: labelInput.value.trim()
+            });
+            menu.remove();
+        });
+
+        btnRow.appendChild(clearBtn);
+        btnRow.appendChild(saveBtn);
+        menu.appendChild(btnRow);
+
+        document.body.appendChild(menu);
+
+        // Prevent closing when interacting with the menu itself
+        menu.addEventListener('click', e => e.stopPropagation());
+
+        setTimeout(() => {
+            const dismiss = (e) => {
+                if (!menu.contains(e.target)) {
+                    menu.remove();
+                    document.removeEventListener('click', dismiss);
+                }
+            };
+            document.addEventListener('click', dismiss);
+        }, 50);
+    }
+
+    function updateUserVibe(username, vibeData) {
+        if (!vibeData) {
+            delete userVibes[username];
+        } else {
+            userVibes[username] = vibeData;
+        }
+
+        GM_setValue('userVibes', userVibes);
+
+        document.querySelectorAll(`.vibe-pill[data-username="${CSS.escape(username)}"]`).forEach(pill => {
+            updatePillStyle(pill, vibeData);
+        });
+
+        changeListeners.forEach(cb => {
+            try { cb(username, vibeData); } catch (e) { /* isolate a bad listener from breaking others */ }
+        });
+    }
+
+    function scanForUserLinks() {
+        const links = document.querySelectorAll('a[href*="userlookup.phtml"]:not([data-vibe-processed="true"])');
+        links.forEach(link => {
+            const username = extractUsername(link.href);
+            const linkText = link.textContent.trim().toLowerCase();
+
+            // Mark EVERY link we've looked at as processed, even ones that
+            // don't qualify for a pill (avatar-only links, mismatched text,
+            // etc.) — otherwise the observer re-checks these same losing
+            // candidates on every future DOM mutation forever.
+            link.dataset.vibeProcessed = "true";
+
+            if (username && linkText.includes(username) && link.querySelector('img') === null) {
+                applyVibePill(link, username);
+            }
+        });
+    }
+
+    const debouncedScan = debounce(scanForUserLinks, 150);
+
+    scanForUserLinks();
+    const observer = new MutationObserver(debouncedScan);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Public API for other userscripts (e.g. a Neomail companion) to read
+    // vibe data. GM_getValue/GM_setValue are sandboxed per-script in
+    // Tampermonkey, so this window global is the only way another script
+    // can see this data.
+    window.VibeRater = {
+        version: '4.1',
+        getVibe(username) {
+            if (!username) return null;
+            return userVibes[username.toLowerCase().trim()] || null;
+        },
+        onChange(callback) {
+            changeListeners.push(callback);
+            return () => { changeListeners = changeListeners.filter(cb => cb !== callback); };
+        }
+    };
+
+})();
