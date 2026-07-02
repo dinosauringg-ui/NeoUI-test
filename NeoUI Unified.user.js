@@ -6,7 +6,7 @@
 // @author       ext1nct
 // @match        *://*.neopets.com/*
 // @grant        none
-// @run-at       document-idle
+// @run-at       document-end
 // @license      MIT
 // ==/UserScript==
 
