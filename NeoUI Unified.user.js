@@ -1072,23 +1072,33 @@
     // Centralized here so every page's topbar+drawer are populated from one
     // implementation instead of each script keeping its own copy in sync.
         function scrapeLegacyProfile() {
-        const userLink = document.querySelector('.user a[href^="/userlookup.phtml?user="]');
-        const petImg = document.querySelector('.activePet img');
-        const petName = document.querySelector('.sidebarHeader a b');
-        const npEl = document.getElementById('npanchor');
-        const ncEl = document.getElementById('ncanchor');
-        
-        // Detect the event icon cell before nuking the DOM
-        const hasNotification = document.querySelector('.eventIcon.sf') !== null;
+        try {
+            const userLink = document.querySelector('.user a[href^="/userlookup.phtml?user="]');
+            const petImg = document.querySelector('.activePet img');
+            const petName = document.querySelector('.sidebarHeader a b');
+            const npEl = document.getElementById('npanchor');
+            const ncEl = document.getElementById('ncanchor');
 
-        return {
-            username: userLink ? userLink.textContent.trim() : 'Neopian',
-            petname: petName ? petName.textContent.trim() : 'Unknown Pet',
-            petImage: petImg ? petImg.src : 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
-            np: npEl ? npEl.textContent.trim() : '0',
-            nc: ncEl ? ncEl.textContent.trim() : '0',
-            hasNotification: hasNotification
-        };
+            // Safely detect the event icon cell
+            const notifIcon = document.querySelector('.eventIcon.sf');
+            const hasNotification = (notifIcon !== null);
+
+            return {
+                username: (userLink && userLink.textContent) ? userLink.textContent.trim() : 'Neopian',
+                petname: (petName && petName.textContent) ? petName.textContent.trim() : 'Unknown Pet',
+                petImage: (petImg && petImg.src) ? petImg.src : 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
+                np: (npEl && npEl.textContent) ? npEl.textContent.trim() : '0',
+                nc: (ncEl && ncEl.textContent) ? ncEl.textContent.trim() : '0',
+                hasNotification: hasNotification
+            };
+        } catch (err) {
+            console.error("NeoUI: Failed to scrape profile, falling back to defaults.", err);
+            return {
+                username: 'Neopian', petname: 'Unknown Pet',
+                petImage: 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
+                np: '0', nc: '0', hasNotification: false
+            };
+        }
     }
 
 
@@ -1097,9 +1107,43 @@
     // this same function so the header looks and behaves identically
     // everywhere, instead of each script hand-rolling its own version.
     // Returns the wrapper element (idempotent - safe to call more than once).
+        function openNotificationDrawer() {
+        if (document.getElementById('nui-notif-drawer')) return; // Already open
+
+        const backdrop = document.createElement('div');
+        backdrop.id = 'nui-notif-drawer';
+        backdrop.className = 'nui-drawer-backdrop nui-reset';
+        backdrop.style.zIndex = '100000';
+
+                // Slide in from the right with a corrected left-facing shadow
+        backdrop.innerHTML = `
+            <div class="nui-drawer" style="right: 0; left: auto; transform: translateX(100%); transition: transform var(--nui-dur-slow) var(--nui-ease); box-shadow: -8px 0 24px var(--nui-shadow); border-left: 1px solid var(--nui-border);">
+                <iframe src="/allevents.phtml" style="width: 100%; height: 100%; border: none; background: var(--nui-surface);"></iframe>
+            </div>
+        `;
+
+        document.body.appendChild(backdrop);
+
+        // Trigger animation
+        requestAnimationFrame(() => {
+            backdrop.classList.add('is-open');
+            backdrop.querySelector('.nui-drawer').style.transform = 'translateX(0)';
+        });
+
+        // Close on backdrop click
+        backdrop.addEventListener('click', (e) => {
+            if (e.target === backdrop) {
+                backdrop.classList.remove('is-open');
+                backdrop.querySelector('.nui-drawer').style.transform = 'translateX(100%)';
+                setTimeout(() => backdrop.remove(), 300);
+            }
+        });
+    }
+
     function buildTopbar(opts) {
         opts = opts || {};
         const existing = document.getElementById('nui-page-topbar');
+
         if (existing) {
             if (opts.stats) {
                 const statsEl = existing.querySelector('#nui-topbar-stats');
@@ -1107,13 +1151,21 @@
             }
             return existing;
         }
+
         const stats = opts.stats || { np: '0', nc: '0' };
         const wrapper = document.createElement('div');
         wrapper.id = 'nui-page-topbar';
         wrapper.className = 'nui-header-wrapper nui-reset';
+
+        const bellHtml = opts.hasNotification ?
+            '<button type="button" class="nui-reset" id="nui-notif-btn" style="width: 38px; height: 38px; position: relative; display: flex; align-items: center; justify-content: center; background: var(--nui-surface-2); border: 1px solid var(--nui-border); border-radius: 50%; color: var(--nui-text); cursor: pointer; flex-shrink: 0; transition: transform var(--nui-dur-fast) var(--nui-ease-snap);">' +
+                '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>' +
+                '<div style="position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: var(--nui-danger); border: 2px solid var(--nui-bg); border-radius: 50%;"></div>' +
+            '</button>' : '';
+
         wrapper.innerHTML =
             '<div class="nui-topbar" style="position: relative;">' +
-                '<div style="display:flex; align-items:center; gap:10px; z-index:2;" id="nui-topbar-neogo-slot"></div>' +
+                '<div style="display:flex; align-items:center; gap:10px; z-index:2;" id="nui-topbar-left-slot"></div>' +
                 '<div class="nui-topbar-title" style="position: absolute; left: 50%; transform: translateX(-50%); z-index: 1;">' +
                     '<a href="/home/index.phtml" style="' +
                         'display: block;' +
@@ -1126,10 +1178,25 @@
                 '</div>' +
                 '<div class="nui-topbar-stats" id="nui-topbar-stats" style="z-index:2;">NP: <b>' + stats.np + '</b> &nbsp; NC: <b>' + stats.nc + '</b></div>' +
             '</div>';
+
         document.body.insertBefore(wrapper, document.body.firstChild);
-        wrapper.querySelector('#nui-topbar-neogo-slot').appendChild(buildNeoGoButton());
+
+        const leftSlot = wrapper.querySelector('#nui-topbar-left-slot');
+        leftSlot.appendChild(buildNeoGoButton());
+
+        // Append the bell if notifications exist, and bind the iframe drawer
+        if (opts.hasNotification) {
+            leftSlot.insertAdjacentHTML('beforeend', bellHtml);
+
+            const bellBtn = wrapper.querySelector('#nui-notif-btn');
+            bellBtn.addEventListener('mousedown', () => bellBtn.style.transform = 'scale(0.92)');
+            bellBtn.addEventListener('mouseup', () => bellBtn.style.transform = 'scale(1)');
+            bellBtn.addEventListener('click', openNotificationDrawer);
+        }
+
         return wrapper;
     }
+
 
     // ---- Settings panel sections (extensible) ----
     // Each section is {id, title, render(container)}. Theme picker ships
@@ -1346,6 +1413,7 @@
         buildTopbar: buildTopbar,
         registerSettingsSection: registerSettingsSection,
         get isInitialized() { return initialized; },
+        openNotificationDrawer: openNotificationDrawer,
     };
 
 })(window);
@@ -2250,7 +2318,7 @@
         NeoUI.setProfileInfo(profile);
 
         // 5. Shared topbar (same markup/behavior on every NeoUI page)
-        NeoUI.buildTopbar({ stats: activeStats });
+        NeoUI.buildTopbar({ stats: activeStats, hasNotification: profile.hasNotification });
 
         // 6. Build Main App Container
         const pageWrapper = document.createElement('div');
@@ -2498,7 +2566,7 @@
         // 5. Initialize NeoUI 
         NeoUI.init();
         NeoUI.setProfileInfo(profile);
-        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc } });
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
 
         // 6. Build the fresh Mobile UI
         const pageWrapper = document.createElement('div');
@@ -2699,6 +2767,7 @@
         document.addEventListener('DOMContentLoaded', () => { try { run(); } catch (err) { showFatalError(err); } });
     }
 })();
+
 // ==============================================================================
 // MODULE 5: ALLEVENTS (COMPACT IFRAME UI)
 // ==============================================================================
@@ -2715,9 +2784,8 @@
         // 1. Scrape the legacy events table
         const events = [];
         const eventForm = document.querySelector('form[name="eventform"]');
-        
+
         if (eventForm) {
-            // Skip the header row (index 0) and the control row (last index)
             const rows = Array.from(eventForm.querySelectorAll('tr'));
             for (let i = 1; i < rows.length - 1; i++) {
                 const cells = rows[i].querySelectorAll('td');
@@ -2734,95 +2802,41 @@
             }
         }
 
-        // 2. Nuke the DOM
+        // 2. Nuke the DOM & Reset
         document.body.innerHTML = '';
         document.body.className = 'nui-reset';
-        
-        // Make the background transparent or match the drawer, remove default padding
         document.documentElement.style.background = 'var(--nui-surface)';
         document.body.style.background = 'var(--nui-surface)';
         document.body.style.padding = '0';
         document.body.style.margin = '0';
-        document.body.style.overflowX = 'hidden';
+        document.body.style.overflow = 'hidden'; // Prevent double scrollbars
 
-        // 3. Initialize NeoUI core tokens (skip topbar injection for the iframe)
-        NeoUI.init({ showNeoGoButton: false }); 
+        // 3. Initialize NeoUI
+        NeoUI.init({ showNeoGoButton: false });
 
-        // 4. Build the Compact UI
+        // 4. Build the App Wrapper
         const wrapper = document.createElement('div');
-        wrapper.style.cssText = 'padding: var(--nui-space-3); display: flex; flex-direction: column; gap: var(--nui-space-3);';
+        wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100vh; width: 100%;';
         document.body.appendChild(wrapper);
 
-        // Header & Actions
+        // --- HEADER ---
         const header = document.createElement('div');
-        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--nui-border); padding-bottom: var(--nui-space-2);';
-        
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: var(--nui-space-4); background: linear-gradient(135deg, var(--nui-accent-soft), var(--nui-surface-2)); border-bottom: 2px solid var(--nui-border); flex-shrink: 0;';
+
         const title = document.createElement('div');
         title.className = 'nui-text';
-        title.style.cssText = 'font-weight: 800; font-size: 18px; font-family: var(--nui-font-display);';
+        title.style.cssText = 'font-weight: 800; font-size: 20px; font-family: var(--nui-font-display); line-height: 1.1;';
         title.textContent = `Notifications (${events.length})`;
-        
-        const clearAllBtn = document.createElement('button');
-        clearAllBtn.className = 'nui-btn nui-btn-sm';
-        clearAllBtn.style.cssText = 'background: var(--nui-danger-soft); color: var(--nui-danger); border: none; font-size: 12px; padding: 6px 10px;';
-        clearAllBtn.textContent = 'Clear All';
-        
         header.appendChild(title);
-        if (events.length > 0) header.appendChild(clearAllBtn);
-        wrapper.appendChild(header);
 
-        // Event List Form
         if (events.length > 0) {
-            const form = document.createElement('form');
-            form.action = 'process_allevents.phtml';
-            form.method = 'POST';
-            form.style.cssText = 'display: flex; flex-direction: column; gap: var(--nui-space-2);';
+            const clearAllBtn = document.createElement('button');
+            clearAllBtn.className = 'nui-btn nui-btn-sm';
+            clearAllBtn.style.cssText = 'background: var(--nui-danger-soft); color: var(--nui-danger); border: 1px solid var(--nui-danger-soft); font-size: 12px; padding: 6px 12px;';
+            clearAllBtn.textContent = 'Clear All';
 
-            events.forEach(ev => {
-                const item = document.createElement('div');
-                item.className = 'nui-surface-2';
-                item.style.cssText = 'border-radius: var(--nui-radius-md); padding: var(--nui-space-3); display: flex; gap: var(--nui-space-3); align-items: flex-start; position: relative;';
-
-                item.innerHTML = `
-                    <a href="${ev.actionUrl}" target="_parent" style="flex-shrink: 0; display: block; border-radius: var(--nui-radius-sm); overflow: hidden; background: var(--nui-surface); padding: 4px; border: 1px solid var(--nui-border);">
-                        <img src="${ev.imgSrc}" style="width: 36px; height: 36px; display: block; object-fit: cover;">
-                    </a>
-                    <div style="flex: 1; min-width: 0; font-size: 13px; line-height: 1.4;">
-                        <div style="font-weight: 800; color: var(--nui-text); margin-bottom: 2px;">${ev.type}</div>
-                        <div class="nui-text-muted" style="word-wrap: break-word;">${ev.descHtml}</div>
-                        <div style="font-size: 11px; color: var(--nui-text-faint); margin-top: 4px; font-weight: 600;">${ev.time}</div>
-                    </div>
-                    <label style="flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--nui-surface); border: 1px solid var(--nui-border);">
-                        <input type="checkbox" name="${ev.delName}" style="margin: 0; width: 16px; height: 16px; accent-color: var(--nui-danger);">
-                    </label>
-                `;
-                
-                // Clicking the description also clicks the link
-                const textWrap = item.querySelector('div.nui-text-muted');
-                textWrap.querySelectorAll('a').forEach(a => {
-                    a.style.color = 'var(--nui-accent)';
-                    a.style.fontWeight = 'bold';
-                    a.style.textDecoration = 'none';
-                    a.setAttribute('target', '_parent'); // Break out of iframe
-                });
-
-                form.appendChild(item);
-            });
-
-            // Delete Selected Button
-            const submitBtn = document.createElement('button');
-            submitBtn.type = 'submit';
-            submitBtn.className = 'nui-btn nui-btn-secondary nui-btn-block nui-btn-sm';
-            submitBtn.style.marginTop = 'var(--nui-space-2)';
-            submitBtn.textContent = 'Clear Selected';
-            form.appendChild(submitBtn);
-
-            wrapper.appendChild(form);
-
-            // Handle "Clear All" via the hidden POST form logic from Neopets
             clearAllBtn.addEventListener('click', () => {
-                const confirmed = window.confirm('Clear all notifications?');
-                if (confirmed) {
+                if (window.confirm('Clear all notifications?')) {
                     const wipeForm = document.createElement('form');
                     wipeForm.action = 'process_allevents.phtml';
                     wipeForm.method = 'POST';
@@ -2831,9 +2845,87 @@
                     wipeForm.submit();
                 }
             });
+            header.appendChild(clearAllBtn);
+        }
+        wrapper.appendChild(header);
+
+        // --- CONTENT AREA ---
+        if (events.length > 0) {
+            const form = document.createElement('form');
+            form.action = 'process_allevents.phtml';
+            form.method = 'POST';
+            form.style.cssText = 'display: flex; flex-direction: column; flex: 1; overflow: hidden;';
+
+            // Scrollable list container
+            const scrollArea = document.createElement('div');
+            scrollArea.style.cssText = 'flex: 1; overflow-y: auto; padding: var(--nui-space-3); display: flex; flex-direction: column; gap: var(--nui-space-2); -webkit-overflow-scrolling: touch;';
+
+            events.forEach((ev, idx) => {
+                // Using a <label> as the card makes the entire item clickable to check the box
+                const item = document.createElement('label');
+                item.className = 'nui-item nui-reset';
+                item.style.cssText = 'margin: 0; padding: var(--nui-space-3); display: flex; gap: var(--nui-space-3); align-items: flex-start; text-align: left; cursor: pointer; transition: transform 0.1s, border-color 0.2s;';
+
+                item.innerHTML = `
+                    <div style="width: 42px; height: 42px; border-radius: var(--nui-radius-sm); background: var(--nui-surface-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--nui-border);">
+                        <img src="${ev.imgSrc}" style="max-width: 32px; max-height: 32px; object-fit: contain;">
+                    </div>
+                    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
+                        <div style="font-weight: 800; font-size: 15px; color: var(--nui-text);">${ev.type}</div>
+                        <div class="nui-text-muted" style="font-size: 13.5px; line-height: 1.4; white-space: normal;">${ev.descHtml}</div>
+                        <div style="font-size: 11px; color: var(--nui-text-faint); font-weight: 700; margin-top: 2px;">${ev.time}</div>
+                    </div>
+                    <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-top: 8px;">
+                        <input type="checkbox" id="del-${idx}" name="${ev.delName}" style="width: 18px; height: 18px; accent-color: var(--nui-danger); cursor: pointer;">
+                    </div>
+                `;
+
+                // Ensure links inside the description open in the main window, not the iframe
+                item.querySelectorAll('a').forEach(a => {
+                    a.style.color = 'var(--nui-accent)';
+                    a.style.fontWeight = 'bold';
+                    a.style.textDecoration = 'none';
+                    a.setAttribute('target', '_parent');
+                    // Stop link clicks from toggling the checkbox
+                    a.addEventListener('click', (e) => e.stopPropagation());
+                });
+
+                // Visual feedback when checking the box
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                checkbox.addEventListener('change', () => {
+                    if (checkbox.checked) {
+                        item.style.borderColor = 'var(--nui-danger)';
+                        item.style.background = 'var(--nui-danger-soft)';
+                    } else {
+                        item.style.borderColor = 'var(--nui-border)';
+                        item.style.background = 'var(--nui-surface)';
+                    }
+                });
+
+                scrollArea.appendChild(item);
+            });
+            form.appendChild(scrollArea);
+
+            // Sticky Bottom Footer
+            const footer = document.createElement('div');
+            footer.style.cssText = 'padding: var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface); flex-shrink: 0; box-shadow: 0 -4px 12px var(--nui-shadow);';
+
+            const submitBtn = document.createElement('button');
+            submitBtn.type = 'submit';
+            submitBtn.className = 'nui-btn nui-btn-secondary nui-btn-block';
+            submitBtn.textContent = 'Clear Selected';
+            footer.appendChild(submitBtn);
+
+            form.appendChild(footer);
+            wrapper.appendChild(form);
 
         } else {
-            wrapper.innerHTML += `<div class="nui-empty" style="padding-top: var(--nui-space-5);"><span class="nui-empty-emoji">✨</span><br>All caught up!</div>`;
+            wrapper.innerHTML += `
+                <div class="nui-empty" style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding-bottom: 20vh;">
+                    <span class="nui-empty-emoji">✨</span>
+                    <span style="font-weight: 700; color: var(--nui-text-muted);">All caught up!</span>
+                </div>
+            `;
         }
     }
 
