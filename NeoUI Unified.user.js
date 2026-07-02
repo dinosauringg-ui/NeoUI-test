@@ -2424,6 +2424,15 @@
       html[data-neoui-theme] body { background: var(--nui-bg) !important; padding-top: calc(var(--nui-topbar-h) + var(--nui-space-4)) !important; }
       html[data-neoui-theme] table[width] { width: 100% !important; }
       html[data-neoui-theme] table td { background: transparent !important; }
+      /* #content (and the legacy table wrapping it) carry a white
+         background from Neopets' own stylesheet that "table td" above
+         doesn't reach, since #content is a div, not a cell - left alone
+         it shows as a big white panel sitting on top of the theme. */
+      html[data-neoui-theme] #content,
+      html[data-neoui-theme] #content > table,
+      html[data-neoui-theme] #main {
+        background: transparent !important;
+      }
 
       .ext1nct-page-title {
         font-family: var(--nui-font-display, inherit);
@@ -2791,6 +2800,8 @@
     const tables = document.querySelectorAll('table.itemTable');
     if (tables.length === 0) return null;
 
+    let firstWrapper = null;
+
     const toolbar = document.createElement('div');
     toolbar.className = 'ext1nct-toolbar';
 
@@ -2958,6 +2969,7 @@
       // cards as a sibling of the wrapper, never inside it, or hiding the
       // wrapper would hide our own cards too.
       const wrapper = table.closest('div[align="center"]') || table.parentElement;
+      if (!firstWrapper) firstWrapper = wrapper;
       wrapper.insertAdjacentElement('afterend', cardsWrap);
       wrapper.style.setProperty('display', 'none', 'important');
 
@@ -2984,7 +2996,7 @@
       }
     });
 
-    return { toolbar, firstTable: tables[0] };
+    return { toolbar, firstWrapper };
   }
 
   function runAutoAcceptInIframe() {
@@ -3152,8 +3164,8 @@
 
     if (!document.querySelector('.ext1nct-toolbar')) {
       const built = buildCards();
-      if (built && built.firstTable) {
-        built.firstTable.insertAdjacentElement('beforebegin', built.toolbar);
+      if (built && built.firstWrapper) {
+        built.firstWrapper.insertAdjacentElement('beforebegin', built.toolbar);
         injectPageTitle(pagerEl || built.toolbar);
       }
     }
