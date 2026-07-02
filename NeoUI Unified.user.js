@@ -1726,9 +1726,19 @@
             });
         }
 
-        function injectTopbar() {
+                function injectTopbar() {
+            // Check for notifications before building
+            const hasNotif = document.querySelector('.eventIcon.sf') !== null;
+
             const headerWrapper = document.createElement('div');
             headerWrapper.className = 'nui-header-wrapper nui-reset';
+
+            const bellHtml = hasNotif ?
+                '<button type="button" class="nui-reset" id="neomail-notif-btn" style="width: 38px; height: 38px; position: relative; display: flex; align-items: center; justify-content: center; background: var(--nui-surface-2); border: 1px solid var(--nui-border); border-radius: 50%; color: var(--nui-text); cursor: pointer; flex-shrink: 0; transition: transform var(--nui-dur-fast) var(--nui-ease-snap);">' +
+                    '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>' +
+                    '<div style="position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: var(--nui-danger); border: 2px solid var(--nui-bg); border-radius: 50%;"></div>' +
+                '</button>' : '';
+
             headerWrapper.innerHTML = `
                 <div class="nui-topbar" style="position: relative;">
                     <div style="display:flex; align-items:center; gap:10px; z-index:2;" id="neomail-neogo-slot"></div>
@@ -1760,7 +1770,28 @@
             `;
 
             document.body.insertBefore(headerWrapper, document.body.firstChild);
-            headerWrapper.querySelector('#neomail-neogo-slot').appendChild(NeoUI.neoGoButton());
+
+            // Inject the NeoGo Drawer button
+            const leftSlot = headerWrapper.querySelector('#neomail-neogo-slot');
+            leftSlot.appendChild(NeoUI.neoGoButton());
+
+            // Inject the Bell if needed
+            if (hasNotif) {
+                leftSlot.insertAdjacentHTML('beforeend', bellHtml);
+                const bellBtn = headerWrapper.querySelector('#neomail-notif-btn');
+
+                bellBtn.addEventListener('mousedown', () => bellBtn.style.transform = 'scale(0.92)');
+                bellBtn.addEventListener('mouseup', () => bellBtn.style.transform = 'scale(1)');
+                bellBtn.addEventListener('click', () => {
+                    if (NeoUI.openNotificationDrawer) {
+                        NeoUI.openNotificationDrawer();
+                    } else {
+                        // Fallback just in case the method wasn't exposed to the global object
+                        window.location.href = '/allevents.phtml';
+                    }
+                });
+            }
+
             const stats = getStats();
             headerWrapper.querySelector('#neomail-stats').innerHTML = `NP: <b>${stats.np}</b> &nbsp; NC: <b>${stats.nc}</b>`;
 
@@ -1777,6 +1808,7 @@
                 composeBtn.addEventListener('click', renderComposeView);
             }
         }
+
 
         let allThreads = [];
         const urlParams = new URLSearchParams(window.location.search);
@@ -2933,5 +2965,472 @@
         run();
     } else {
         document.addEventListener('DOMContentLoaded', run);
+    }
+})();
+// ==============================================================================
+// MODULE 6: THE COINCIDENCE (TRUE SPA + CUSTOM SSW MODAL)
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/space\/coincidence\.phtml/.test(location.pathname)) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Coincidence crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) { }
+    }
+
+    const NeoUI = window.NeoUI;
+
+    // --- Custom SSW Modal ---
+    function openCustomSSW(itemName) {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
+        backdrop.style.cssText = 'position: fixed; inset: 0; z-index: 100000; background: var(--nui-overlay); display: flex; align-items: center; justify-content: center; padding: var(--nui-space-4); transition: opacity var(--nui-dur-fast) var(--nui-ease);';
+
+        const modal = document.createElement('div');
+        modal.className = 'nui-surface';
+        modal.style.cssText = 'width: 100%; max-width: 450px; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95); opacity: 0; transition: all var(--nui-dur-fast) var(--nui-ease-snap);';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'padding: var(--nui-space-4); border-bottom: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: space-between; align-items: center;';
+        header.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 24px; height: 24px; background: var(--nui-accent-soft); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--nui-accent);"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg></div>
+                <div style="font-family: var(--nui-font-display); font-size: 18px; font-weight: 800; color: var(--nui-text);">Super Shop Wizard</div>
+            </div>
+            <button type="button" class="nui-reset" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--nui-text-muted); line-height: 1;">&times;</button>
+        `;
+
+        header.querySelector('button').addEventListener('click', closeModal);
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
+
+        function closeModal() {
+            modal.style.transform = 'scale(0.95)';
+            modal.style.opacity = '0';
+            backdrop.style.opacity = '0';
+            setTimeout(() => backdrop.remove(), 200);
+        }
+
+        const content = document.createElement('div');
+        content.style.cssText = 'padding: var(--nui-space-4); max-height: 55vh; overflow-y: auto; font-size: 14px; -webkit-overflow-scrolling: touch;';
+
+        const footer = document.createElement('div');
+        footer.style.cssText = 'padding: var(--nui-space-3) var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: flex-end;';
+
+        const resubmitBtn = document.createElement('button');
+        resubmitBtn.className = 'nui-btn nui-btn-primary nui-btn-sm';
+        resubmitBtn.textContent = 'Resubmit Search';
+        footer.appendChild(resubmitBtn);
+
+        modal.appendChild(header);
+        modal.appendChild(content);
+        modal.appendChild(footer);
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+
+        requestAnimationFrame(() => {
+            modal.style.transform = 'scale(1)';
+            modal.style.opacity = '1';
+        });
+
+        async function doSearch() {
+            resubmitBtn.disabled = true;
+            content.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: var(--nui-space-5) 0; color: var(--nui-text-muted);">
+                    <div style="width: 24px; height: 24px; border: 3px solid var(--nui-border); border-top-color: var(--nui-accent); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+                    <div style="font-weight: 600;">Searching for <b>${itemName}</b>...</div>
+                </div>
+            `;
+
+            try {
+                const params = new URLSearchParams({
+                    q: itemName, priceOnly: 0, context: 0, partial: 0,
+                    min_price: 0, max_price: 0, lang: 'en', json: 1, cb: Date.now()
+                });
+
+                const res = await fetch(`/shops/ssw/ssw_query.php?${params.toString()}`);
+                const data = await res.json();
+
+                if (data.data && data.data.error) {
+                    content.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: var(--nui-space-4); text-align: center;">
+                            <div style="font-size: 32px;">⚠️</div>
+                            <div style="color: var(--nui-danger); font-weight: 800;">${data.data.error}</div>
+                        </div>
+                    `;
+                } else if (data.html) {
+                    content.innerHTML = data.html;
+                    const table = content.querySelector('table');
+                    if (table) {
+                        table.style.width = '100%';
+                        table.style.borderCollapse = 'collapse';
+                        table.style.marginTop = 'var(--nui-space-2)';
+                        table.querySelectorAll('tr').forEach((row, idx) => {
+                            if (idx === 0) row.style.background = 'var(--nui-surface-2)';
+                            row.querySelectorAll('td, th').forEach(cell => {
+                                cell.style.padding = '10px var(--nui-space-2)';
+                                cell.style.borderBottom = '1px solid var(--nui-border)';
+                                cell.style.color = 'var(--nui-text)';
+                                cell.style.fontSize = '13.5px';
+                                cell.removeAttribute('bgcolor');
+                                cell.removeAttribute('class');
+                            });
+                        });
+                        table.querySelectorAll('a').forEach(a => {
+                            a.style.color = 'var(--nui-accent)';
+                            a.style.fontWeight = '800';
+                            a.style.textDecoration = 'none';
+                            a.setAttribute('target', '_blank');
+                        });
+                    }
+                } else {
+                    content.innerHTML = `<div style="text-align: center; color: var(--nui-text-muted); font-weight: 600; padding: var(--nui-space-4);">No results found.</div>`;
+                }
+            } catch (err) {
+                content.innerHTML = `<div style="color: var(--nui-danger); text-align: center; font-weight: 700; padding: var(--nui-space-4);">Connection failed. Are you Premium?</div>`;
+            }
+            resubmitBtn.disabled = false;
+        }
+
+        resubmitBtn.addEventListener('click', doSearch);
+        doSearch();
+    }
+
+    // --- Dynamic RE Catcher (For AJAX injected events) ---
+    function observeInjectedREs() {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === 1) {
+                        if (node.classList && (node.classList.contains('randomEvent') || node.classList.contains('re-container') || node.id === 'randomEvents')) {
+                            injectRECard(node.innerHTML);
+                            node.style.display = 'none';
+                        }
+                    }
+                });
+            });
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
+    function injectRECard(htmlContent) {
+        const container = document.getElementById('coincidence-app-wrapper');
+        if (!container) return;
+
+        let reCard = document.getElementById('nui-re-card');
+        if (!reCard) {
+            reCard = document.createElement('div');
+            reCard.id = 'nui-re-card';
+            reCard.className = 'nui-surface';
+            reCard.style.cssText = 'border-radius: var(--nui-radius-lg); border: 2px solid var(--nui-accent); padding: var(--nui-space-4); box-shadow: 0 4px 16px var(--nui-shadow); text-align: center; font-size: 15px; color: var(--nui-text); background: var(--nui-surface-2);';
+
+            // Insert it below the title
+            container.insertBefore(reCard, container.children[1]);
+        }
+
+        reCard.innerHTML = `
+            <div style="font-family: var(--nui-font-display); font-size: 22px; font-weight: 800; color: var(--nui-accent); margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <span style="font-size: 26px;">⚡</span> Event Result! <span style="font-size: 26px;">⚡</span>
+            </div>
+            <hr style="border: 0; border-bottom: 1px solid var(--nui-border); margin: 16px 0;">
+            ${htmlContent}
+        `;
+    }
+
+    // --- SPA State Manager ---
+    async function reloadSPA(actionUrl, options = {}) {
+        const wrapper = document.getElementById('coincidence-app-wrapper');
+        if (wrapper) wrapper.innerHTML = `<div class="nui-empty" style="padding-top: 50px;"><span class="nui-empty-emoji">🚀</span><br>Communicating with the ship...</div>`;
+
+        try {
+            let res;
+            if (actionUrl) {
+                // If we submit an action, KEEP this response. This holds the RE!
+                res = await fetch(actionUrl, options);
+            } else {
+                // Otherwise just fetch the page normally
+                res = await fetch('/space/coincidence.phtml');
+            }
+
+            const html = await res.text();
+            const newDoc = new DOMParser().parseFromString(html, 'text/html');
+            renderCoincidence(newDoc);
+        } catch (err) {
+            showFatalError(err);
+        }
+    }
+
+    function renderCoincidence(doc) {
+        const profile = NeoUI.scrapeLegacyProfile();
+
+        // 1. Scrape Quest Items
+        const items = [];
+        const questTable = doc.getElementById('questItems');
+        if (questTable) {
+            questTable.querySelectorAll('td').forEach(td => {
+                const img = td.querySelector('img');
+                const b = td.querySelector('b');
+                if (!img || !b) return;
+                let itemName = '';
+                td.childNodes.forEach(node => {
+                    if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim().length > 0) itemName = node.nodeValue.trim();
+                });
+                items.push({ name: itemName, qty: b.textContent.trim(), imgSrc: img.src });
+            });
+        }
+
+        // 2. Scrape Story/Status Text
+        const messages = [];
+        doc.querySelectorAll('td.content > p').forEach(p => {
+            const text = p.textContent.trim();
+            if (text && !text.includes('RESEARCH COMPLETE IN:')) messages.push(p.innerHTML);
+        });
+
+        // 3. Static RE Scrape (From the POST response DOM)
+        const staticREs = [];
+        doc.querySelectorAll('.randomEvent, #randomEvents').forEach(re => {
+            if (re.textContent.trim().length > 0) {
+                staticREs.push(re.innerHTML);
+            }
+        });
+
+        // Catch Coincidence-specific centered results if they aren't marked as REs
+        doc.querySelectorAll('td.content > div[align="center"]').forEach(div => {
+            const html = div.innerHTML;
+            if (!html.includes('RESEARCH COMPLETE IN') && !html.includes('id="countdownClock') && div.textContent.trim().length > 0) {
+                staticREs.push(html);
+            }
+        });
+
+        // 4. Scrape Timer (If active)
+        let cooldown = null;
+        doc.querySelectorAll('script').forEach(script => {
+            const match = script.textContent.match(/hours:\s*(\d+),\s*minutes:\s*(\d+),\s*seconds:\s*(\d+)/);
+            if (match) {
+                cooldown = { h: parseInt(match[1], 10), m: parseInt(match[2], 10), s: parseInt(match[3], 10) };
+            }
+        });
+
+        // 5. Scrape and Translate Legacy Buttons
+        const actionButtons = [];
+        doc.querySelectorAll('div[class*="shipButton"]').forEach(btn => {
+            const className = Array.from(btn.classList).find(c => c.startsWith('shipButton') && c !== 'shipButton');
+            if (!className) return;
+
+            let btnConfig = null;
+            if (className === 'shipButtonCancelQuest' || className === 'shipButtonNoCancel') {
+                btnConfig = { text: 'Cancel Quest', class: 'nui-btn-danger', action: 'cancel' };
+            } else if (className === 'shipButtonReturn' || className === 'shipButtonLater' || className === 'shipButtonYesLater' || className === 'shipButtonNoCreep') {
+                btnConfig = { text: 'Leave Ship', class: 'nui-btn-secondary', action: 'link', href: '/explore.phtml' };
+            } else if (className === 'shipButtonHelp' || className === 'shipButtonYesAsk' || className === 'shipButtonYesBoldly' || className === 'shipButtonSure') {
+                btnConfig = { text: 'Accept / Fire Machine', class: 'nui-btn-primary', action: 'submit_form' };
+            } else if (className === 'shipButtonDoIt') {
+                btnConfig = { text: 'Complete Quest', class: 'nui-btn-primary', action: 'submit_form' };
+            }
+
+            if (btnConfig) {
+                btnConfig.legacyForm = btn.closest('form') || doc.getElementById('shipCombine') || doc.getElementById('shipQuest');
+                actionButtons.push(btnConfig);
+            }
+        });
+
+        const uniqueActions = [];
+        const seenTexts = new Set();
+        actionButtons.forEach(btn => {
+            if (!seenTexts.has(btn.text)) {
+                seenTexts.add(btn.text);
+                uniqueActions.push(btn);
+            }
+        });
+
+        // 6. Safely Hide Legacy DOM
+        Array.from(document.body.children).forEach(child => {
+            const tag = child.tagName.toLowerCase();
+            if (['script', 'style', 'link'].includes(tag)) return;
+            if (['panelPopups', 'neoFade', 'colorbox', 'cboxOverlay', 'cboxWrapper'].includes(child.id)) return;
+            child.style.display = 'none';
+        });
+
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        if (!NeoUI.isInitialized) NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // 7. Build the UI
+        let pageWrapper = document.getElementById('coincidence-main-wrapper');
+        if (!pageWrapper) {
+            pageWrapper = document.createElement('div');
+            pageWrapper.id = 'coincidence-main-wrapper';
+            pageWrapper.style.cssText = 'min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5); box-sizing: border-box;';
+            document.body.appendChild(pageWrapper);
+        } else {
+            pageWrapper.innerHTML = '';
+        }
+
+        const container = document.createElement('div');
+        container.id = 'coincidence-app-wrapper';
+        container.style.cssText = 'width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: var(--nui-space-4);';
+        pageWrapper.appendChild(container);
+
+        container.innerHTML += `<div class="nui-text" style="font-family: var(--nui-font-display); font-size: 26px; font-weight: 800; text-align: center;">The Coincidence</div>`;
+
+        // Render Static REs if caught on load
+        if (staticREs.length > 0) {
+            injectRECard(staticREs.join('<hr style="border: 0; border-bottom: 1px solid var(--nui-border); margin: 16px 0;">'));
+        }
+
+        // Narrative Text Card
+        if (messages.length > 0) {
+            const msgCard = document.createElement(items.length > 0 ? 'details' : 'div');
+            msgCard.className = 'nui-surface';
+            msgCard.style.cssText = 'border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); padding: var(--nui-space-3) var(--nui-space-4); box-shadow: 0 4px 12px var(--nui-shadow); font-size: 14px; line-height: 1.5; color: var(--nui-text);';
+            if (items.length > 0) {
+                msgCard.innerHTML = `<summary style="font-weight: 800; cursor: pointer; color: var(--nui-text-muted); outline: none;">Dr. Landelbrot says...</summary><div style="margin-top: 12px;">${messages.join('<br><br>')}</div>`;
+            } else {
+                msgCard.innerHTML = messages.join('<br><br>');
+            }
+            container.appendChild(msgCard);
+        }
+
+        // Custom Timer UI
+        if (cooldown) {
+            const timerCard = document.createElement('div');
+            timerCard.className = 'nui-surface';
+            timerCard.style.cssText = 'border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); padding: var(--nui-space-5) var(--nui-space-4); box-shadow: 0 4px 12px var(--nui-shadow); display: flex; flex-direction: column; align-items: center; gap: 12px;';
+
+            timerCard.innerHTML = `
+                <div style="font-weight: 800; color: var(--nui-text-muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Research Complete In</div>
+                <div id="nui-ship-timer" style="font-family: var(--nui-font-display); font-size: 42px; font-weight: 800; color: var(--nui-accent); line-height: 1; text-shadow: 0 2px 4px var(--nui-shadow);">
+                    --:--:--
+                </div>
+            `;
+            container.appendChild(timerCard);
+
+            let totalSeconds = (cooldown.h * 3600) + (cooldown.m * 60) + cooldown.s;
+            const timerDisplay = timerCard.querySelector('#nui-ship-timer');
+
+            const tick = setInterval(() => {
+                if (totalSeconds <= 0) {
+                    clearInterval(tick);
+                    timerDisplay.textContent = "Ready!";
+                    reloadSPA();
+                    return;
+                }
+                totalSeconds--;
+                const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+                const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+                const s = (totalSeconds % 60).toString().padStart(2, '0');
+                timerDisplay.textContent = `${h}:${m}:${s}`;
+            }, 1000);
+
+            const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+            const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+            const s = (totalSeconds % 60).toString().padStart(2, '0');
+            timerDisplay.textContent = `${h}:${m}:${s}`;
+        }
+
+        // Quest Items List
+        if (items.length > 0) {
+            const itemsWrap = document.createElement('div');
+            itemsWrap.style.cssText = 'display: flex; flex-direction: column; gap: var(--nui-space-3);';
+
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'nui-surface';
+                card.style.cssText = 'border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); padding: var(--nui-space-3); display: flex; align-items: center; gap: var(--nui-space-3); box-shadow: 0 2px 6px var(--nui-shadow); flex-wrap: wrap;';
+
+                card.innerHTML = `
+                    <div style="width: 56px; height: 56px; border-radius: var(--nui-radius-md); background: var(--nui-surface-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--nui-border);">
+                        <img src="${item.imgSrc}" style="max-width: 48px; max-height: 48px; object-fit: contain;">
+                    </div>
+                    <div style="flex: 1; min-width: 120px;">
+                        <div style="font-weight: 800; font-size: 15px; color: var(--nui-text);">${item.name}</div>
+                        <div class="nui-badge" style="display: inline-block; margin-top: 4px; background: var(--nui-accent-soft); color: var(--nui-accent);">Needed: ${item.qty}</div>
+                    </div>
+                `;
+
+                const actionsWrap = document.createElement('div');
+                actionsWrap.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-left: auto;';
+
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'nui-btn nui-btn-secondary nui-btn-sm';
+                copyBtn.style.padding = '8px 12px';
+                copyBtn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>`;
+                copyBtn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(item.name);
+                    copyBtn.style.color = 'var(--nui-success)';
+                    setTimeout(() => copyBtn.style.color = '', 2000);
+                });
+
+                const sswBtn = document.createElement('button');
+                sswBtn.className = 'nui-btn nui-btn-primary nui-btn-sm';
+                sswBtn.style.padding = '8px 16px';
+                sswBtn.textContent = 'SSW';
+                sswBtn.addEventListener('click', () => openCustomSSW(item.name));
+
+                actionsWrap.appendChild(copyBtn);
+                actionsWrap.appendChild(sswBtn);
+                card.appendChild(actionsWrap);
+                itemsWrap.appendChild(card);
+            });
+            container.appendChild(itemsWrap);
+        }
+
+        if (uniqueActions.length > 0) {
+            const btnWrap = document.createElement('div');
+            btnWrap.style.cssText = 'display: flex; flex-direction: column; gap: var(--nui-space-3); margin-top: var(--nui-space-2); width: 100%;';
+
+            uniqueActions.forEach(action => {
+                const btn = document.createElement('button');
+                btn.className = `nui-btn ${action.class} nui-btn-block`;
+                btn.textContent = action.text;
+
+                btn.addEventListener('click', () => {
+                    if (action.action === 'link') {
+                        window.location.href = action.href;
+                    } else if (action.action === 'cancel') {
+                        if (window.confirm('Are you sure you want to cancel? You will forfeit your quest for the day.')) {
+                            const refMatch = doc.documentElement.innerHTML.match(/_ref_ck:\s*["']([^"']+)["']/);
+                            const fd = new URLSearchParams();
+                            if (refMatch) fd.append('_ref_ck', refMatch[1]);
+                            reloadSPA('/magma/portal/ajax/cancelQuest.php', { method: 'POST', body: fd, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+                        }
+                    } else if (action.action === 'submit_form') {
+                        if (action.legacyForm) {
+                            const fd = new FormData(action.legacyForm);
+                            reloadSPA(action.legacyForm.action || '/space/coincidence.phtml', { method: action.legacyForm.method || 'POST', body: fd });
+                        } else {
+                            reloadSPA('/space/coincidence.phtml');
+                        }
+                    }
+                });
+                btnWrap.appendChild(btn);
+            });
+            container.appendChild(btnWrap);
+        }
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        try {
+            observeInjectedREs();
+            renderCoincidence(document);
+        } catch (err) { showFatalError(err); }
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                observeInjectedREs();
+                renderCoincidence(document);
+            } catch (err) { showFatalError(err); }
+        });
     }
 })();
