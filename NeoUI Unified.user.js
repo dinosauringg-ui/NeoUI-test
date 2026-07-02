@@ -1071,21 +1071,26 @@
     // sidebar before a consuming script does anything destructive to the DOM.
     // Centralized here so every page's topbar+drawer are populated from one
     // implementation instead of each script keeping its own copy in sync.
-    function scrapeLegacyProfile() {
+        function scrapeLegacyProfile() {
         const userLink = document.querySelector('.user a[href^="/userlookup.phtml?user="]');
         const petImg = document.querySelector('.activePet img');
         const petName = document.querySelector('.sidebarHeader a b');
         const npEl = document.getElementById('npanchor');
         const ncEl = document.getElementById('ncanchor');
+        
+        // Detect the event icon cell before nuking the DOM
+        const hasNotification = document.querySelector('.eventIcon.sf') !== null;
+
         return {
             username: userLink ? userLink.textContent.trim() : 'Neopian',
             petname: petName ? petName.textContent.trim() : 'Unknown Pet',
             petImage: petImg ? petImg.src : 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
             np: npEl ? npEl.textContent.trim() : '0',
-        nc: ncEl ? ncEl.textContent.trim() : '0',
-        hasNotification: hasNotification
+            nc: ncEl ? ncEl.textContent.trim() : '0',
+            hasNotification: hasNotification
         };
     }
+
 
     // ---- Shared fixed topbar (logo + NeoGo button + NP/NC) ----
     // This is THE topbar markup for the suite. Every page-level module calls
