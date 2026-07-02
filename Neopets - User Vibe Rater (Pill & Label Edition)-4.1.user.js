@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Neopets - User Vibe Rater (Pill & Label Edition)
 // @namespace    http://tampermonkey.net/
-// @version      4.1
+// @version      4.2
 // @description  Rate users with custom colors and text labels via a clickable pill interface.
 // @author       Ryan
 // @match        https://www.neopets.com/*
@@ -12,6 +12,15 @@
 
 (function() {
     'use strict';
+
+    // 4.2 changelog:
+    //  - Fixed pills not appearing at all. The 4.1 change that marks every
+    //    scanned link as processed (to stop endless re-checks of
+    //    non-qualifying links) was setting data-vibe-processed="true" BEFORE
+    //    calling applyVibePill(), which had its own guard that bailed out
+    //    whenever that same flag was already "true". Every qualifying link
+    //    hit that guard and returned before a pill was ever created.
+    //    Removed the now-redundant guard from applyVibePill().
 
     // 4.1 changelog:
     //  - Debounced the MutationObserver scan (was firing a full-page
@@ -86,8 +95,11 @@
     }
 
     function applyVibePill(link, username) {
-        if (link.dataset.vibeProcessed === "true") return;
-        link.dataset.vibeProcessed = "true";
+        // Note: link.dataset.vibeProcessed is already set to "true" by
+        // scanForUserLinks() before this is called (so non-qualifying links
+        // get skipped on future scans too). Don't re-check it here — that
+        // guard used to protect against double-processing, but now it would
+        // always be true and would bail out before ever creating a pill.
 
         const currentVibe = userVibes[username];
 
