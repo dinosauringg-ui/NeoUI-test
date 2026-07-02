@@ -1082,7 +1082,8 @@
             petname: petName ? petName.textContent.trim() : 'Unknown Pet',
             petImage: petImg ? petImg.src : 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
             np: npEl ? npEl.textContent.trim() : '0',
-            nc: ncEl ? ncEl.textContent.trim() : '0',
+        nc: ncEl ? ncEl.textContent.trim() : '0',
+        hasNotification: hasNotification
         };
     }
 
@@ -2691,5 +2692,149 @@
         try { run(); } catch (err) { showFatalError(err); }
     } else {
         document.addEventListener('DOMContentLoaded', () => { try { run(); } catch (err) { showFatalError(err); } });
+    }
+})();
+// ==============================================================================
+// MODULE 5: ALLEVENTS (COMPACT IFRAME UI)
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/allevents\.phtml/.test(location.pathname)) return;
+
+    function run() {
+        const NeoUI = window.NeoUI;
+        if (!NeoUI || !NeoUI.__ready) { throw new Error('NeoUI Core Framework missing.'); }
+
+        // 1. Scrape the legacy events table
+        const events = [];
+        const eventForm = document.querySelector('form[name="eventform"]');
+        
+        if (eventForm) {
+            // Skip the header row (index 0) and the control row (last index)
+            const rows = Array.from(eventForm.querySelectorAll('tr'));
+            for (let i = 1; i < rows.length - 1; i++) {
+                const cells = rows[i].querySelectorAll('td');
+                if (cells.length < 4) continue;
+
+                events.push({
+                    time: cells[0].textContent.trim().replace(/\s+/g, ' '),
+                    actionUrl: cells[1].querySelector('a') ? cells[1].querySelector('a').href : '#',
+                    imgSrc: cells[1].querySelector('img') ? cells[1].querySelector('img').src : '',
+                    type: cells[1].querySelector('b') ? cells[1].querySelector('b').textContent.trim() : 'Event',
+                    descHtml: cells[2].innerHTML.trim(),
+                    delName: cells[3].querySelector('input') ? cells[3].querySelector('input').name : null
+                });
+            }
+        }
+
+        // 2. Nuke the DOM
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset';
+        
+        // Make the background transparent or match the drawer, remove default padding
+        document.documentElement.style.background = 'var(--nui-surface)';
+        document.body.style.background = 'var(--nui-surface)';
+        document.body.style.padding = '0';
+        document.body.style.margin = '0';
+        document.body.style.overflowX = 'hidden';
+
+        // 3. Initialize NeoUI core tokens (skip topbar injection for the iframe)
+        NeoUI.init({ showNeoGoButton: false }); 
+
+        // 4. Build the Compact UI
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'padding: var(--nui-space-3); display: flex; flex-direction: column; gap: var(--nui-space-3);';
+        document.body.appendChild(wrapper);
+
+        // Header & Actions
+        const header = document.createElement('div');
+        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--nui-border); padding-bottom: var(--nui-space-2);';
+        
+        const title = document.createElement('div');
+        title.className = 'nui-text';
+        title.style.cssText = 'font-weight: 800; font-size: 18px; font-family: var(--nui-font-display);';
+        title.textContent = `Notifications (${events.length})`;
+        
+        const clearAllBtn = document.createElement('button');
+        clearAllBtn.className = 'nui-btn nui-btn-sm';
+        clearAllBtn.style.cssText = 'background: var(--nui-danger-soft); color: var(--nui-danger); border: none; font-size: 12px; padding: 6px 10px;';
+        clearAllBtn.textContent = 'Clear All';
+        
+        header.appendChild(title);
+        if (events.length > 0) header.appendChild(clearAllBtn);
+        wrapper.appendChild(header);
+
+        // Event List Form
+        if (events.length > 0) {
+            const form = document.createElement('form');
+            form.action = 'process_allevents.phtml';
+            form.method = 'POST';
+            form.style.cssText = 'display: flex; flex-direction: column; gap: var(--nui-space-2);';
+
+            events.forEach(ev => {
+                const item = document.createElement('div');
+                item.className = 'nui-surface-2';
+                item.style.cssText = 'border-radius: var(--nui-radius-md); padding: var(--nui-space-3); display: flex; gap: var(--nui-space-3); align-items: flex-start; position: relative;';
+
+                item.innerHTML = `
+                    <a href="${ev.actionUrl}" target="_parent" style="flex-shrink: 0; display: block; border-radius: var(--nui-radius-sm); overflow: hidden; background: var(--nui-surface); padding: 4px; border: 1px solid var(--nui-border);">
+                        <img src="${ev.imgSrc}" style="width: 36px; height: 36px; display: block; object-fit: cover;">
+                    </a>
+                    <div style="flex: 1; min-width: 0; font-size: 13px; line-height: 1.4;">
+                        <div style="font-weight: 800; color: var(--nui-text); margin-bottom: 2px;">${ev.type}</div>
+                        <div class="nui-text-muted" style="word-wrap: break-word;">${ev.descHtml}</div>
+                        <div style="font-size: 11px; color: var(--nui-text-faint); margin-top: 4px; font-weight: 600;">${ev.time}</div>
+                    </div>
+                    <label style="flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: var(--nui-surface); border: 1px solid var(--nui-border);">
+                        <input type="checkbox" name="${ev.delName}" style="margin: 0; width: 16px; height: 16px; accent-color: var(--nui-danger);">
+                    </label>
+                `;
+                
+                // Clicking the description also clicks the link
+                const textWrap = item.querySelector('div.nui-text-muted');
+                textWrap.querySelectorAll('a').forEach(a => {
+                    a.style.color = 'var(--nui-accent)';
+                    a.style.fontWeight = 'bold';
+                    a.style.textDecoration = 'none';
+                    a.setAttribute('target', '_parent'); // Break out of iframe
+                });
+
+                form.appendChild(item);
+            });
+
+            // Delete Selected Button
+            const submitBtn = document.createElement('button');
+            submitBtn.type = 'submit';
+            submitBtn.className = 'nui-btn nui-btn-secondary nui-btn-block nui-btn-sm';
+            submitBtn.style.marginTop = 'var(--nui-space-2)';
+            submitBtn.textContent = 'Clear Selected';
+            form.appendChild(submitBtn);
+
+            wrapper.appendChild(form);
+
+            // Handle "Clear All" via the hidden POST form logic from Neopets
+            clearAllBtn.addEventListener('click', () => {
+                const confirmed = window.confirm('Clear all notifications?');
+                if (confirmed) {
+                    const wipeForm = document.createElement('form');
+                    wipeForm.action = 'process_allevents.phtml';
+                    wipeForm.method = 'POST';
+                    wipeForm.innerHTML = `<input type="hidden" name="type" value="all">`;
+                    document.body.appendChild(wipeForm);
+                    wipeForm.submit();
+                }
+            });
+
+        } else {
+            wrapper.innerHTML += `<div class="nui-empty" style="padding-top: var(--nui-space-5);"><span class="nui-empty-emoji">✨</span><br>All caught up!</div>`;
+        }
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        run();
+    } else {
+        document.addEventListener('DOMContentLoaded', run);
     }
 })();
