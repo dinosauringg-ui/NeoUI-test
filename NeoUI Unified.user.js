@@ -2674,6 +2674,37 @@
         cursor: pointer;
         flex-shrink: 0;
       }
+
+      /* Legacy clutter that isn't part of the item table itself - the
+         "Neopia Central | Bazaar | Plaza..." shop toolbar and the
+         "Jump to: Closet | Quick Stock..." link line. The shop toolbar
+         has a stable id; the "Jump to" line doesn't, so it's also
+         hidden via JS text-matching in hideLegacyClutter(). */
+      #shoptoolbar-nav {
+        display: none !important;
+      }
+
+      .ext1nct-confirm-row {
+        display: flex;
+        justify-content: center;
+        margin: var(--nui-space-2) auto var(--nui-space-4);
+        padding: 0 var(--nui-space-4);
+        max-width: 700px;
+        box-sizing: border-box;
+      }
+      .ext1nct-confirm-row button {
+        font-family: var(--nui-font-body);
+        font-size: 13.5px;
+        font-weight: 700;
+        padding: 11px 16px;
+        border: 1px solid var(--nui-success);
+        background: var(--nui-success);
+        color: var(--nui-surface);
+        border-radius: var(--nui-radius-md);
+        cursor: pointer;
+        width: 100%;
+        max-width: 320px;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -2685,8 +2716,17 @@
     const links = Array.from(document.querySelectorAll('a[href*="transfer_list.phtml?page="]'));
     if (links.length === 0) return null;
 
+    // A page can render pagination twice (above and below the list) -
+    // hide every legacy pagination table we find, not just the first,
+    // or a second copy is left sitting on the page unstyled.
+    const pagerTables = new Set();
+    links.forEach((a) => {
+      const t = a.closest('table');
+      if (t) pagerTables.add(t);
+    });
+    pagerTables.forEach((t) => t.classList.add('ext1nct-orig-pagination'));
+
     const pagerTable = links[0].closest('table');
-    if (pagerTable) pagerTable.classList.add('ext1nct-orig-pagination');
 
     const params = new URLSearchParams(window.location.search);
     const currentPage = parseInt(params.get('page') || '1', 10);
@@ -2912,8 +2952,36 @@
         cardsWrap.appendChild(card);
       });
 
-      table.insertAdjacentElement('afterend', cardsWrap);
-      table.style.setProperty('display', 'none', 'important');
+      // Hide the whole legacy wrapper around this table (it also contains
+      // a redundant "Transfer Log" <p> heading), not just the table -
+      // otherwise that heading is left floating on the page. Insert the
+      // cards as a sibling of the wrapper, never inside it, or hiding the
+      // wrapper would hide our own cards too.
+      const wrapper = table.closest('div[align="center"]') || table.parentElement;
+      wrapper.insertAdjacentElement('afterend', cardsWrap);
+      wrapper.style.setProperty('display', 'none', 'important');
+
+      // Each NP/NC section is its own <form> with its own native Submit
+      // button. That raw button (and the extra whitespace its wrapper div
+      // adds) was the only thing left unstyled on the page - hide it and
+      // give this section a matching "Confirm" button that submits the
+      // same form.
+      const form = table.closest('form');
+      if (form) {
+        form.querySelectorAll('input[type="submit"]').forEach((btn) => {
+          const holder = btn.parentElement && btn.parentElement !== form ? btn.parentElement : btn;
+          holder.style.setProperty('display', 'none', 'important');
+        });
+
+        const confirmRow = document.createElement('div');
+        confirmRow.className = 'ext1nct-confirm-row';
+        const confirmBtn = document.createElement('button');
+        confirmBtn.type = 'button';
+        confirmBtn.textContent = 'Confirm Selections';
+        confirmBtn.addEventListener('click', () => form.submit());
+        confirmRow.appendChild(confirmBtn);
+        cardsWrap.insertAdjacentElement('afterend', confirmRow);
+      }
     });
 
     return { toolbar, firstTable: tables[0] };
@@ -3020,6 +3088,17 @@
     banner.appendChild(btn);
   }
 
+  function hideLegacyClutter() {
+    // "Jump to: Closet | Quick Stock | ..." has no id/class of its own to
+    // hang a CSS selector off, so match it by content instead. Scoped to
+    // span.medText so it can't accidentally catch something unrelated.
+    document.querySelectorAll('span.medText').forEach((span) => {
+      if (/Jump to:/i.test(span.textContent)) {
+        span.style.setProperty('display', 'none', 'important');
+      }
+    });
+  }
+
   function injectPageTitle(anchor) {
     if (document.querySelector('.ext1nct-page-title')) return;
     const title = document.createElement('div');
@@ -3048,6 +3127,7 @@
     }
 
     injectStyles();
+    hideLegacyClutter();
 
     // Pull in NeoUI's theme tokens + mobile viewport so this page matches
     // the rest of the suite instead of rendering at legacy desktop width
