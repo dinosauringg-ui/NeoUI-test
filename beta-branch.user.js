@@ -1073,9 +1073,29 @@
     // implementation instead of each script keeping its own copy in sync.
         function scrapeLegacyProfile() {
         try {
-            const userLink = document.querySelector('.user a[href^="/userlookup.phtml?user="]');
-            const petImg = document.querySelector('.activePet img');
-            const petName = document.querySelector('.sidebarHeader a b');
+            // Current header uses a "...__2020" profile dropdown (id suffix may
+            // rotate with theme updates, so match on prefix). Username and active
+            // pet name are plain links inside it; pet image is a background-image
+            // on a div, not an <img>.
+            const profileDropdown = document.querySelector('[id^="navprofiledropdown__"]');
+            const petImgDiv = document.querySelector('[id^="navProfilePet__"]');
+
+            const userLink = (profileDropdown && profileDropdown.querySelector('a[href^="/userlookup.phtml?user="]'))
+                || document.querySelector('.user a[href^="/userlookup.phtml?user="]'); // legacy fallback
+
+            const petLink = profileDropdown && profileDropdown.querySelector('a[href^="/petlookup.phtml?pet="]');
+            const legacyPetName = document.querySelector('.sidebarHeader a b'); // legacy fallback
+
+            let petImage = null;
+            if (petImgDiv && petImgDiv.style.backgroundImage) {
+                const m = petImgDiv.style.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
+                if (m) petImage = m[1].startsWith('//') ? 'https:' + m[1] : m[1];
+            }
+            if (!petImage) {
+                const legacyPetImg = document.querySelector('.activePet img'); // legacy fallback
+                if (legacyPetImg && legacyPetImg.src) petImage = legacyPetImg.src;
+            }
+
             const npEl = document.getElementById('npanchor');
             const ncEl = document.getElementById('ncanchor');
 
@@ -1085,8 +1105,8 @@
 
             return {
                 username: (userLink && userLink.textContent) ? userLink.textContent.trim() : 'Neopian',
-                petname: (petName && petName.textContent) ? petName.textContent.trim() : 'Unknown Pet',
-                petImage: (petImg && petImg.src) ? petImg.src : 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
+                petname: (petLink && petLink.textContent) ? petLink.textContent.trim() : ((legacyPetName && legacyPetName.textContent) ? legacyPetName.textContent.trim() : 'Unknown Pet'),
+                petImage: petImage || 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
                 np: (npEl && npEl.textContent) ? npEl.textContent.trim() : '0',
                 nc: (ncEl && ncEl.textContent) ? ncEl.textContent.trim() : '0',
                 hasNotification: hasNotification
@@ -3466,8 +3486,46 @@
 
     let favThreads = JSON.parse(localStorage.getItem('nui_fav_threads') || '[]');
     let recentThreads = JSON.parse(localStorage.getItem('nui_recent_threads') || '[]');
-    let penMode = localStorage.getItem('nui_pen_mode') || 'remember';
+    let penMode = localStorage.getItem('nui_pen_mode') || '__remember__';
     let savedPenVal = localStorage.getItem('nui_pen_val') || '0';
+
+    // --- Emoticon list ---
+    // The full smiley picker on Neoboards is injected client-side by a different
+    // userscript, not present in the raw HTML this module fetches with fetch().
+    // So instead of scraping it, we ship the full code->file map directly.
+    const SMILEY_BASE = 'https://images.neopets.com/neoboards/smilies/';
+    function starWrap(names) { return names.map(n => ({ code: `*${n}*`, file: `${n}.gif` })); }
+
+    const NEOBOARD_SMILIES = [
+        ...starWrap(['aaa', 'abigail', 'angrylawyerbot', 'awakened', 'boatswain', 'brutes', 'brynn', 'cabinboy', 'capn3legs', 'dreamy', 'coltzan', 'cook', 'fyora', 'gunner', 'hanso', 'happiness', 'illusen', 'jazan', 'jhudora', 'lawyerbot', 'lulu', 'mate', 'mipsy', 'mrcoconut', 'nabile', 'nox', 'order', 'quartermaster', 'rigger', 'rohane', 'rower', 'seekers', 'shopwiz', 'sloth', 'snowager', 'swabbie', 'sway', 'talinia', 'techomaster', 'thieves', 'turmaculus', 'velm', 'wizard']),
+        ...starWrap(['acara', 'aisha', 'blumaroo', 'bori', 'bruce', 'buzz', 'chia', 'chomby', 'cybunny', 'draik', 'elephante', 'eyrie', 'flotsam', 'gelert', 'gnorbu', 'grarrl', 'grundo', 'hissi', 'ixi', 'jetsam', 'jubjub', 'kacheek', 'kau', 'kiko', 'koi', 'korbat', 'kougra', 'krawk', 'kyrii', 'lenny', 'lupe', 'lutari', 'meerca', 'moehog', 'mynci', 'nimmo', 'ogrin', 'peophin', 'poogle', 'pteri', 'quiggle', 'ruki', 'scorchio', 'shoyru', 'skeith', 'techo', 'tonu', 'tuskaninny', 'uni', 'usul', 'vandagyre', 'wocky', 'xweetok', 'yurble', 'zafara']),
+        ...starWrap(['angelpuss', 'feepit', 'jellykacheek', 'jimmi', 'jinjah', 'kadoatery', 'kadoatie', 'larnikin', 'meepit', 'meowclops', 'mootix', 'niptor', 'noil', 'pinchit', 'plumpy', 'purplebug', 'slorg', 'snowbunny', 'spyder', 'swipe', 'warf', 'weewoo', 'woogy', 'yooyu', 'zomutt']),
+        ...starWrap(['babypb', 'bacon', 'baf', 'battleduck', 'bdf', 'bef', 'bff', 'bgc', 'blf', 'bluesand', 'blurf', 'book', 'bwf', 'codestone', 'cookie', 'cupcake', 'dariganpb', 'dbd', 'dubloon', 'eventidepb', 'eventidepppb', 'faeriepb', 'greensand', 'icecream', 'islandpb', 'jelly', 'maractitepb', 'mspp', 'omelette', 'orangesand', 'pie', 'pinksand', 'piratepb', 'popcorn', 'scroll', 'sock', 'starberry', 'stonepie', 'suap', 'tigerfruit', 'twirlyfruit', 'ummagine', 'woodlandpb', 'wraithpb']),
+        ...starWrap(['aishadow', 'angrynegg', 'bauble', 'bballoon', 'brownleaf', 'candle', 'candycane', 'creepyspyder', 'eekeek', 'fence', 'festivalnegg', 'firecrackers', 'fishnegg', 'flower', 'gballoon', 'ghost', 'happynegg', 'heart', 'holly', 'jackolantern', 'leafleft', 'leafright', 'luckydraik', 'mistletoe', 'negg', 'paperlantern', 'present', 'pumpkin', 'rballoon', 'redleaf', 'rednose', 'roses', 'santa', 'shamrock', 'snowflake', 'snowman', 'spyder', 'tombstone', 'web', 'xmastree', 'yballoon', 'yellowleaf']),
+        { code: '*witch*', file: 'witchhat.gif' },
+        ...starWrap(['altador', 'brightvale', 'dacardia', 'darigan', 'faerieland', 'haunted', 'kikolake', 'krawkisland', 'kreludor', 'lostdesert', 'maraqua', 'meridell', 'mystery', 'moltara', 'rooisland', 'shenkuu', 'terror', 'tyrannia', 'virtupets', 'air', 'dark', 'earth', 'fire', 'light', 'physical', 'water', 'carrot', 'catfish', 'cloud', 'rainbow', 'coffee', 'dung', 'genie', 'indubitably', 'kqdoor', 'kqkey', 'map', 'moneybag', 'monocle', 'moon', 'raincloud', 'star', 'sun', 'tea', 'tophat', 'yarn']),
+        { code: '*0.o.0*', file: '0.o.0.gif' },
+        { code: ':)', file: 'smiley.gif' },
+        { code: '0:-)', file: 'angel.gif' },
+        { code: ':o', file: 'oh.gif' },
+        { code: ':(', file: 'sad.gif' },
+        { code: ':D', file: 'grin.gif' },
+        { code: 'B)', file: 'sunglasses.gif' },
+        { code: ':P', file: 'tongue.gif' },
+        { code: ':K', file: 'vampire.gif' },
+        { code: ';)', file: 'winking.gif' },
+        { code: '*yarr*', file: 'yarr.gif' },
+        { code: ':*', file: 'kisskiss.gif' },
+        { code: '*angry*', file: 'angry.gif' },
+        { code: '*complain*', file: 'complain.gif' },
+        { code: '*facepalm*', file: 'facepalm.gif' },
+        { code: '*cough*', file: 'cough.gif' },
+        { code: '*lol*', file: 'lol.gif' },
+        { code: '*unsure*', file: 'unsure.gif' },
+        { code: '*cry*', file: 'cry.gif' },
+        { code: '*clap*', file: 'clap.gif' },
+        { code: '*violin*', file: 'violin.gif' }
+    ].map(s => ({ code: s.code, src: SMILEY_BASE + s.file }));
 
     function saveState() {
         localStorage.setItem('nui_fav_threads', JSON.stringify(favThreads));
@@ -3506,10 +3564,31 @@
         appWrapper.id = 'nui-neoboards-app';
         appWrapper.style.cssText = 'display: flex; flex-direction: column; height: 100vh; padding-top: var(--nui-topbar-h); box-sizing: border-box;';
 
+        // Top row holds the thread tabs (scrollable) plus fave/refresh (pinned to
+        // the right, always visible without scrolling) — shown only while a
+        // thread tab is open.
+        const topRow = document.createElement('div');
+        topRow.style.cssText = 'display: flex; align-items: center; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border); flex-shrink: 0;';
+
         const tabBar = document.createElement('div');
         tabBar.id = 'nui-thread-tabs';
-        tabBar.style.cssText = 'display: flex; gap: 4px; overflow-x: auto; background: var(--nui-surface-2); padding: 8px 12px; border-bottom: 1px solid var(--nui-border); scrollbar-width: none; flex-shrink: 0; -webkit-overflow-scrolling: touch;';
-        appWrapper.appendChild(tabBar);
+        tabBar.style.cssText = 'display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px; scrollbar-width: none; flex: 1; min-width: 0; -webkit-overflow-scrolling: touch;';
+        topRow.appendChild(tabBar);
+
+        const actionBar = document.createElement('div');
+        actionBar.id = 'nui-thread-actionbar';
+        actionBar.style.cssText = 'display: none; gap: 8px; padding: 8px 12px; flex-shrink: 0;';
+        actionBar.innerHTML = `
+            <button type="button" id="nui-fav-btn-top" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding: 6px 10px; display: flex; align-items: center; gap: 4px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
+            </button>
+            <button type="button" id="nui-thread-refresh-top" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding: 6px 10px; display: flex; align-items: center; gap: 4px;">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+        `;
+        topRow.appendChild(actionBar);
+
+        appWrapper.appendChild(topRow);
 
         const contentArea = document.createElement('div');
         contentArea.id = 'nui-content-area';
@@ -3564,6 +3643,8 @@
         contentArea.innerHTML = '';
 
         if (id === 'board') {
+            const actionBar = document.getElementById('nui-thread-actionbar');
+            if (actionBar) actionBar.style.display = 'none';
             loadBoardList(currentBoardUrl, contentArea);
         } else {
             const thread = openThreads.find(t => t.id === id);
@@ -3654,11 +3735,12 @@
         boardTopic.querySelectorAll('li').forEach(li => {
             if (!li.querySelector('.boardPostByline')) return;
 
-            const authorIconEl = li.querySelector('.authorIcon');
+            const authorIconEl = li.querySelector('.postAuthorPetIcon img');
             let avatarUrl = 'https://images.neopets.com/neoboards/avatars/default.gif';
-            if (authorIconEl && authorIconEl.style.backgroundImage) {
-                const match = authorIconEl.style.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
-                if (match) avatarUrl = match[1];
+            if (authorIconEl && authorIconEl.getAttribute('src')) {
+                let src = authorIconEl.getAttribute('src');
+                if (src.startsWith('//')) src = 'https:' + src; else if (src.startsWith('/')) src = 'https://images.neopets.com' + src;
+                avatarUrl = src;
             }
 
             const authorNameEl = li.querySelector('.postAuthorName');
@@ -3679,13 +3761,7 @@
             posts.push({ avatarUrl, authorName, authorTitle, authorAge, dateStr, messageHtml });
         });
 
-        doc.querySelectorAll('.replySmilies-neoboards .smiley').forEach(a => {
-            const img = a.querySelector('img');
-            const match = a.getAttribute('onclick').match(/insertSmiley\("([^"]+)"\)/);
-            if (img && match) {
-                smilies.push({ code: match[1], src: img.src });
-            }
-        });
+        smilies.push(...NEOBOARD_SMILIES);
 
         const formEl = doc.querySelector('form[name="message_form"]');
         if (formEl) {
@@ -3708,33 +3784,43 @@
 
         headerCard.innerHTML = `
             <div class="nui-text" style="font-family: var(--nui-font-display); font-size: 22px; font-weight: 800; line-height: 1.3; flex: 1; min-width: 0;">${displayTitleHtml}</div>
-            <div style="display: flex; gap: 8px; flex-shrink: 0; margin-left: 12px;">
-                <button type="button" id="nui-fav-btn" class="nui-btn nui-btn-sm ${isFav ? 'nui-btn-primary' : 'nui-btn-secondary'}" style="padding: 6px 10px; display: flex; align-items: center; gap: 4px;">
-                    <svg width="16" height="16" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
-                </button>
-                <button type="button" id="nui-thread-refresh" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding: 6px 10px; display: flex; align-items: center; gap: 4px;">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                </button>
-            </div>
         `;
         wrapper.appendChild(headerCard);
 
-        headerCard.querySelector('#nui-fav-btn').addEventListener('click', (e) => {
-            const btn = e.currentTarget;
-            const exists = favThreads.some(t => t.id === threadId);
-            if (exists) {
-                favThreads = favThreads.filter(t => t.id !== threadId);
-                btn.className = 'nui-btn nui-btn-secondary nui-btn-sm';
-                btn.querySelector('svg').setAttribute('fill', 'none');
-            } else {
-                favThreads.push({ id: threadId, title: safeTitleStr, url: currentUrl });
-                btn.className = 'nui-btn nui-btn-primary nui-btn-sm';
-                btn.querySelector('svg').setAttribute('fill', 'currentColor');
-            }
-            saveState();
-        });
+        // Fave/refresh live in the fixed top action bar (next to the tabs,
+        // always visible without scrolling), not in the header card. Reveal it
+        // and (re)bind it for this thread every time renderThreadUI runs.
+        const actionBar = document.getElementById('nui-thread-actionbar');
+        if (actionBar) {
+            actionBar.style.display = 'flex';
 
-        headerCard.querySelector('#nui-thread-refresh').addEventListener('click', () => fetchThread(currentUrl, threadId, container));
+            const favBtn = actionBar.querySelector('#nui-fav-btn-top');
+            const refreshBtn = actionBar.querySelector('#nui-thread-refresh-top');
+
+            function setFavBtnState(el, active) {
+                el.className = `nui-btn nui-btn-sm ${active ? 'nui-btn-primary' : 'nui-btn-secondary'}`;
+                el.querySelector('svg').setAttribute('fill', active ? 'currentColor' : 'none');
+            }
+            setFavBtnState(favBtn, isFav);
+
+            // Clone+replace to drop any listeners bound for a previously open thread.
+            const newFavBtn = favBtn.cloneNode(true);
+            favBtn.parentNode.replaceChild(newFavBtn, favBtn);
+            newFavBtn.addEventListener('click', () => {
+                const exists = favThreads.some(t => t.id === threadId);
+                if (exists) {
+                    favThreads = favThreads.filter(t => t.id !== threadId);
+                } else {
+                    favThreads.push({ id: threadId, title: safeTitleStr, url: currentUrl });
+                }
+                setFavBtnState(newFavBtn, !exists);
+                saveState();
+            });
+
+            const newRefreshBtn = refreshBtn.cloneNode(true);
+            refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
+            newRefreshBtn.addEventListener('click', () => fetchThread(currentUrl, threadId, container));
+        }
 
         if (paginationHtml) {
             const topPager = document.createElement('div');
@@ -3761,7 +3847,7 @@
                         ${post.dateStr}
                     </div>
                 </div>
-                <div style="padding: var(--nui-space-4); font-size: 14px; line-height: 1.6; color: var(--nui-text); overflow-wrap: break-word; word-wrap: break-word;">
+                <div style="padding: var(--nui-space-4); font-size: 14px; line-height: 1.6; color: #2b2620; background: #efe9df; overflow-wrap: break-word; word-wrap: break-word;">
                     ${post.messageHtml}
                 </div>
             `;
@@ -3791,9 +3877,17 @@
             replyWrap.className = 'nui-surface';
             replyWrap.style.cssText = 'margin-top: var(--nui-space-4); border: 2px solid var(--nui-accent-soft); border-radius: var(--nui-radius-lg); padding: var(--nui-space-4); box-shadow: 0 4px 16px var(--nui-shadow);';
 
+            // If we've never remembered a real pen (or the remembered one no longer
+            // exists on this account), fall back to the first pen the account owns
+            // instead of leaving savedPenVal at the hardcoded '0' default.
+            if (replyFormData.pens.length > 0 && !replyFormData.pens.some(p => p.val === savedPenVal)) {
+                savedPenVal = replyFormData.pens[0].val;
+                saveState();
+            }
+
             const penOptions = [
-                { label: 'Remember', val: 'remember' },
-                { label: 'Random', val: 'random' },
+                { label: 'Remember', val: '__remember__' },
+                { label: 'Random', val: '__random__' },
                 ...replyFormData.pens
             ];
 
@@ -3810,8 +3904,13 @@
             let smiliesHtml = '';
             if (smilies.length > 0) {
                 smiliesHtml = `
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
-                        ${smilies.map(s => `<img src="${s.src}" data-code="${s.code}" class="nui-smiley-btn" style="cursor: pointer; width: 16px; height: 16px; transition: transform 0.1s;">`).join('')}
+                    <div style="margin-bottom: 12px;">
+                        <button type="button" id="nui-smiley-toggle" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding: 4px 10px; font-size: 12px;">
+                            😊 Emoticons (${smilies.length})
+                        </button>
+                        <div id="nui-smiley-drawer" style="display: none; max-height: 160px; overflow-y: auto; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding: 8px; border: 1px solid var(--nui-border); border-radius: var(--nui-radius-md); background: var(--nui-surface-2);">
+                            ${smilies.map(s => `<img src="${s.src}" data-code="${s.code.replace(/"/g, '&quot;')}" class="nui-smiley-btn" title="${s.code.replace(/"/g, '&quot;')}" style="cursor: pointer; width: 18px; height: 18px; transition: transform 0.1s;">`).join('')}
+                        </div>
                     </div>
                 `;
             }
@@ -3831,6 +3930,16 @@
             `;
 
             const textarea = replyWrap.querySelector('textarea');
+
+            const smileyToggle = replyWrap.querySelector('#nui-smiley-toggle');
+            const smileyDrawer = replyWrap.querySelector('#nui-smiley-drawer');
+            if (smileyToggle && smileyDrawer) {
+                smileyToggle.addEventListener('click', () => {
+                    const open = smileyDrawer.style.display !== 'none';
+                    smileyDrawer.style.display = open ? 'none' : 'flex';
+                });
+            }
+
             replyWrap.querySelectorAll('.nui-smiley-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     textarea.value += btn.getAttribute('data-code');
@@ -3849,7 +3958,7 @@
                     activeLabel.style.color = 'var(--nui-accent)';
                     penMode = activeLabel.getAttribute('data-val');
 
-                    if (penMode !== 'remember' && penMode !== 'random') {
+                    if (penMode !== '__remember__' && penMode !== '__random__') {
                         savedPenVal = penMode;
                     }
                     saveState();
@@ -3864,13 +3973,16 @@
                 submitBtn.disabled = true;
                 statusText.textContent = 'Posting...';
 
-                let finalPenVal = '0';
                 const realPens = replyFormData.pens.map(p => p.val);
-                if (penMode === 'random' && realPens.length > 0) {
-                    finalPenVal = realPens[Math.floor(Math.random() * realPens.length)];
-                } else if (penMode === 'remember') {
+                let finalPenVal = savedPenVal; // safe default: never the literal 'remember'/'random' strings
+                if (penMode === '__random__') {
+                    if (realPens.length > 0) {
+                        finalPenVal = realPens[Math.floor(Math.random() * realPens.length)];
+                    }
+                    // else: no real pens scraped, fall back to savedPenVal above
+                } else if (penMode === '__remember__') {
                     finalPenVal = savedPenVal;
-                } else {
+                } else if (realPens.includes(penMode)) {
                     finalPenVal = penMode;
                 }
 
