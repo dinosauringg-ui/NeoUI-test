@@ -5356,7 +5356,7 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
 
         if (createTopicUrl && createTopicUrl !== '#') {
             const fabWrap = document.createElement('div');
-            fabWrap.style.cssText = 'position: fixed; bottom: var(--nui-space-4); right: var(--nui-space-4); z-index: 99;';
+            fabWrap.style.cssText = 'position: fixed; bottom: calc(var(--nui-space-4) + 25px); right: var(--nui-space-4); z-index: 99;';
             fabWrap.innerHTML = `
                 <a href="${createTopicUrl}" class="nui-btn nui-btn-primary" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; border-radius: 30px; box-shadow: 0 4px 16px var(--nui-shadow); text-decoration: none;">
                     <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
