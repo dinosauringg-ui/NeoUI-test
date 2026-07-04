@@ -640,7 +640,6 @@
     background: var(--nui-surface);
     border-radius: var(--nui-radius-md); /* Matching your squared-off aesthetic */
     border: 1px solid var(--nui-border);
-    overflow: hidden;
     max-width: 90%;
     box-shadow: 0 1px 2px var(--nui-shadow);
     flex-shrink: 0; /* Prevents the squishing and text cut-off */
@@ -1964,14 +1963,22 @@
             }
         }
 
-        if (window.VibeRater && typeof window.VibeRater.onChange === 'function') {
+                if (window.VibeRater && typeof window.VibeRater.onChange === 'function') {
             window.VibeRater.onChange(function (username) {
                 const key = String(username).toLowerCase().trim();
+
+                // Update bubbles
                 document.querySelectorAll(`.nui-bubble[data-vibe-user="${CSS.escape(key)}"]`).forEach(function (el) {
+                    applyVibeTint(el, key);
+                });
+
+                // ADD THIS: Update sidebar items
+                document.querySelectorAll(`.nui-item[data-vibe-user="${CSS.escape(key)}"]`).forEach(function (el) {
                     applyVibeTint(el, key);
                 });
             });
         }
+
 
         function escapeHTML(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
 
@@ -2517,6 +2524,8 @@
 
             filteredThreads.forEach(thread => {
                 const item = document.createElement('div'); item.className = `nui-item nui-reset ${thread.isRead ? '' : 'is-unread'}`;
+              if (!thread.isSent) applyVibeTint(item, thread.sender);
+
                 let badges = '';
                 if (thread.isFullyLocal) badges += `<span class="nui-badge nui-badge-warning">Local Archive</span> `;
                 if (thread.messages.length > 1) badges += `<span class="nui-badge">${thread.messages.length} msgs</span>`;
@@ -4768,7 +4777,7 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
 
                 const pop = document.createElement('div');
                 pop.className = 'nui-vibe-pop';
-                pop.style.cssText = 'position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 9999; background: var(--nui-surface); border: 1px solid var(--nui-border); border-radius: var(--nui-radius-md); padding: 8px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 4px 16px var(--nui-shadow); min-width: 120px;';
+                pop.style.cssText = 'position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 999999; background: var(--nui-surface); border: 1px solid var(--nui-border); border-radius: var(--nui-radius-md); padding: 8px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 4px 16px var(--nui-shadow); min-width: 120px;';
 
                 window.VibeRater.PRESETS.forEach(preset => {
                     const opt = document.createElement('button');
