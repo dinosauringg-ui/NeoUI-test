@@ -1582,7 +1582,7 @@
                 // (The redundant stats block has been deleted from here)
 
                 '<a class="nui-drawer-item is-action" href="/quickref.phtml">Quickref</a>' + navHtml +
-                '<div class="nui-drawer-section"><div class="nui-drawer-item" data-action="open-settings">Settings</div><a class="nui-drawer-item is-danger" href="/logout.phtml">Logout</a></div>' +
+                '<div class="nui-drawer-section"><div class="nui-drawer-item" data-action="open-settings">NeoUI Settings</div><a class="nui-drawer-item is-danger" href="/logout.phtml">Logout</a></div>' +
             '</div><div class="nui-drawer-view" data-view="settings"><div class="nui-drawer-back" data-action="back-to-nav">&larr; Back</div><div data-slot="settings-sections"></div></div></div></div>'
         );
 
@@ -2204,15 +2204,20 @@
                 id: 'neomail_data',
                 title: 'Data Management',
                 render: function (settingsContainer) {
-                    settingsContainer.innerHTML = `
-                        <div class="nui-drawer-section-title" style="background:transparent; padding:0; margin-top:20px;">Neomail Storage</div>
-                        <div style="margin-top:10px; display:flex; flex-direction:column; gap:10px;">
-                            <div style="font-size: 13px; color: var(--nui-text-muted);">Manage your local message archive and avatar cache.</div>
-                            <button type="button" class="nui-btn nui-btn-warning nui-btn-block" id="nui-clear-archive">Clear Local Archive</button>
-                            <button type="button" class="nui-btn nui-btn-danger nui-btn-block" id="nui-clear-avatars">Clear Avatar Cache</button>
-                            <span id="nui-settings-status" style="font-size: 13px; font-weight: 600; text-align: center; display: block; margin-top: 4px;"></span>
-                        </div>
+                                        settingsContainer.innerHTML = `
+                        <details class="nui-drawer-section">
+                            <summary class="nui-drawer-section-title" style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                                Data Management <span style="font-size:10px; opacity:0.5;">▼</span>
+                            </summary>
+                            <div style="margin-top:10px; display:flex; flex-direction:column; gap:10px;">
+                                <div style="font-size: 13px; color: var(--nui-text-muted);">Manage your local message archive and avatar cache.</div>
+                                <button type="button" class="nui-btn nui-btn-warning nui-btn-block" id="nui-clear-archive">Clear Local Archive</button>
+                                <button type="button" class="nui-btn nui-btn-danger nui-btn-block" id="nui-clear-avatars">Clear Avatar Cache</button>
+                                <span id="nui-settings-status" style="font-size: 13px; font-weight: 600; text-align: center; display: block; margin-top: 4px;"></span>
+                            </div>
+                        </details>
                     `;
+
 
                     settingsContainer.querySelector('#nui-clear-archive').addEventListener('click', function() {
                         localStorage.removeItem(ARCHIVE_KEY);
@@ -2261,18 +2266,29 @@
                             </div>
                         `).join('');
 
-                        settingsContainer.innerHTML = `
-                            <div class="nui-drawer-section-title" style="background:transparent; padding:0; margin-top:20px;">Vibe Rater Presets</div>
-                            <div style="font-size:12px; color:var(--nui-text-faint); margin:6px 0 10px; line-height:1.5;">Customize your vibe options. Edits are saved automatically.</div>
-                            <div id="nui-vibe-presets-container">
-                                ${presetList}
-                                <button type="button" id="nui-add-preset" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="margin-top:8px;">+ Add New Vibe</button>
-                            </div>
-
-                            <div class="nui-drawer-section-title" style="background:transparent; padding:0; margin-top:20px;">Assigned Users</div>
-                            <div>${rows}</div>
-                            ${keys.length > 0 ? '<button type="button" id="nui-vr-clear-all" class="nui-btn nui-btn-danger nui-btn-block" style="margin-top:10px;">Clear All Assigned</button>' : ''}
+                                                settingsContainer.innerHTML = `
+                            <details class="nui-drawer-section">
+                                <summary class="nui-drawer-section-title" style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                                    Vibe Rater <span style="font-size:10px; opacity:0.5;">▼</span>
+                                </summary>
+                                <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 16px;">
+                                    <div>
+                                        <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:6px;">Presets</div>
+                                        <div style="font-size:12px; color:var(--nui-text-muted); margin-bottom: 10px; line-height:1.5;">Customize your vibe options. Edits are saved automatically.</div>
+                                        <div id="nui-vibe-presets-container">
+                                            ${presetList}
+                                            <button type="button" id="nui-add-preset" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="margin-top:8px;">+ Add New Vibe</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:6px;">Assigned Users</div>
+                                        <div>${rows}</div>
+                                        ${keys.length > 0 ? '<button type="button" id="nui-vr-clear-all" class="nui-btn nui-btn-danger nui-btn-block" style="margin-top:10px;">Clear All Assigned</button>' : ''}
+                                    </div>
+                                </div>
+                            </details>
                         `;
+
 
                         const updatePresets = () => {
                             const newPresets = [];
@@ -4184,20 +4200,25 @@
             render: function (container) {
                 function renderPenSettings() {
                     const isPerBoard = localStorage.getItem('nui_per_board_pen') === 'true';
-                    container.innerHTML = `
-                        <div class="nui-drawer-section-title" style="background:transparent; padding:0; margin-top:20px;">Pen Options</div>
-                        <div style="margin-top:10px; display:flex; flex-direction:column; gap:14px;">
-                            <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-                                <input type="checkbox" id="nui-per-board-pen" ${isPerBoard ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer; accent-color:var(--nui-accent);">
-                                <span style="font-size:13px; font-weight:700; color:var(--nui-text);">Per-board pen memory</span>
-                            </label>
-                            <div style="font-size:12px; color:var(--nui-text-muted); line-height:1.5; margin-top:-8px;">
-                                When enabled, your pen choice and mode (Remember / Random) are saved separately for each board.
+                                        container.innerHTML = `
+                        <details class="nui-drawer-section">
+                            <summary class="nui-drawer-section-title" style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                                Pen Options <span style="font-size:10px; opacity:0.5;">▼</span>
+                            </summary>
+                            <div style="margin-top:10px; display:flex; flex-direction:column; gap:14px;">
+                                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                                    <input type="checkbox" id="nui-per-board-pen" ${isPerBoard ? 'checked' : ''} style="width:16px; height:16px; cursor:pointer; accent-color:var(--nui-accent);">
+                                    <span style="font-size:13px; font-weight:700; color:var(--nui-text);">Per-board pen memory</span>
+                                </label>
+                                <div style="font-size:12px; color:var(--nui-text-muted); line-height:1.5; margin-top:-8px;">
+                                    When enabled, your pen choice and mode (Remember / Random) are saved separately for each board.
+                                </div>
+                                <button type="button" class="nui-btn nui-btn-primary nui-btn-block" id="nui-pen-save">Save</button>
+                                <span id="nui-pen-status" style="font-size:12px; text-align:center; color:var(--nui-text-muted); display:block;"></span>
                             </div>
-                            <button type="button" class="nui-btn nui-btn-primary nui-btn-block" id="nui-pen-save">Save</button>
-                            <span id="nui-pen-status" style="font-size:12px; text-align:center; color:var(--nui-text-muted); display:block;"></span>
-                        </div>
+                        </details>
                     `;
+
                     container.querySelector('#nui-pen-save').addEventListener('click', () => {
                         const checked = container.querySelector('#nui-per-board-pen').checked;
                         localStorage.setItem('nui_per_board_pen', String(checked));
@@ -4244,18 +4265,29 @@
                         </div>
                     `).join('');
 
-                    container.innerHTML = `
-                        <div class="nui-drawer-section-title" style="background:transparent; padding:0; margin-top:20px;">Vibe Rater Presets</div>
-                        <div style="font-size:12px; color:var(--nui-text-faint); margin:6px 0 10px; line-height:1.5;">Customize your vibe options. Edits are saved automatically.</div>
-                        <div id="nui-vibe-presets-container">
-                            ${presetList}
-                            <button type="button" id="nui-add-preset" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="margin-top:8px;">+ Add New Vibe</button>
-                        </div>
-
-                        <div class="nui-drawer-section-title" style="background:transparent; padding:0; margin-top:20px;">Assigned Users</div>
-                        <div>${rows}</div>
-                        ${keys.length > 0 ? '<button type="button" id="nui-vr-clear-all" class="nui-btn nui-btn-danger nui-btn-block" style="margin-top:10px;">Clear All Assigned</button>' : ''}
+                                        container.innerHTML = `
+                        <details class="nui-drawer-section">
+                            <summary class="nui-drawer-section-title" style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                                Vibe Rater <span style="font-size:10px; opacity:0.5;">▼</span>
+                            </summary>
+                            <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 16px;">
+                                <div>
+                                    <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:6px;">Presets</div>
+                                    <div style="font-size:12px; color:var(--nui-text-muted); margin-bottom: 10px; line-height:1.5;">Customize your vibe options. Edits are saved automatically.</div>
+                                    <div id="nui-vibe-presets-container">
+                                        ${presetList}
+                                        <button type="button" id="nui-add-preset" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="margin-top:8px;">+ Add New Vibe</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:6px;">Assigned Users</div>
+                                    <div>${rows}</div>
+                                    ${keys.length > 0 ? '<button type="button" id="nui-vr-clear-all" class="nui-btn nui-btn-danger nui-btn-block" style="margin-top:10px;">Clear All Assigned</button>' : ''}
+                                </div>
+                            </div>
+                        </details>
                     `;
+
 
                     // Preset Editing Logic
                     const updatePresets = () => {
@@ -4412,8 +4444,17 @@
         else renderTabs();
     }
 
-    async function fetchThread(url, id, container) {
-        container.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">📡</span><br>Fetching thread...</div>`;
+        async function fetchThread(url, id, container, preserveScroll = false) {
+        const savedScroll = container.scrollTop;
+
+        // If we're refreshing, don't wipe the screen. Just dim it slightly.
+        if (!preserveScroll) {
+            container.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">📡</span><br>Fetching thread...</div>`;
+        } else {
+            container.style.opacity = '0.6';
+            container.style.pointerEvents = 'none';
+        }
+
         try {
             const res = await fetch(url);
             const html = await res.text();
@@ -4424,12 +4465,23 @@
 
             if (activeTabId === id) {
                 renderThreadUI(doc, container, url, id);
-                container.scrollTop = 0;
+
+                // Restore scroll if requested, otherwise snap to top
+                if (preserveScroll) {
+                    container.scrollTop = savedScroll;
+                } else {
+                    container.scrollTop = 0;
+                }
             }
         } catch (err) {
             container.innerHTML = `<div class="nui-empty" style="color: var(--nui-danger);">Failed to load thread.</div>`;
+        } finally {
+            // Always restore opacity/clicks when done
+            container.style.opacity = '1';
+            container.style.pointerEvents = 'auto';
         }
     }
+
 
     // --------------------------------------------------------------------------
     // THREAD UI & QUICK REPLY (PHASE 3)
@@ -4586,7 +4638,7 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
 
             const newRefreshBtn = refreshBtn.cloneNode(true);
             refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
-            newRefreshBtn.addEventListener('click', () => fetchThread(currentUrl, threadId, container));
+            newRefreshBtn.addEventListener('click', () => fetchThread(currentUrl, threadId, container, true));
         }
 
         if (paginationHtml) {
@@ -4623,7 +4675,7 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
                         ${post.dateStr}
                     </div>
                 </div>
-                <div style="padding: var(--nui-space-4); font-size: 14px; line-height: 1.6; color: #2b2620; background: #efe9df; overflow-wrap: break-word; word-wrap: break-word;">
+                <div style="padding: var(--nui-space-4); font-size: 14px; line-height: 1.6; color: #000000; background: #FFFFFF; overflow-wrap: break-word; word-wrap: break-word;">
                     ${post.messageHtml}
                 </div>
             `;
@@ -4999,7 +5051,7 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
 
             wrapper.appendChild(replyWrap);
         }
-    });
+    }
 
     // --------------------------------------------------------------------------
     // INDEX & BOARD LIST VIEWER (PHASE 1 & 2)
