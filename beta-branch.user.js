@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.0.3
+// @version      1.0.8
 // @description  Mobile-forward Neopets overhaul suite (Core design system + Neomail + Wishing Well + Item Transfer Log) bundled as a single script. Each module self-activates only on its own page.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -4048,6 +4048,520 @@
         });
     }
 })();
+
+// ==============================================================================
+// MODULE 7: QUICKREF OVERHAUL
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/quickref\.phtml/.test(location.pathname)) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Quickref crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) { }
+    }
+
+    function run() {
+        const NeoUI = window.NeoUI;
+        if (!NeoUI || !NeoUI.__ready) { throw new Error('NeoUI Core Framework was not found.'); }
+
+        // 1. Scrape Global Profile Info BEFORE nuking the DOM
+        const profile = NeoUI.scrapeLegacyProfile();
+
+        // 2. Precision Scraper based on the provided Quickref DOM
+        function scrapeQuickref() {
+            const pets = [];
+
+            // The safest place to pull pet data is the hidden/visible contentModule details blocks
+            document.querySelectorAll('.contentModule').forEach(module => {
+                if (!module.id || !module.id.endsWith('_details')) return;
+
+                const petName = module.id.replace('_details', '');
+                // Active pets use 'contentModuleHeader', inactive use 'contentModuleHeaderAlt'
+                const isActive = !!module.querySelector('th.contentModuleHeader');
+
+                // Extract the high-res image from the background-image style
+                const imageDiv = module.querySelector('.pet_image');
+                let imgSrc = 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png';
+                if (imageDiv && imageDiv.style.backgroundImage) {
+                    const match = imageDiv.style.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
+                    if (match) {
+                        let src = match[1];
+                        if (src.startsWith('//')) src = 'https:' + src;
+                        imgSrc = src;
+                    }
+                }
+
+                // Scrape the stats table
+                const rawStats = {};
+                module.querySelectorAll('.pet_stats tr').forEach(row => {
+                    const th = row.querySelector('th');
+                    const td = row.querySelector('td');
+                    if (th && td) {
+                        const key = th.textContent.replace(':', '').trim().toLowerCase();
+                        rawStats[key] = td.innerHTML.trim();
+                    }
+                });
+
+                // Helper to strip HTML tags (like <font color="red">) and get raw text
+                const getText = (htmlStr) => {
+                    if (!htmlStr) return '-';
+                    const tmp = document.createElement('div');
+                    tmp.innerHTML = htmlStr;
+                    return tmp.textContent.trim();
+                };
+
+                // Look for Petpets/P3s in the bottom spanned row
+                const petpets = [];
+                const lastRow = module.querySelector('.pet_stats tr:last-child td[colspan="2"]');
+                if (lastRow) {
+                    lastRow.querySelectorAll('img').forEach(img => {
+                        let pSrc = img.getAttribute('src');
+                        if (pSrc.startsWith('//')) pSrc = 'https:' + pSrc; else if (pSrc.startsWith('/')) pSrc = 'https://images.neopets.com' + pSrc;
+                        petpets.push(pSrc);
+                    });
+                }
+
+                // Header text contains the petpet names (e.g. "din0sauring with Mazzhew the Mazzew...")
+                const headerEl = module.querySelector('th a');
+                const fullHeaderText = headerEl ? headerEl.parentNode.textContent : '';
+                let companionText = '';
+                if (fullHeaderText.includes(' with ')) {
+                    companionText = fullHeaderText.split(' with ')[1].trim();
+                }
+
+                // Check for Neolodge or other notices
+                const noticesContainer = module.querySelector('.pet_notices');
+                let noticeHtml = '';
+                if (noticesContainer && noticesContainer.textContent.trim().length > 0) {
+                    // Extract just the text from the SF div, removing the raw HTML button
+                    const sfDiv = noticesContainer.querySelector('.sf');
+                    if (sfDiv) {
+                        noticeHtml = sfDiv.innerHTML.split('<br>')[0].trim();
+                    }
+                }
+
+                pets.push({
+                    name: petName,
+                    isActive,
+                    imgSrc,
+                    species: getText(rawStats.species),
+                    color: getText(rawStats.colour),
+                    gender: getText(rawStats.gender),
+                    age: getText(rawStats.age),
+                    lvl: getText(rawStats.level),
+                    hp: getText(rawStats.health),
+                    mood: getText(rawStats.mood),
+                    hunger: getText(rawStats.hunger),
+                    str: getText(rawStats.strength),
+                    def: getText(rawStats.defence),
+                    mov: getText(rawStats.move),
+                    int: getText(rawStats.intelligence),
+                    companionText,
+                    petpets,
+                    noticeHtml
+                });
+            });
+
+            // Sort so the active pet is always at the top of the array
+            pets.sort((a, b) => (a.isActive === b.isActive) ? 0 : a.isActive ? -1 : 1);
+            return pets;
+        }
+
+        const petsData = scrapeQuickref();
+
+        // 3. Nuke the legacy DOM safely
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        // 4. Initialize NeoUI
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // 5. Build Main App Container
+        const pageWrapper = document.createElement('div');
+        pageWrapper.style.cssText = 'min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5); box-sizing: border-box;';
+        document.body.appendChild(pageWrapper);
+
+        const container = document.createElement('div');
+        container.style.cssText = 'width: 100%; max-width: 650px; display: flex; flex-direction: column; gap: var(--nui-space-4);';
+        pageWrapper.appendChild(container);
+
+        // Header
+        container.innerHTML += `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div class="nui-text" style="font-family: var(--nui-font-display); font-size: 26px; font-weight: 800;">Quick Reference</div>
+            </div>
+        `;
+
+        if (petsData.length === 0) {
+            container.innerHTML += `<div class="nui-empty"><span class="nui-empty-emoji">🐾</span><br>No Neopets found.</div>`;
+            return;
+        }
+
+        // ── Track which pet card is expanded ──
+        let expandedPet = petsData.find(p => p.isActive)?.name || null;
+
+        // ── Build and inject all cards, wired for expand/collapse ──
+        function renderAllCards(pets, activePetName) {
+            container.querySelectorAll('.nui-qr-card').forEach(c => c.remove());
+
+            pets.forEach(pet => {
+                const isSelected = pet.name === activePetName;
+
+                const card = document.createElement('div');
+                card.className = 'nui-surface nui-qr-card';
+                card.setAttribute('data-pet', pet.name);
+
+                const borderStyle = pet.isActive
+                    ? 'border: 2px solid var(--nui-accent); box-shadow: 0 0 0 4px var(--nui-accent-soft), 0 4px 16px var(--nui-shadow);'
+                    : 'border: 1px solid var(--nui-border); box-shadow: 0 2px 8px var(--nui-shadow);';
+                card.style.cssText = `border-radius: var(--nui-radius-lg); overflow: hidden; ${borderStyle} display: flex; flex-direction: column; transition: box-shadow 0.2s;`;
+
+                let genderIcon = '';
+                if (pet.gender.toLowerCase() === 'male') genderIcon = '<span style="color:#3b82f6;font-weight:800;">♂</span>';
+                else if (pet.gender.toLowerCase() === 'female') genderIcon = '<span style="color:#ec4899;font-weight:800;">♀</span>';
+
+                // ── Compact row (always visible) ──
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px var(--nui-space-4);cursor:pointer;user-select:none;';
+                row.innerHTML = `
+                    <div style="width:52px;height:52px;border-radius:var(--nui-radius-md);background:var(--nui-surface-2);border:1px solid var(--nui-border);overflow:hidden;flex-shrink:0;">
+                        <img src="${pet.imgSrc}" style="width:100%;height:100%;object-fit:cover;">
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-family:var(--nui-font-display);font-weight:800;font-size:17px;color:var(--nui-text);display:flex;align-items:center;gap:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                            ${pet.name} ${genderIcon}
+                            ${pet.isActive ? '<span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;background:var(--nui-accent);color:var(--nui-accent-ink);border-radius:4px;padding:2px 6px;margin-left:4px;">Active</span>' : ''}
+                        </div>
+                        <div style="font-size:12px;color:var(--nui-text-muted);font-weight:600;margin-top:2px;">${pet.color} ${pet.species}${pet.companionText ? ` <span style="color:var(--nui-text-faint);">· 🐾 ${pet.companionText.split(' the ')[0]}</span>` : ''}</div>
+                    </div>
+                    <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
+                        <span class="nui-badge ${pet.hunger.toLowerCase().includes('starv') ? 'nui-badge-danger' : 'nui-badge-success'}" style="font-size:11px;">${pet.hunger}</span>
+                        <svg style="color:var(--nui-text-faint);transition:transform 0.2s;flex-shrink:0;" class="nui-qr-chevron" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 18l6-6-6-6"/></svg>
+                    </div>
+                `;
+                card.appendChild(row);
+
+                // ── Expanded detail panel ──
+                const detail = document.createElement('div');
+                detail.className = 'nui-qr-detail';
+                detail.style.cssText = 'overflow:hidden;transition:max-height 0.3s ease,opacity 0.3s ease;';
+
+                let petpetHtml = '';
+                if (pet.petpets.length > 0) {
+                    const ppImages = pet.petpets.map(src => `<img src="${src}" style="width:34px;height:34px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);background:var(--nui-surface-2);object-fit:contain;">`).join('');
+                    petpetHtml = `
+                        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:1px dashed var(--nui-border);">
+                            <div style="display:flex;gap:4px;">${ppImages}</div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-size:11px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;">Companions</div>
+                                <div style="font-size:13px;font-weight:600;color:var(--nui-text);line-height:1.3;">${pet.companionText}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const noticeBlock = pet.noticeHtml ? `
+                    <div style="margin-top:12px;padding:10px 12px;border-radius:var(--nui-radius-sm);background:var(--nui-warning-soft);color:var(--nui-warning);font-size:13px;font-weight:600;border:1px solid var(--nui-warning);display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:16px;">🏨</span> ${pet.noticeHtml}
+                    </div>
+                ` : '';
+
+                detail.innerHTML = `
+                    <div style="padding:0 var(--nui-space-4) var(--nui-space-3);border-top:1px solid var(--nui-border);">
+                        <div style="margin-top:14px;background:var(--nui-surface-2);border-radius:var(--nui-radius-md);padding:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+                            <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:10px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">Lvl</span><span style="font-size:14px;font-weight:700;color:var(--nui-text);">${pet.lvl}</span></div>
+                            <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:10px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">HP</span><span style="font-size:14px;font-weight:800;color:var(--nui-success);">${pet.hp}</span></div>
+                            <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:10px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">Str</span><span style="font-size:13px;font-weight:700;color:var(--nui-danger);overflow:hidden;text-overflow:ellipsis;">${pet.str}</span></div>
+                            <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:10px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">Def</span><span style="font-size:13px;font-weight:700;color:var(--nui-accent-2);overflow:hidden;text-overflow:ellipsis;">${pet.def}</span></div>
+                            <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:10px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">Spd</span><span style="font-size:13px;font-weight:700;color:var(--nui-text);overflow:hidden;text-overflow:ellipsis;">${pet.mov}</span></div>
+                            <div style="display:flex;flex-direction:column;gap:2px;"><span style="font-size:10px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">Int</span><span style="font-size:13px;font-weight:700;color:var(--nui-accent);overflow:hidden;text-overflow:ellipsis;">${pet.int}</span></div>
+                        </div>
+                        ${petpetHtml}
+                        ${noticeBlock}
+                    </div>
+                    <div style="padding:10px var(--nui-space-4);background:var(--nui-surface-2);border-top:1px solid var(--nui-border);display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;">
+                        ${!pet.isActive ? `<button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-make-active" data-pet="${pet.name}" style="flex-shrink:0;padding:8px 16px;">Make Active</button>` : ''}
+                        <a href="/customise/?view=${encodeURIComponent(pet.name)}" class="nui-btn nui-btn-secondary nui-btn-sm" style="flex-shrink:0;text-decoration:none;padding:8px 14px;">Customise</a>
+                        <a href="/petlookup.phtml?pet=${encodeURIComponent(pet.name)}" class="nui-btn nui-btn-secondary nui-btn-sm" style="flex-shrink:0;text-decoration:none;padding:8px 14px;">Lookup</a>
+                        <a href="/abilities.phtml?pet_name=${encodeURIComponent(pet.name)}" class="nui-btn nui-btn-secondary nui-btn-sm" style="flex-shrink:0;text-decoration:none;padding:8px 14px;">Abilities</a>
+                        <a href="/battledome/battledome.phtml?type=equip" class="nui-btn nui-btn-secondary nui-btn-sm" style="flex-shrink:0;text-decoration:none;padding:8px 14px;">Equip</a>
+                        ${pet.petpets.length > 0 ? `<button type="button" class="nui-btn nui-btn-secondary nui-btn-sm btn-toggle-petpet" data-pet="${pet.name}" style="flex-shrink:0;padding:8px 14px;">🐾 Petpet</button>` : ''}
+                    </div>
+                    <!-- Inline Petpet Panel (SPA) -->
+                    ${pet.petpets.length > 0 ? `
+                    <div class="nui-petpet-panel" data-pet="${pet.name}" style="display:none;border-top:1px solid var(--nui-border);padding:var(--nui-space-3) var(--nui-space-4);display:none;flex-direction:column;gap:var(--nui-space-3);">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <img src="${pet.petpets[0]}" style="width:48px;height:48px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);background:var(--nui-surface-2);object-fit:contain;flex-shrink:0;">
+                            ${pet.petpets[1] ? `<img src="${pet.petpets[1]}" style="width:36px;height:36px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);background:var(--nui-surface-2);object-fit:contain;flex-shrink:0;">` : ''}
+                            <div style="flex:1;min-width:0;">
+                                <div class="nui-petpet-name" style="font-family:var(--nui-font-display);font-weight:800;font-size:16px;color:var(--nui-text);">${pet.companionText.split(' the ')[0] || 'Petpet'}</div>
+                                <div style="font-size:12px;color:var(--nui-text-muted);font-weight:600;">${pet.companionText.split(' the ')[1] || ''}</div>
+                            </div>
+                        </div>
+                        <!-- Result message area -->
+                        <div class="nui-petpet-result" style="display:none;padding:10px 12px;border-radius:var(--nui-radius-sm);background:var(--nui-success-soft);color:var(--nui-success);font-size:13px;font-weight:600;border:1px solid var(--nui-success);"></div>
+                        <!-- Talk -->
+                        <div style="display:flex;flex-direction:column;gap:6px;">
+                            <div style="font-size:11px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;">Say something</div>
+                            <div style="display:flex;gap:8px;">
+                                <input type="text" class="nui-petpet-talk-input" maxlength="50" placeholder="Say hi..." style="flex:1;padding:8px 12px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-text);font-size:14px;min-width:0;">
+                                <button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-petpet-talk" data-pet="${pet.name}" style="flex-shrink:0;padding:8px 14px;">Go!</button>
+                            </div>
+                        </div>
+                        <!-- Rename -->
+                        <div style="display:flex;flex-direction:column;gap:6px;">
+                            <div style="font-size:11px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;">Rename</div>
+                            <div style="display:flex;gap:8px;">
+                                <input type="text" class="nui-petpet-rename-input" maxlength="20" placeholder="${pet.companionText.split(' the ')[0] || 'New name'}" style="flex:1;padding:8px 12px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-text);font-size:14px;min-width:0;">
+                                <button type="button" class="nui-btn nui-btn-secondary nui-btn-sm btn-petpet-rename" data-pet="${pet.name}" style="flex-shrink:0;padding:8px 14px;">Rename</button>
+                            </div>
+                        </div>
+                    </div>` : ''}
+                `;
+                card.appendChild(detail);
+
+                // ── Expand/collapse logic ──
+                function setExpanded(open, animate) {
+                    const chevron = row.querySelector('.nui-qr-chevron');
+                    if (open) {
+                        detail.style.maxHeight = detail.scrollHeight + 600 + 'px'; // generous for safety
+                        detail.style.opacity = '1';
+                        chevron.style.transform = 'rotate(90deg)';
+                    } else {
+                        detail.style.maxHeight = '0';
+                        detail.style.opacity = '0';
+                        chevron.style.transform = 'rotate(0deg)';
+                    }
+                }
+
+                // Start in correct state (no animation on initial render)
+                setExpanded(isSelected, false);
+
+                row.addEventListener('click', () => {
+                    const isOpen = detail.style.maxHeight !== '0px' && detail.style.maxHeight !== '';
+                    // Collapse all others
+                    container.querySelectorAll('.nui-qr-card').forEach(otherCard => {
+                        if (otherCard === card) return;
+                        const otherDetail = otherCard.querySelector('.nui-qr-detail');
+                        const otherChevron = otherCard.querySelector('.nui-qr-chevron');
+                        if (otherDetail) { otherDetail.style.maxHeight = '0'; otherDetail.style.opacity = '0'; }
+                        if (otherChevron) otherChevron.style.transform = 'rotate(0deg)';
+                    });
+                    // Toggle this one
+                    setExpanded(!isOpen, true);
+                    expandedPet = !isOpen ? pet.name : null;
+                });
+
+                container.appendChild(card);
+            });
+
+            // ── Wire Petpet panel toggle ──
+            container.querySelectorAll('.btn-toggle-petpet').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const petName = btn.getAttribute('data-pet');
+                    const card = btn.closest('.nui-qr-card');
+                    const panel = card && card.querySelector('.nui-petpet-panel');
+                    if (!panel) return;
+                    const isOpen = panel.style.display === 'flex';
+                    panel.style.display = isOpen ? 'none' : 'flex';
+                    btn.textContent = isOpen ? '🐾 Petpet' : '✕ Petpet';
+                });
+            });
+
+            // ── Helper: scrape _ref_ck from page source ──
+            function getRefCk() {
+                const m = document.documentElement.innerHTML.match(/_ref_ck['":\s]+['"]([a-f0-9]{32})['"]/);
+                return m ? m[1] : '';
+            }
+
+            // ── Helper: show petpet result message ──
+            function showPetpetResult(panel, msg, isError) {
+                const el = panel.querySelector('.nui-petpet-result');
+                if (!el) return;
+                el.style.display = 'block';
+                el.style.background = isError ? 'var(--nui-danger-soft)' : 'var(--nui-success-soft)';
+                el.style.color = isError ? 'var(--nui-danger)' : 'var(--nui-success)';
+                el.style.borderColor = isError ? 'var(--nui-danger)' : 'var(--nui-success)';
+                el.innerHTML = msg;
+                setTimeout(() => { el.style.display = 'none'; }, 4000);
+            }
+
+            // ── Wire Talk buttons ──
+            container.querySelectorAll('.btn-petpet-talk').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const petName = btn.getAttribute('data-pet');
+                    const panel = btn.closest('.nui-petpet-panel');
+                    const input = panel && panel.querySelector('.nui-petpet-talk-input');
+                    const text = input ? input.value.trim() : '';
+                    if (!text) return;
+                    btn.textContent = '...';
+                    btn.disabled = true;
+                    try {
+                        const fd = new FormData();
+                        fd.append('neopet_name', petName);
+                        fd.append('type', 'talk');
+                        fd.append('text', text);
+                        fd.append('_ref_ck', getRefCk());
+                        const res = await fetch('/np-templates/ajax/process_neopetpet.php', {
+                            method: 'POST',
+                            headers: { 'x-requested-with': 'XMLHttpRequest' },
+                            body: fd
+                        });
+                        const data = await res.json();
+                        showPetpetResult(panel, data.message, !data.success);
+                        if (data.success && input) input.value = '';
+                    } catch (err) {
+                        showPetpetResult(panel, 'Error: ' + err.message, true);
+                    } finally {
+                        btn.textContent = 'Go!';
+                        btn.disabled = false;
+                    }
+                });
+            });
+
+            // ── Wire Rename buttons ──
+            container.querySelectorAll('.btn-petpet-rename').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const petName = btn.getAttribute('data-pet');
+                    const panel = btn.closest('.nui-petpet-panel');
+                    const input = panel && panel.querySelector('.nui-petpet-rename-input');
+                    const newName = input ? input.value.trim() : '';
+                    if (!newName) return;
+                    btn.textContent = '...';
+                    btn.disabled = true;
+                    try {
+                        const fd = new FormData();
+                        fd.append('neopet_name', petName);
+                        fd.append('pet_name', newName);
+                        fd.append('_ref_ck', getRefCk());
+                        const res = await fetch('/np-templates/ajax/process_neopetpet.php', {
+                            method: 'POST',
+                            headers: { 'x-requested-with': 'XMLHttpRequest' },
+                            body: fd
+                        });
+                        const data = await res.json();
+                        showPetpetResult(panel, data.success ? `Renamed to ${newName}!` : data.message, !data.success);
+                        if (data.success) {
+                            // Update the displayed name in the panel and compact row
+                            const nameEl = panel.querySelector('.nui-petpet-name');
+                            if (nameEl) nameEl.textContent = newName;
+                            if (input) input.value = '';
+                        }
+                    } catch (err) {
+                        showPetpetResult(panel, 'Error: ' + err.message, true);
+                    } finally {
+                        btn.textContent = 'Rename';
+                        btn.disabled = false;
+                    }
+                });
+            });
+
+            // ── Wire Make Active buttons — SPA, no reload ──
+            container.querySelectorAll('.btn-make-active').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation(); // don't toggle collapse
+                    const pName = btn.getAttribute('data-pet');
+                    btn.textContent = 'Switching...';
+                    btn.disabled = true;
+
+                    try {
+                        await fetch(`/process_changepet.phtml?new_active_pet=${encodeURIComponent(pName)}`);
+
+                        // Fetch the quickref page, re-scrape, re-render — no reload
+                        const res = await fetch('/quickref.phtml', { credentials: 'include' });
+                        const html = await res.text();
+                        const doc = new DOMParser().parseFromString(html, 'text/html');
+
+                        // Re-scrape using the fetched DOM
+                        const newPets = [];
+                        doc.querySelectorAll('.contentModule').forEach(module => {
+                            if (!module.id || !module.id.endsWith('_details')) return;
+                            const petName = module.id.replace('_details', '');
+                            const isActive = !!module.querySelector('th.contentModuleHeader');
+                            const imageDiv = module.querySelector('.pet_image');
+                            let imgSrc = 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png';
+                            if (imageDiv && imageDiv.style.backgroundImage) {
+                                const match = imageDiv.style.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
+                                if (match) { let src = match[1]; if (src.startsWith('//')) src = 'https:' + src; imgSrc = src; }
+                            }
+                            const rawStats = {};
+                            module.querySelectorAll('.pet_stats tr').forEach(row => {
+                                const th = row.querySelector('th'), td = row.querySelector('td');
+                                if (th && td) rawStats[th.textContent.replace(':','').trim().toLowerCase()] = td.innerHTML.trim();
+                            });
+                            const getText = (h) => { if (!h) return '-'; const t = doc.createElement('div'); t.innerHTML = h; return t.textContent.trim(); };
+                            const petpets = [];
+                            const lastRow = module.querySelector('.pet_stats tr:last-child td[colspan="2"]');
+                            if (lastRow) lastRow.querySelectorAll('img').forEach(img => {
+                                let s = img.getAttribute('src');
+                                if (s.startsWith('//')) s = 'https:' + s; else if (s.startsWith('/')) s = 'https://images.neopets.com' + s;
+                                petpets.push(s);
+                            });
+                            const headerEl = module.querySelector('th a');
+                            const fullHeaderText = headerEl ? headerEl.parentNode.textContent : '';
+                            let companionText = '';
+                            if (fullHeaderText.includes(' with ')) companionText = fullHeaderText.split(' with ')[1].trim();
+                            const noticesContainer = module.querySelector('.pet_notices');
+                            let noticeHtml = '';
+                            if (noticesContainer && noticesContainer.textContent.trim().length > 0) {
+                                const sfDiv = noticesContainer.querySelector('.sf');
+                                if (sfDiv) noticeHtml = sfDiv.innerHTML.split('<br>')[0].trim();
+                            }
+                            newPets.push({ name: petName, isActive, imgSrc,
+                                species: getText(rawStats.species), color: getText(rawStats.colour),
+                                gender: getText(rawStats.gender), age: getText(rawStats.age),
+                                lvl: getText(rawStats.level), hp: getText(rawStats.health),
+                                mood: getText(rawStats.mood), hunger: getText(rawStats.hunger),
+                                str: getText(rawStats.strength), def: getText(rawStats.defence),
+                                mov: getText(rawStats.move), int: getText(rawStats.intelligence),
+                                companionText, petpets, noticeHtml
+                            });
+                        });
+                        newPets.sort((a, b) => (a.isActive === b.isActive) ? 0 : a.isActive ? -1 : 1);
+
+                        // Slide out, swap, slide in
+                        container.style.transition = 'opacity 0.18s ease';
+                        container.style.opacity = '0';
+                        setTimeout(() => {
+                            expandedPet = pName;
+                            renderAllCards(newPets, pName);
+                            container.style.opacity = '1';
+                        }, 180);
+
+                    } catch (err) {
+                        btn.textContent = 'Error';
+                        btn.className = 'nui-btn nui-btn-danger nui-btn-sm';
+                        setTimeout(() => { btn.textContent = 'Make Active'; btn.disabled = false; btn.className = 'nui-btn nui-btn-primary nui-btn-sm btn-make-active'; }, 2000);
+                    }
+                });
+            });
+        }
+
+        // 6. Initial render — active pet pre-expanded
+        renderAllCards(petsData, expandedPet);
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        try { run(); } catch (err) { showFatalError(err); }
+    } else {
+        document.addEventListener('DOMContentLoaded', () => { try { run(); } catch (err) { showFatalError(err); } });
+    }
+})();
+
 // ==============================================================================
 // MODULE 8: NEOBOARDS SPA (TABBED MULTI-THREADING & QUICK REPLY)
 // ==============================================================================
@@ -5425,4 +5939,613 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             } catch (err) { showFatalError(err); }
         });
     }
+})();
+// ==============================================================================
+// MODULE 9: MYSTERY ISLAND TRAINING SCHOOL (FULL SPA)
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/island\/training\.phtml/.test(location.pathname) && !/\/island\/process_training\.phtml/.test(location.pathname)) return;
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Training SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    const COURSE_TIERS = [
+        { name: 'Grasshopper', maxLevel: 20,  stones: 1, hours: 2  },
+        { name: 'Basic',       maxLevel: 40,  stones: 2, hours: 3  },
+        { name: 'Intermediate',maxLevel: 80,  stones: 3, hours: 4  },
+        { name: 'Adept',       maxLevel: 100, stones: 4, hours: 6  },
+        { name: 'Advanced',    maxLevel: 120, stones: 5, hours: 8  },
+        { name: 'Expert',      maxLevel: 150, stones: 6, hours: 12 },
+        { name: 'Master',      maxLevel: 200, stones: 7, hours: 18 },
+        { name: 'Grand Master',maxLevel: 250, stones: 8, hours: 24 },
+    ];
+
+    function tierForLevel(lvl) {
+        return COURSE_TIERS.find(t => lvl <= t.maxLevel) || COURSE_TIERS[COURSE_TIERS.length - 1];
+    }
+
+    // --- Custom SSW Modal (Ported from Coincidence) ---
+    function openCustomSSW(itemName) {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
+        backdrop.style.cssText = 'position: fixed; inset: 0; z-index: 100000; background: var(--nui-overlay); display: flex; align-items: center; justify-content: center; padding: var(--nui-space-4); transition: opacity var(--nui-dur-fast) var(--nui-ease);';
+
+        const modal = document.createElement('div');
+        modal.className = 'nui-surface';
+        modal.style.cssText = 'width: 100%; max-width: 450px; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95); opacity: 0; transition: all var(--nui-dur-fast) var(--nui-ease-snap);';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'padding: var(--nui-space-4); border-bottom: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: space-between; align-items: center;';
+        header.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 24px; height: 24px; background: var(--nui-accent-soft); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--nui-accent);"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg></div>
+                <div style="font-family: var(--nui-font-display); font-size: 18px; font-weight: 800; color: var(--nui-text);">Super Shop Wizard</div>
+            </div>
+            <button type="button" class="nui-reset" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--nui-text-muted); line-height: 1;">&times;</button>
+        `;
+
+        header.querySelector('button').addEventListener('click', closeModal);
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
+
+        function closeModal() {
+            modal.style.transform = 'scale(0.95)';
+            modal.style.opacity = '0';
+            backdrop.style.opacity = '0';
+            setTimeout(() => backdrop.remove(), 200);
+        }
+
+        const content = document.createElement('div');
+        content.style.cssText = 'padding: var(--nui-space-4); max-height: 55vh; overflow-y: auto; font-size: 14px; -webkit-overflow-scrolling: touch;';
+
+        const footer = document.createElement('div');
+        footer.style.cssText = 'padding: var(--nui-space-3) var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: flex-end;';
+
+        const resubmitBtn = document.createElement('button');
+        resubmitBtn.className = 'nui-btn nui-btn-primary nui-btn-sm';
+        resubmitBtn.textContent = 'Resubmit Search';
+        footer.appendChild(resubmitBtn);
+
+        modal.appendChild(header);
+        modal.appendChild(content);
+        modal.appendChild(footer);
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+
+        requestAnimationFrame(() => {
+            modal.style.transform = 'scale(1)';
+            modal.style.opacity = '1';
+        });
+
+        async function doSearch() {
+            resubmitBtn.disabled = true;
+            content.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: var(--nui-space-5) 0; color: var(--nui-text-muted);">
+                    <div style="font-weight: 600;">Searching for <b>${itemName}</b>...</div>
+                </div>
+            `;
+
+            try {
+                const params = new URLSearchParams({
+                    q: itemName, priceOnly: 0, context: 0, partial: 0,
+                    min_price: 0, max_price: 0, lang: 'en', json: 1, cb: Date.now()
+                });
+
+                const res = await fetch(`/shops/ssw/ssw_query.php?${params.toString()}`);
+                const data = await res.json();
+
+                if (data.data && data.data.error) {
+                    content.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: var(--nui-space-4); text-align: center;">
+                            <div style="font-size: 32px;">⚠️</div>
+                            <div style="color: var(--nui-danger); font-weight: 800;">${data.data.error}</div>
+                        </div>
+                    `;
+                } else if (data.html) {
+                    content.innerHTML = data.html;
+                    const table = content.querySelector('table');
+                    if (table) {
+                        table.style.width = '100%';
+                        table.style.borderCollapse = 'collapse';
+                        table.style.marginTop = 'var(--nui-space-2)';
+                        table.querySelectorAll('tr').forEach((row, idx) => {
+                            if (idx === 0) row.style.background = 'var(--nui-surface-2)';
+                            row.querySelectorAll('td, th').forEach(cell => {
+                                cell.style.padding = '10px var(--nui-space-2)';
+                                cell.style.borderBottom = '1px solid var(--nui-border)';
+                                cell.style.color = 'var(--nui-text)';
+                                cell.style.fontSize = '13.5px';
+                                cell.removeAttribute('bgcolor');
+                                cell.removeAttribute('class');
+                            });
+                        });
+                        table.querySelectorAll('a').forEach(a => {
+                            a.style.color = 'var(--nui-accent)';
+                            a.style.fontWeight = '800';
+                            a.style.textDecoration = 'none';
+                            a.setAttribute('target', '_blank');
+                        });
+                    }
+                } else {
+                    content.innerHTML = `<div style="text-align: center; color: var(--nui-text-muted); font-weight: 600; padding: var(--nui-space-4);">No results found.</div>`;
+                }
+            } catch (err) {
+                content.innerHTML = `<div style="color: var(--nui-danger); text-align: center; font-weight: 700; padding: var(--nui-space-4);">Connection failed. Are you Premium?</div>`;
+            }
+            resubmitBtn.disabled = false;
+        }
+
+        resubmitBtn.addEventListener('click', doSearch);
+        doSearch();
+    }
+
+
+    function scrapeStatus(doc) {
+        const pets = [];
+        const rows = doc.querySelectorAll('table[align="center"] tr');
+        let i = 0;
+
+        while (i < rows.length) {
+            const headerTd = rows[i] && rows[i].querySelector('td[bgcolor="#efefef"]');
+            if (!headerTd) { i++; continue; }
+
+            const headerText = headerTd.textContent.trim();
+            const headerMatch = headerText.match(/^(.+?)\s+\(Level\s+(\d+)\)\s+(.*)/);
+            if (!headerMatch) { i++; continue; }
+
+            const name = headerMatch[1].trim();
+            const level = parseInt(headerMatch[2]);
+            const statusText = headerMatch[3].trim();
+            const onCourse = statusText.startsWith('is currently studying');
+            const courseSubject = onCourse ? statusText.replace('is currently studying', '').trim() : null;
+
+            const dataRow = rows[i + 1];
+            let imgSrc = `//pets.neopets.com/cpn/${encodeURIComponent(name)}/2/2.png`;
+            let lvl = level, str = '-', def = '-', mov = '-', hp = '-';
+            let courseFinished = false;
+            let totalSeconds = 0;
+            let codestonesNeeded = [];
+
+            if (dataRow) {
+                const img = dataRow.querySelector('img[src*="/cpn/"]');
+                if (img) imgSrc = img.getAttribute('src');
+
+                const tdText = dataRow.querySelector('td:first-child') ? dataRow.querySelector('td:first-child').innerHTML : '';
+                const lvlM = tdText.match(/Lvl\s*:\s*<[^>]*>(\d+)/);
+                const strM = tdText.match(/Str\s*:\s*<[^>]*>(\d+)/);
+                const defM = tdText.match(/Def\s*:\s*<[^>]*>(\d+)/);
+                const movM = tdText.match(/Mov\s*:\s*<[^>]*>(\d+)/);
+                const hpM  = tdText.match(/Hp\s*:\s*<[^>]*>([\d\s\/]+)</);
+                if (lvlM) lvl = parseInt(lvlM[1]);
+                if (strM) str = strM[1];
+                if (defM) def = defM[1];
+                if (movM) mov = movM[1];
+                if (hpM)  hp  = hpM[1].trim();
+
+                const actionTd = dataRow.querySelectorAll('td')[1];
+                if (actionTd) {
+                    const actionText = actionTd.textContent.trim();
+                    if (actionText.includes('Course Finished')) courseFinished = true;
+
+                    const timeMatch = actionText.match(/(\d+)\s*hrs?,?\s*(\d+)\s*minutes?,?\s*(\d+)\s*seconds?/i);
+                    if (timeMatch) {
+                        totalSeconds = (parseInt(timeMatch[1]) * 3600) + (parseInt(timeMatch[2]) * 60) + parseInt(timeMatch[3]);
+                    }
+
+                    actionTd.querySelectorAll('b').forEach(b => {
+                        if (b.textContent.includes('Codestone')) codestonesNeeded.push(b.textContent.trim());
+                    });
+                }
+            }
+
+            pets.push({ name, level: lvl, str, def, mov, hp, imgSrc, onCourse, courseSubject, courseFinished, totalSeconds, codestonesNeeded });
+            i += 2;
+        }
+
+        // Sort: Finished > Needs Payment > Training > Idle
+        pets.sort((a, b) => {
+            const score = p => p.courseFinished ? 4 : (p.codestonesNeeded.length > 0 ? 3 : (p.onCourse ? 2 : 1));
+            return score(b) - score(a);
+        });
+
+        return pets;
+    }
+
+    function scrapeCoursesOptions(doc) {
+        const map = {};
+        doc.querySelectorAll('select[name="pet_name"] option').forEach(opt => {
+            if (!opt.value) return;
+            const m = opt.textContent.match(/^(.+?)\s+-\s+(\w[\w\s]*?)\s+\((\d+)\s+codestone/i);
+            if (m) map[m[1].trim()] = { tier: m[2].trim(), stones: parseInt(m[3]) };
+        });
+        return map;
+    }
+
+    async function fetchTraining(type) {
+        const res = await fetch(`/island/training.phtml?type=${type}`, { credentials: 'include' });
+        const html = await res.text();
+        return { doc: new DOMParser().parseFromString(html, 'text/html'), raw: html };
+    }
+
+    async function processTraining(type, petName, courseType) {
+        const fd = new FormData();
+        fd.append('type', type);
+        fd.append('pet_name', petName);
+        if (courseType) fd.append('course_type', courseType);
+
+        const res = await fetch('/island/process_training.phtml', { method: 'POST', credentials: 'include', body: fd });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const contentTd = doc.querySelector('td.content');
+
+        if (!contentTd) return { ok: true, message: 'Done!' };
+
+        const clone = contentTd.cloneNode(true);
+        clone.querySelectorAll('center a, br').forEach(el => { if (el.tagName === 'BR') el.replaceWith(' '); });
+
+        const text = clone.textContent.replace(/\s+/g, ' ').trim();
+        const isError = /error|invalid|cannot|already|not enough|too many/i.test(text);
+        return { ok: !isError, message: text.substring(0, 300) };
+    }
+
+    async function init() {
+        const profile = NeoUI.scrapeLegacyProfile();
+
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'nui-reset';
+        wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5); max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--nui-space-4);';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;align-items:center;gap:12px;margin-bottom:var(--nui-space-2);';
+        header.innerHTML = `
+            <img src="//images.neopets.com/island/judo5.gif" style="width:52px;height:52px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);object-fit:cover;flex-shrink:0;">
+            <div>
+                <div style="font-family:var(--nui-font-display);font-weight:800;font-size:22px;color:var(--nui-text);">Mystery Island Training</div>
+                <div style="font-size:13px;color:var(--nui-text-muted);font-weight:600;">Codestones accepted here</div>
+            </div>
+        `;
+
+        const tabs = document.createElement('div');
+        tabs.style.cssText = 'display:flex;gap:6px;margin-bottom:var(--nui-space-3);border-bottom:2px solid var(--nui-border);padding-bottom:0;';
+
+        const TABS = [
+            { id: 'status',  label: '📋 Status'  },
+            { id: 'courses', label: '📚 Courses'  },
+            { id: 'wisdom',  label: '🥋 Wisdom'   },
+        ];
+
+        const startTab = new URLSearchParams(location.search).get('type') || 'status';
+        let activeTab = TABS.find(t => t.id === startTab) ? startTab : 'status';
+
+        const tabEls = {};
+        TABS.forEach(t => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = t.label;
+            btn.style.cssText = `padding:8px 14px;border:none;cursor:pointer;font-weight:700;font-size:13px;border-radius:var(--nui-radius-sm) var(--nui-radius-sm) 0 0;background:transparent;color:var(--nui-text-muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all 0.15s;`;
+            tabEls[t.id] = btn;
+            tabs.appendChild(btn);
+        });
+
+        const content = document.createElement('div');
+        content.className = 'nui-surface';
+        content.style.cssText = 'border-radius:var(--nui-radius-lg);overflow:hidden;min-height:200px; box-shadow: 0 4px 12px var(--nui-shadow); border: 1px solid var(--nui-border);';
+
+        const contentInner = document.createElement('div');
+        contentInner.style.cssText = 'padding:var(--nui-space-4);';
+        content.appendChild(contentInner);
+
+        wrapper.appendChild(header);
+        wrapper.appendChild(tabs);
+        wrapper.appendChild(content);
+        document.body.appendChild(wrapper);
+
+        let timerIntervals = [];
+        function clearAllTimers() {
+            timerIntervals.forEach(t => clearInterval(t));
+            timerIntervals = [];
+        }
+
+        function showToast(msg, isError) {
+            const toast = document.createElement('div');
+            toast.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 18px;border-radius:var(--nui-radius-md);font-size:14px;font-weight:700;max-width:90vw;text-align:center;box-shadow:0 4px 16px var(--nui-shadow);background:${isError ? 'var(--nui-danger)' : 'var(--nui-success)'};color:#fff;transition:opacity 0.3s;`;
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        async function switchTab(id) {
+            activeTab = id;
+            clearAllTimers();
+            Object.entries(tabEls).forEach(([tid, btn]) => {
+                const active = tid === id;
+                btn.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                btn.style.borderBottomColor = active ? 'var(--nui-accent)' : 'transparent';
+                btn.style.background = active ? 'var(--nui-surface-2)' : 'transparent';
+            });
+            contentInner.innerHTML = '<div style="text-align:center;padding:40px;color:var(--nui-text-faint);">Loading...</div>';
+            try {
+                if (id === 'status') await renderStatus();
+                else if (id === 'courses') await renderCourses();
+                else if (id === 'wisdom') await renderWisdom();
+            } catch (err) {
+                contentInner.innerHTML = `<div style="color:var(--nui-danger);font-weight:600;text-align:center;">Failed to load: ${err.message}</div>`;
+            }
+        }
+
+        TABS.forEach(t => { tabEls[t.id].addEventListener('click', () => switchTab(t.id)); });
+
+        // ── STATUS VIEW ───────────────────────────────────────────────────────────
+        async function renderStatus() {
+            const { doc } = await fetchTraining('status');
+            const pets = scrapeStatus(doc);
+
+            if (!pets.length) {
+                contentInner.innerHTML = '<div style="color:var(--nui-text-muted);text-align:center;padding:40px;">No pets found in training logs.</div>';
+                return;
+            }
+
+            contentInner.innerHTML = '';
+
+            const training = pets.filter(p => p.onCourse);
+            const finished = pets.filter(p => p.courseFinished);
+            if (training.length || finished.length) {
+                const bar = document.createElement('div');
+                bar.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:var(--nui-space-3);';
+                if (finished.length) bar.innerHTML += `<span class="nui-badge nui-badge-success">🎉 ${finished.length} course${finished.length>1?'s':''} finished!</span>`;
+                if (training.length) bar.innerHTML += `<span class="nui-badge">${training.length} in training</span>`;
+                contentInner.appendChild(bar);
+            }
+
+            pets.forEach((pet, i) => {
+                const card = document.createElement('div');
+                card.style.cssText = `margin-bottom:12px;border-radius:var(--nui-radius-md);overflow:hidden;border:${pet.courseFinished || pet.codestonesNeeded.length > 0 ? '2px solid var(--nui-accent)' : '1px solid var(--nui-border)'};background:var(--nui-surface-2);`;
+
+                let statusBadge = '';
+                if (pet.courseFinished) statusBadge = '<span class="nui-badge nui-badge-success">Course Finished!</span>';
+                else if (pet.codestonesNeeded.length > 0) statusBadge = '<span class="nui-badge nui-badge-warning">Awaiting Payment</span>';
+                else if (pet.onCourse) statusBadge = `<span class="nui-badge">📚 ${pet.courseSubject} · <span id="nui-timer-${i}">Loading...</span></span>`;
+                else statusBadge = '<span class="nui-badge" style="opacity:0.5;">Not enrolled</span>';
+
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;">
+                        <img src="${pet.imgSrc}" style="width:48px;height:48px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);object-fit:cover;flex-shrink:0;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-family:var(--nui-font-display);font-weight:800;font-size:16px;color:var(--nui-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pet.name}</div>
+                            <div style="font-size:12px;color:var(--nui-text-muted);font-weight:600;margin-top:2px;">${statusBadge}</div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;flex-shrink:0;">
+                            ${[['Lvl',pet.level,'var(--nui-text)'],['Str',pet.str,'var(--nui-danger)'],['Def',pet.def,'var(--nui-accent-2)'],['Spd',pet.mov,'var(--nui-text)'],['HP',pet.hp,'var(--nui-success)']].map(([label,val,color])=>`
+                            <div style="display:flex;flex-direction:column;gap:1px;">
+                                <span style="font-size:9px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">${label}</span>
+                                <span style="font-size:12px;font-weight:700;color:${color};">${val}</span>
+                            </div>`).join('')}
+                        </div>
+                    </div>
+                `;
+
+                // Handle live countdown
+                if (pet.onCourse && pet.totalSeconds > 0) {
+                    let secs = pet.totalSeconds;
+                    const updateDisplay = () => {
+                        const el = card.querySelector(`#nui-timer-${i}`);
+                        if (!el) return;
+                        if (secs <= 0) { el.textContent = 'Ready!'; return; }
+                        const h = Math.floor(secs / 3600).toString().padStart(2, '0');
+                        const m = Math.floor((secs % 3600) / 60).toString().padStart(2, '0');
+                        const s = (secs % 60).toString().padStart(2, '0');
+                        el.textContent = `${h}:${m}:${s}`;
+                    };
+                    updateDisplay();
+                    const interval = setInterval(() => { secs--; updateDisplay(); }, 1000);
+                    timerIntervals.push(interval);
+                } else if (pet.onCourse) {
+                    const el = card.querySelector(`#nui-timer-${i}`);
+                    if (el) el.textContent = 'Ready!';
+                }
+
+                // Footers
+                if (pet.courseFinished) {
+                    const footer = document.createElement('div');
+                    footer.style.cssText = 'padding:8px 12px;border-top:1px solid var(--nui-border);background:var(--nui-success-soft);';
+                    footer.innerHTML = `<button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-complete" data-pet="${pet.name}" style="width:100%;padding:8px;background:var(--nui-success);color:var(--nui-surface);">✓ Complete Course</button>`;
+                    card.appendChild(footer);
+                } else if (pet.codestonesNeeded.length > 0) {
+                    const footer = document.createElement('div');
+                    footer.style.cssText = 'padding:12px;border-top:1px solid var(--nui-border);background:var(--nui-warning-soft); display: flex; flex-direction: column; gap: 8px;';
+
+                    const payRow = document.createElement('div');
+                    payRow.style.cssText = 'display: flex; gap: 8px; justify-content: space-between; align-items: center;';
+                    payRow.innerHTML = `
+                        <div style="font-size: 12px; font-weight: 800; color: var(--nui-warning); text-transform: uppercase;">Required Codestones</div>
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" class="nui-btn nui-btn-danger nui-btn-sm btn-cancel" data-pet="${pet.name}" style="padding: 6px 12px; font-size: 11px;">Cancel</button>
+                            <button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-pay" data-pet="${pet.name}" style="padding: 6px 12px; font-size: 11px;">Pay All</button>
+                        </div>
+                    `;
+                    footer.appendChild(payRow);
+
+                    const stonesList = document.createElement('div');
+                    stonesList.style.cssText = 'display:flex; flex-direction:column; gap:6px;';
+                    pet.codestonesNeeded.forEach(stoneName => {
+                        const row = document.createElement('div');
+                        row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:var(--nui-surface); border:1px solid var(--nui-border); padding:6px 10px; border-radius:var(--nui-radius-sm);';
+                        row.innerHTML = `
+                            <span style="font-size:13px; font-weight:700; color:var(--nui-text);">${stoneName}</span>
+                            <div style="display:flex; gap:6px;">
+                                <button type="button" class="nui-btn nui-btn-secondary nui-btn-sm btn-ssw" style="padding:4px 8px; font-size:11px;">SSW</button>
+                                <a href="/market.phtml?type=wizard&string=${encodeURIComponent(stoneName)}" target="_blank" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:4px 8px; font-size:11px; text-decoration:none;">SW</a>
+                            </div>
+                        `;
+                        row.querySelector('.btn-ssw').addEventListener('click', () => openCustomSSW(stoneName));
+                        stonesList.appendChild(row);
+                    });
+
+                    footer.appendChild(stonesList);
+                    card.appendChild(footer);
+                }
+
+                contentInner.appendChild(card);
+            });
+
+            // Action Listeners
+            contentInner.querySelectorAll('.btn-complete').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const petName = btn.getAttribute('data-pet');
+                    btn.textContent = 'Processing...'; btn.disabled = true;
+                    const result = await processTraining('complete', petName);
+                    showToast(result.ok ? `${petName}'s course complete! 🎉` : result.message, !result.ok);
+                    if (result.ok) await renderStatus();
+                });
+            });
+
+            contentInner.querySelectorAll('.btn-pay').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const petName = btn.getAttribute('data-pet');
+                    btn.textContent = 'Paying...'; btn.disabled = true;
+                    const result = await processTraining('pay', petName);
+                    showToast(result.ok ? `Paid for ${petName}'s course!` : result.message, !result.ok);
+                    if (result.ok) await renderStatus();
+                    else { btn.textContent = 'Pay All'; btn.disabled = false; }
+                });
+            });
+
+            contentInner.querySelectorAll('.btn-cancel').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const petName = btn.getAttribute('data-pet');
+                    btn.textContent = '...'; btn.disabled = true;
+                    const result = await processTraining('cancel', petName);
+                    showToast(result.ok ? `Cancelled ${petName}'s course.` : result.message, !result.ok);
+                    if (result.ok) await renderStatus();
+                    else { btn.textContent = 'Cancel'; btn.disabled = false; }
+                });
+            });
+        }
+
+        // ── COURSES VIEW ──────────────────────────────────────────────────────────
+        async function renderCourses() {
+            const [statusFetch, coursesFetch] = await Promise.all([
+                fetchTraining('status'),
+                fetchTraining('courses')
+            ]);
+            const pets = scrapeStatus(statusFetch.doc);
+            const tierMap = scrapeCoursesOptions(coursesFetch.doc);
+
+            contentInner.innerHTML = '';
+
+            const eligible = pets.filter(p => !p.onCourse && !p.courseFinished && p.codestonesNeeded.length === 0 && p.level < 250);
+
+            if (!eligible.length) {
+                const note = document.createElement('div');
+                note.style.cssText = 'text-align:center;padding:40px;color:var(--nui-text-muted);';
+                note.textContent = 'All your pets are currently in training or awaiting payment!';
+                contentInner.appendChild(note);
+                return;
+            }
+
+            const courseTypes = ['Strength', 'Defence', 'Agility', 'Endurance', 'Level'];
+            const ctrlRow = document.createElement('div');
+            ctrlRow.style.cssText = 'display:flex;gap:8px;margin-bottom:var(--nui-space-4);align-items:center;flex-wrap:wrap;';
+            ctrlRow.innerHTML = `
+                <span style="font-size:12px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">Course Type</span>
+                <select class="nui-select" id="nui-course-type" style="flex:1;min-width:120px;max-width:200px;font-weight:700;">
+                    ${courseTypes.map(c => `<option value="${c}">${c}</option>`).join('')}
+                </select>
+            `;
+            contentInner.appendChild(ctrlRow);
+
+            const listWrap = document.createElement('div');
+            listWrap.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--nui-space-3);';
+
+            eligible.forEach(pet => {
+                const info = tierMap[pet.name] || { tier: tierForLevel(pet.level).name, stones: tierForLevel(pet.level).stones };
+                const tier = tierForLevel(pet.level);
+
+                const card = document.createElement('div');
+                card.style.cssText = 'display:flex; flex-direction:column; align-items:center; text-align:center; padding: 12px; border: 1px solid var(--nui-border); border-radius: var(--nui-radius-md); background: var(--nui-surface-2);';
+
+                card.innerHTML = `
+                    <img src="${pet.imgSrc}" style="width:54px; height:54px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); object-fit:cover; margin-bottom:8px;">
+                    <div style="font-weight:800; font-size:15px; color:var(--nui-text); width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${pet.name}</div>
+                    <div style="font-size:12px; color:var(--nui-text-muted); margin-top:2px; margin-bottom:12px;">Lvl ${pet.level} · ${info.stones} stone${info.stones>1?'s':''}</div>
+                    <button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-start" data-pet="${pet.name}" style="width: 100%;">Start Course</button>
+                `;
+                listWrap.appendChild(card);
+            });
+
+            contentInner.appendChild(listWrap);
+
+            contentInner.querySelectorAll('.btn-start').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const petName = btn.getAttribute('data-pet');
+                    const courseType = document.getElementById('nui-course-type').value;
+                    btn.textContent = '...'; btn.disabled = true;
+                    const result = await processTraining('start', petName, courseType);
+                    showToast(result.ok ? `${petName} started ${courseType}!` : result.message, !result.ok);
+                    if (result.ok) await switchTab('status');
+                    else { btn.textContent = 'Start'; btn.disabled = false; }
+                });
+            });
+        }
+
+        // ── WISDOM VIEW ───────────────────────────────────────────────────────────
+        async function renderWisdom() {
+            const { raw } = await fetchTraining('wisdom');
+
+            // Raw HTML regex match prevents fragile DOM traversal issues
+            const quoteMatch = raw.match(/The Techo Master says '<b>(.*?)<\/b>'/i);
+            const quote = quoteMatch ? quoteMatch[1] : 'The Techo Master has no wisdom for you today.';
+
+            contentInner.innerHTML = `
+                <div style="text-align:center;padding:var(--nui-space-4);">
+                    <img src="//images.neopets.com/island/techomaster.gif" style="width:80px;height:80px;border-radius:50%;border:2px solid var(--nui-border);object-fit:cover;margin-bottom:16px;">
+                    <div style="font-size:13px;color:var(--nui-text-faint);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">The Techo Master says...</div>
+                    <blockquote style="font-size:15px;font-weight:600;color:var(--nui-text);font-style:italic;line-height:1.6;max-width:480px;margin:0 auto;padding:16px;border-radius:var(--nui-radius-md);background:var(--nui-surface-2);border-left:3px solid var(--nui-accent);">"${quote}"</blockquote>
+                    <button type="button" class="nui-btn nui-btn-secondary nui-btn-sm" style="margin-top:14px;" id="nui-new-wisdom">New Wisdom</button>
+                </div>
+            `;
+
+            contentInner.querySelector('#nui-new-wisdom').onclick = async () => {
+                contentInner.innerHTML = '<div style="text-align:center;padding:40px;color:var(--nui-text-faint);">Consulting the master...</div>';
+                await renderWisdom();
+            };
+        }
+
+        // ── Boot ──────────────────────────────────────────────────────────────────
+        switchTab(activeTab);
+    }
+
+    let booted = false;
+    function boot() {
+        if (booted) return;
+        booted = true;
+        init().catch(showFatalError);
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        boot();
+    } else {
+        document.addEventListener('DOMContentLoaded', boot);
+    }
+
 })();
