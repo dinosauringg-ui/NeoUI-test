@@ -1069,20 +1069,16 @@
     // sidebar before a consuming script does anything destructive to the DOM.
     // Centralized here so every page's topbar+drawer are populated from one
     // implementation instead of each script keeping its own copy in sync.
-        function scrapeLegacyProfile() {
+            function scrapeLegacyProfile() {
         try {
-            // Current header uses a "...__2020" profile dropdown (id suffix may
-            // rotate with theme updates, so match on prefix). Username and active
-            // pet name are plain links inside it; pet image is a background-image
-            // on a div, not an <img>.
             const profileDropdown = document.querySelector('[id^="navprofiledropdown__"]');
             const petImgDiv = document.querySelector('[id^="navProfilePet__"]');
 
             const userLink = (profileDropdown && profileDropdown.querySelector('a[href^="/userlookup.phtml?user="]'))
-                || document.querySelector('.user a[href^="/userlookup.phtml?user="]'); // legacy fallback
+                || document.querySelector('.user a[href^="/userlookup.phtml?user="]');
 
             const petLink = profileDropdown && profileDropdown.querySelector('a[href^="/petlookup.phtml?pet="]');
-            const legacyPetName = document.querySelector('.sidebarHeader a b'); // legacy fallback
+            const legacyPetName = document.querySelector('.sidebarHeader a b');
 
             let petImage = null;
             if (petImgDiv && petImgDiv.style.backgroundImage) {
@@ -1090,41 +1086,54 @@
                 if (m) petImage = m[1].startsWith('//') ? 'https:' + m[1] : m[1];
             }
             if (!petImage) {
-                const legacyPetImg = document.querySelector('.activePet img'); // legacy fallback
+                const legacyPetImg = document.querySelector('.activePet img');
                 if (legacyPetImg && legacyPetImg.src) petImage = legacyPetImg.src;
             }
 
             const npEl = document.getElementById('npanchor');
             const ncEl = document.getElementById('ncanchor');
 
-               // 1. Detect classic layout notifications (e.g., Wishing Well, Transfer Log)
             const notifIcon = document.querySelector('.eventIcon.sf');
             const notifImg = notifIcon && notifIcon.querySelector('img[src]');
             const hasClassicNotif = !!(notifImg && notifImg.getAttribute('src') && !notifImg.getAttribute('src').includes('blank'));
-
-            // 2. Detect modern 2020 layout notifications (e.g., Neoboards)
             const modernBadge = document.querySelector('.nav-bell .nav-bell-icon__badge, .nav-bell .bell-badge, [class*="nav-bell"] [class*="badge"], [class*="nav-bell"] [class*="alert"]');
-            const hasModernNotif = !!modernBadge;
+            const hasNotification = hasClassicNotif || !!modernBadge;
 
-            const hasNotification = hasClassicNotif || hasModernNotif;
-
-            return {
-                username: (userLink && userLink.textContent) ? userLink.textContent.trim() : 'Neopian',
-                petname: (petLink && petLink.textContent) ? petLink.textContent.trim() : ((legacyPetName && legacyPetName.textContent) ? legacyPetName.textContent.trim() : 'Unknown Pet'),
-                petImage: petImage || 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
-                np: (npEl && npEl.textContent) ? npEl.textContent.trim() : '0',
-                nc: (ncEl && ncEl.textContent) ? ncEl.textContent.trim() : '0',
+            // Extract what we can find on the CURRENT page
+            const liveData = {
+                username: (userLink && userLink.textContent) ? userLink.textContent.trim() : null,
+                petname: (petLink && petLink.textContent) ? petLink.textContent.trim() : ((legacyPetName && legacyPetName.textContent) ? legacyPetName.textContent.trim() : null),
+                petImage: petImage,
+                np: (npEl && npEl.textContent) ? npEl.textContent.trim() : null,
+                nc: (ncEl && ncEl.textContent) ? ncEl.textContent.trim() : null,
                 hasNotification: hasNotification
             };
-        } catch (err) {
-            console.error("NeoUI: Failed to scrape profile, falling back to defaults.", err);
-            return {
-                username: 'Neopian', petname: 'Unknown Pet',
-                petImage: 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
-                np: '0', nc: '0', hasNotification: false
+
+            // Load cache
+            let cache = {};
+            try { cache = JSON.parse(localStorage.getItem('nui_profile_cache')) || {}; } catch (e) {}
+
+            // Merge live data over cache, falling back to defaults if BOTH are empty
+            const finalProfile = {
+                username: liveData.username || cache.username || 'Neopian',
+                petname: liveData.petname || cache.petname || 'Unknown Pet',
+                petImage: liveData.petImage || cache.petImage || 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png',
+                np: liveData.np || cache.np || '0',
+                nc: liveData.nc || cache.nc || '0',
+                hasNotification: liveData.hasNotification || false // Don't cache notifications
             };
+
+            // Save the newly merged state back to cache
+            try { localStorage.setItem('nui_profile_cache', JSON.stringify(finalProfile)); } catch (e) {}
+
+            return finalProfile;
+
+        } catch (err) {
+            console.error("NeoUI: Failed to scrape profile.", err);
+            return { username: 'Neopian', petname: 'Unknown Pet', petImage: 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png', np: '0', nc: '0', hasNotification: false };
         }
     }
+
 
 
     // ---- Shared fixed topbar (logo + NeoGo button + NP/NC) ----
@@ -6535,6 +6544,1068 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
         switchTab(activeTab);
     }
 
+    let booted = false;
+    function boot() {
+        if (booted) return;
+        booted = true;
+        init().catch(showFatalError);
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        boot();
+    } else {
+        document.addEventListener('DOMContentLoaded', boot);
+    }
+
+})();
+// ==============================================================================
+// MODULE 10: FOOD CLUB (FULL SPA)
+// ==============================================================================
+// Activates on: /pirates/foodclub.phtml (all ?type= subpages)
+//
+// Features:
+//   • Pirates tab   — stat table with win-rate bars and sort
+//   • Bet tab       — 5-arena dropdowns, live odds calc, max-bet enforced
+//   • My Bets tab   — current round bets with odds breakdown
+//   • Collect tab   — collect winnings form
+//   • History tab   — lifetime bet history stats
+//   • NeoFoodClub bet-string importer — paste an NFC URL/string to generate
+//     a 10-bet auto-capped queue and submit them sequentially.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/pirates\/foodclub\.phtml/.test(location.pathname)) return;
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI) return;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FATAL ERROR BOX
+    // ─────────────────────────────────────────────────────────────────────────
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Food Club SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    const ARENAS = ['Shipwreck', 'Lagoon', 'Treasure Island', 'Hidden Cove', "Harpoon Harry's"];
+    const MAX_WIN = 1000000;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FETCH HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+    async function fetchFC(type) {
+        const res = await fetch(`/pirates/foodclub.phtml?type=${type}`, { credentials: 'include' });
+        const html = await res.text();
+        return { doc: new DOMParser().parseFromString(html, 'text/html'), raw: html };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SCRAPERS
+    // ─────────────────────────────────────────────────────────────────────────
+    function scrapePirates(doc) {
+        const pirates = [];
+        const rows = doc.querySelectorAll("tr");
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 6) return;
+            const link = cells[0].querySelector('a');
+            if (!link) return;
+            const href = link.getAttribute('href') || '';
+            const idMatch = href.match(/id=(\d+)/);
+            if (!idMatch) return;
+            pirates.push({
+                id: parseInt(idMatch[1]),
+                name: link.textContent.trim(),
+                strength: parseInt(cells[1].textContent) || 0,
+                weight: parseInt(cells[2].textContent) || 0,
+                wins: parseInt(cells[3].textContent.replace(/,/g, '')) || 0,
+                losses: parseInt(cells[4].textContent.replace(/,/g, '')) || 0,
+                pct: parseInt(cells[5].textContent) || 0,
+            });
+        });
+        return pirates;
+    }
+    function scrapeBetForm(doc) {
+        const raw = doc.documentElement.innerHTML;
+
+        // 1. Scrape Max Bet Amount safely from the text string or JS fallback
+        let maxBet = 0;
+        const textMatch = raw.match(/up to <b>(\d+)<\/b> NeoPoints/i);
+        const jsMatch = raw.match(/max_bet\s*=\s*(\d+)/i);
+
+        if (textMatch) {
+            maxBet = parseInt(textMatch[1], 10);
+        } else if (jsMatch) {
+            maxBet = parseInt(jsMatch[1], 10);
+        }
+
+        // 2. Scrape Pirate Odds
+        const oddsMap = {};
+        const oddsRe = /pirate_odds\[(\d+)\]\s*=\s*(\d+)/g;
+        let m;
+        while ((m = oddsRe.exec(raw)) !== null) {
+            oddsMap[parseInt(m[1], 10)] = parseInt(m[2], 10);
+        }
+
+        // 3. Map Arenas and Pirates
+        const arenas = [];
+        const betTable = doc.querySelector("form[name='bet_form'] table");
+        if (!betTable) return { maxBet, arenas };
+
+        const rows = betTable.querySelectorAll('tr');
+        rows.forEach(row => {
+            const cbInput = row.querySelector('input[type="checkbox"][name="matches[]"]');
+            if (!cbInput) return;
+            const arenaIndex = parseInt(cbInput.value, 10) - 1;
+            const arenaName = ARENAS[arenaIndex] || `Arena ${arenaIndex + 1}`;
+            const select = row.querySelector('select');
+            if (!select) return;
+
+            const pirates = [];
+            select.querySelectorAll('option').forEach(opt => {
+                if (!opt.value) return;
+                const id = parseInt(opt.value, 10);
+                const oddsVal = oddsMap[id] || 1;
+                const txt = opt.textContent.trim();
+                const nameMatch = txt.match(/^(.+?)\s+\(/);
+                const name = nameMatch ? nameMatch[1].trim() : txt;
+                pirates.push({ id, name, odds: oddsVal });
+            });
+
+            arenas.push({ name: arenaName, arenaIndex, pirates });
+        });
+
+        return { maxBet, arenas };
+    }
+
+
+    function scrapeCurrentBets(doc) {
+        const bets = [];
+        const rows = doc.querySelectorAll("tr");
+        let dataRows = 0;
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length === 5 && cells[0].textContent.trim() !== 'Round' && cells[0].textContent.trim() !== '') {
+                const betInfo = cells[1].innerHTML.trim();
+                const amount = cells[2].textContent.trim();
+                const odds = cells[3].textContent.trim();
+                const winnings = cells[4].textContent.trim();
+                bets.push({ betInfo, amount, odds, winnings });
+                dataRows++;
+            }
+        });
+
+        if (dataRows === 0) {
+            const emptyCell = doc.querySelector("td[colspan='5']");
+            if (emptyCell && emptyCell.textContent.includes('You do not have any bets placed')) return null;
+        }
+
+        return bets;
+    }
+
+    function scrapeCollect(doc) {
+        const formAction = 'process_foodclub.phtml';
+        const rows = [];
+        const trs = doc.querySelectorAll("tr");
+        trs.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length === 5 && cells[0].textContent.trim() !== 'Round' && cells[0].textContent.trim() !== '') {
+                rows.push({
+                    round: cells[0].textContent.trim(),
+                    betInfo: cells[1].innerHTML.trim(),
+                    amount: cells[2].textContent.trim(),
+                    odds: cells[3].textContent.trim(),
+                    winnings: cells[4].textContent.trim(),
+                });
+            }
+        });
+
+        let emptyCheck = false;
+        trs.forEach(row => {
+            const td = row.querySelector("td[colspan='5']");
+            if (td && td.textContent.includes("You do not have any winning bets")) emptyCheck = true;
+        });
+
+        const hasWinnings = rows.length > 0 && !emptyCheck;
+        return { hasWinnings, rows, formAction };
+    }
+
+    function scrapeHistory(doc) {
+        const tables = doc.querySelectorAll('table');
+        let historyData = null;
+        tables.forEach(table => {
+            if (table.textContent.includes('Bets Placed') && table.textContent.includes('Bet Total')) {
+                const rows = table.querySelectorAll('tr');
+                if (rows.length >= 3) {
+                    const cells = rows[2].querySelectorAll('td');
+                    if (cells.length >= 4) {
+                        historyData = {
+                            betsPlaced: cells[0].textContent.trim(),
+                            betTotal: cells[1].textContent.trim(),
+                            winTotal: cells[2].textContent.trim(),
+                            differenceHtml: cells[3].innerHTML.trim()
+                        };
+                    }
+                }
+            }
+        });
+        return historyData;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POST A SINGLE BET
+    // ─────────────────────────────────────────────────────────────────────────
+    async function postBet(row, amount) {
+        const fd = new FormData();
+        fd.append('type', 'bet');
+        fd.append('bet_amount', String(amount));
+
+        row.forEach((pid, arenaIdx) => {
+            if (!pid) return;
+            fd.append('matches[]', String(arenaIdx + 1));
+            fd.append(`winner${arenaIdx + 1}`, String(pid));
+        });
+
+        const res = await fetch('/pirates/process_foodclub.phtml', {
+            method: 'POST',
+            credentials: 'include',
+            body: fd,
+        });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const content = doc.querySelector('td.content');
+        if (!content) return { ok: true, message: 'Bet placed!' };
+
+        const text = content.textContent.replace(/\s+/g, ' ').trim();
+        const isError = /error|invalid|cannot|already|not enough|too many|please/i.test(text);
+        return { ok: !isError, message: text.slice(0, 200) };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // INIT
+    // ─────────────────────────────────────────────────────────────────────────
+    async function init() {
+        const profile = NeoUI.scrapeLegacyProfile();
+
+        const nextMatchEl = document.querySelector('center');
+        const nextMatchText = nextMatchEl ? nextMatchEl.textContent.trim() : '';
+
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'nui-reset';
+        wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5); max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--nui-space-4);';
+
+        const pageHeader = document.createElement('div');
+        pageHeader.style.cssText = 'display:flex;align-items:center;gap:12px;';
+        pageHeader.innerHTML = `
+            <img src="//images.neopets.com/pirates/fc/bookie.gif"
+                 style="width:52px;height:52px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);object-fit:cover;flex-shrink:0;"
+                 onerror="this.style.display='none'">
+            <div style="flex:1;min-width:0;">
+                <div style="font-family:var(--nui-font-display);font-weight:800;font-size:22px;color:var(--nui-text);">Food Club</div>
+                <div id="nui-fc-next" style="font-size:13px;color:var(--nui-text-muted);font-weight:600;">${nextMatchText}</div>
+            </div>
+        `;
+        wrapper.appendChild(pageHeader);
+
+        const tabBar = document.createElement('div');
+        tabBar.style.cssText = 'display:flex;gap:6px;border-bottom:2px solid var(--nui-border);padding-bottom:0;overflow-x:auto;scrollbar-width:none;';
+
+        const TABS = [
+            { id: 'pirates',  label: '🏴‍☠️ Pirates'  },
+            { id: 'bet',      label: '🎰 Place Bet'  },
+            { id: 'mybets',   label: '📋 My Bets'    },
+            { id: 'collect',  label: '💰 Collect'    },
+            { id: 'history',  label: '📜 History'    },
+        ];
+
+        const urlType = new URLSearchParams(location.search).get('type') || '';
+        const startTab = urlType === 'current_bets' ? 'mybets'
+                       : urlType === 'collect'       ? 'collect'
+                       : urlType === 'bet'           ? 'bet'
+                       : urlType === 'history'       ? 'history'
+                       : 'pirates';
+
+        let activeTab = startTab;
+        const tabEls = {};
+
+        TABS.forEach(t => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = t.label;
+            btn.style.cssText = 'padding:8px 14px;border:none;cursor:pointer;font-weight:700;font-size:13px;border-radius:var(--nui-radius-sm) var(--nui-radius-sm) 0 0;background:transparent;color:var(--nui-text-muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all 0.15s;white-space:nowrap;flex-shrink:0;';
+            tabEls[t.id] = btn;
+            tabBar.appendChild(btn);
+        });
+        wrapper.appendChild(tabBar);
+
+        const contentPanel = document.createElement('div');
+        contentPanel.className = 'nui-surface';
+        contentPanel.style.cssText = 'border-radius:var(--nui-radius-lg);overflow:hidden;min-height:200px;box-shadow:0 4px 12px var(--nui-shadow);border:1px solid var(--nui-border);';
+
+        const contentInner = document.createElement('div');
+        contentInner.style.cssText = 'padding:var(--nui-space-4);';
+        contentPanel.appendChild(contentInner);
+        wrapper.appendChild(contentPanel);
+
+        document.body.appendChild(wrapper);
+
+        function showToast(msg, isError) {
+            const toast = document.createElement('div');
+            toast.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 18px;border-radius:var(--nui-radius-md);font-size:14px;font-weight:700;max-width:90vw;text-align:center;box-shadow:0 4px 16px var(--nui-shadow);background:${isError ? 'var(--nui-danger)' : 'var(--nui-success)'};color:#fff;transition:opacity 0.3s;`;
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        async function switchTab(id, extraState) {
+            activeTab = id;
+            Object.entries(tabEls).forEach(([tid, btn]) => {
+                const on = tid === id;
+                btn.style.color = on ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                btn.style.borderBottomColor = on ? 'var(--nui-accent)' : 'transparent';
+                btn.style.background = on ? 'var(--nui-surface-2)' : 'transparent';
+            });
+            contentInner.innerHTML = '<div style="text-align:center;padding:40px;color:var(--nui-text-faint);">Loading...</div>';
+            try {
+                if      (id === 'pirates') await renderPirates();
+                else if (id === 'bet')     await renderBet(extraState);
+                else if (id === 'mybets')  await renderMyBets();
+                else if (id === 'collect') await renderCollect();
+                else if (id === 'history') await renderHistory();
+            } catch (err) {
+                contentInner.innerHTML = `<div style="color:var(--nui-danger);font-weight:600;text-align:center;padding:var(--nui-space-4);">Failed to load: ${err.message}</div>`;
+            }
+        }
+
+        TABS.forEach(t => { tabEls[t.id].addEventListener('click', () => switchTab(t.id)); });
+
+        // ─────────────────────────────────────────────────────────────────────
+        // RENDER: PIRATES TAB
+        // ─────────────────────────────────────────────────────────────────────
+        async function renderPirates() {
+            const { doc } = await fetchFC('pirates');
+            const pirates = scrapePirates(doc);
+
+            contentInner.innerHTML = '';
+
+            if (!pirates.length) {
+                contentInner.innerHTML = '<div class="nui-empty"><span class="nui-empty-emoji">🏴‍☠️</span>No pirate data found.</div>';
+                return;
+            }
+
+            let sortKey = 'pct';
+            let sortDir = -1;
+
+            function renderTable() {
+                contentInner.innerHTML = '';
+
+                const sorted = [...pirates].sort((a, b) => {
+                    const av = a[sortKey], bv = b[sortKey];
+                    return typeof av === 'number' ? (bv - av) * sortDir : sortDir * String(av).localeCompare(String(bv));
+                });
+
+                const sortRow = document.createElement('div');
+                sortRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--nui-space-3);align-items:center;';
+                sortRow.innerHTML = '<span style="font-size:12px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">Sort by</span>';
+
+                [['name','Name'],['pct','Win%'],['wins','Wins'],['strength','Str'],['weight','Wt']].forEach(([key, label]) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.style.cssText = `padding:4px 10px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);font-size:12px;font-weight:700;cursor:pointer;transition:all 0.1s;background:${sortKey===key?'var(--nui-accent-soft)':'var(--nui-surface-2)'};color:${sortKey===key?'var(--nui-accent)':'var(--nui-text-muted)'};`;
+                    btn.textContent = label + (sortKey === key ? (sortDir === -1 ? ' ↓' : ' ↑') : '');
+                    btn.addEventListener('click', () => {
+                        if (sortKey === key) sortDir *= -1;
+                        else { sortKey = key; sortDir = -1; }
+                        renderTable();
+                    });
+                    sortRow.appendChild(btn);
+                });
+                contentInner.appendChild(sortRow);
+
+                const grid = document.createElement('div');
+                grid.style.cssText = 'display:flex;flex-direction:column;gap:var(--nui-space-2);';
+
+                sorted.forEach(p => {
+                    const card = document.createElement('div');
+                    card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:10px 14px;background:var(--nui-surface-2);display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;';
+
+                    const total = p.wins + p.losses;
+                    const barW = total > 0 ? Math.round((p.wins / total) * 100) : 0;
+                    const barColor = p.pct >= 50 ? 'var(--nui-success)' : p.pct >= 25 ? 'var(--nui-warning)' : 'var(--nui-danger)';
+
+                    card.innerHTML = `
+                        <div style="min-width:0;">
+                            <div style="font-weight:800;font-size:15px;color:var(--nui-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                <a href="/pirates/foodclub.phtml?type=pirates&id=${p.id}" style="color:var(--nui-accent);text-decoration:none;">${p.name}</a>
+                            </div>
+                            <div style="font-size:12px;color:var(--nui-text-muted);font-weight:600;margin-top:3px;">
+                                Str <b style="color:var(--nui-text);">${p.strength}</b> &nbsp;·&nbsp;
+                                Wt <b style="color:var(--nui-text);">${p.weight}</b> &nbsp;·&nbsp;
+                                ${p.wins.toLocaleString()} W / ${p.losses.toLocaleString()} L
+                            </div>
+                            <div style="margin-top:6px;height:5px;background:var(--nui-surface);border-radius:3px;overflow:hidden;">
+                                <div style="height:100%;width:${barW}%;background:${barColor};border-radius:3px;transition:width 0.3s;"></div>
+                            </div>
+                        </div>
+                        <div style="text-align:center;flex-shrink:0;">
+                            <div style="font-family:var(--nui-font-display);font-size:22px;font-weight:800;color:${barColor};">${p.pct}%</div>
+                            <div style="font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Win Rate</div>
+                        </div>
+                    `;
+
+                    grid.appendChild(card);
+                });
+
+                contentInner.appendChild(grid);
+            }
+
+            renderTable();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // RENDER: BET TAB (WITH MULTIPLE BET QUEUE AND CAPPING)
+        // ─────────────────────────────────────────────────────────────────────
+        async function renderBet(extraState) {
+            const { doc } = await fetchFC('bet');
+            const { maxBet, arenas } = scrapeBetForm(doc);
+            const globalOddsMap = {};
+            arenas.forEach(a => a.pirates.forEach(p => { globalOddsMap[p.id] = p.odds; }));
+
+            contentInner.innerHTML = '';
+
+            if (!arenas.length) {
+                contentInner.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">🎰</span>Betting is not currently available.</div>`;
+                return;
+            }
+
+            // --- Top Importer Row (Always visible) ---
+            const importRow = document.createElement('div');
+            importRow.style.cssText = 'display:flex;gap:8px;margin-bottom:var(--nui-space-4);align-items:flex-start;flex-wrap:wrap;';
+            importRow.innerHTML = `
+                <div style="flex:1;min-width:180px;">
+                    <div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--nui-text-faint);letter-spacing:0.5px;margin-bottom:4px;">NeoFoodClub Import</div>
+                    <input class="nui-input" id="nui-fc-nfc-input" type="text" placeholder="Paste NFC URL or bet string…" style="font-size:13px;padding:9px 12px;">
+                </div>
+                <button type="button" class="nui-btn nui-btn-secondary nui-btn-sm" id="nui-fc-nfc-btn" style="align-self:flex-end;white-space:nowrap;">Load Bets</button>
+            `;
+            contentInner.appendChild(importRow);
+
+            // Container for shifting between Queue View and Single View
+            const viewContainer = document.createElement('div');
+            contentInner.appendChild(viewContainer);
+
+            // Import Button Listener
+            importRow.querySelector('#nui-fc-nfc-btn').addEventListener('click', () => {
+                const val = importRow.querySelector('#nui-fc-nfc-input').value.trim();
+                if (!val) { showToast('Paste an NFC URL or bet string first.', true); return; }
+
+                const hashIdx = val.indexOf('#');
+                const fragment = hashIdx !== -1 ? val.slice(hashIdx + 1) : val;
+                const params = new URLSearchParams(fragment);
+
+                let parsedBets = [];
+                let parsedAmounts = [];
+
+                if (params.has('b')) {
+                    const alphabet = "abcdefghijklmnopqrstuvwxy";
+                    const nums = params.get('b').replace(/[^a-y]/g, "").split("").map(c => alphabet.indexOf(c));
+
+                    const flat = [];
+                    for (let i = 0; i < nums.length; i++) {
+                        flat.push(Math.floor(nums[i] / 5));
+                        flat.push(nums[i] % 5);
+                    }
+
+                    const betArrays = [];
+                    for (let i = 0; i < flat.length; i += 5) {
+                        const chunk = flat.slice(i, i + 5);
+                        if (chunk.length === 5) betArrays.push(chunk);
+                    }
+
+                    parsedBets = betArrays.map(betRow => {
+                        const arenaSelections = [null, null, null, null, null];
+                        betRow.forEach((pirateIdx, arenaIdx) => {
+                            if (pirateIdx === 0) return;
+                            const arena = arenas[arenaIdx];
+                            if (arena && arena.pirates[pirateIdx - 1]) {
+                                arenaSelections[arenaIdx] = arena.pirates[pirateIdx - 1].id;
+                            }
+                        });
+                        return arenaSelections;
+                    });
+                }
+
+                if (params.has('a')) {
+                    const aStr = params.get('a');
+                    const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                    const chunks = aStr.replace(/[^a-zA-Z]/g, "").match(/.{1,3}/g) || [];
+                    parsedAmounts = chunks.map(chunk => {
+                        let v = 0;
+                        for (let i = 0; i < chunk.length; i++) {
+                            v *= 52;
+                            v += alphabet.indexOf(chunk[i]);
+                        }
+                        return v - 70304;
+                    });
+                }
+
+                if (!parsedBets || !parsedBets.length) {
+                    showToast('Could not parse NFC string. Make sure it contains a b= parameter.', true);
+                    return;
+                }
+
+                // Map into Queue Format
+                const betQueue = parsedBets.map((arenaSelections, i) => {
+                    let amt = null;
+                    if (parsedAmounts && parsedAmounts[i]) {
+                        amt = parsedAmounts[i];
+                    } else if (parsedAmounts && parsedAmounts.length > 0) {
+                        amt = parsedAmounts[0];
+                    }
+                    return { arenaSelections, amount: amt };
+                });
+
+                showToast(`Loaded ${betQueue.length} bet(s).`, false);
+                switchTab('bet', { betQueue });
+            });
+
+
+            // --- QUEUE VIEW (If array of bets is passed) ---
+            if (extraState && extraState.betQueue) {
+                const queueCard = document.createElement('div');
+                queueCard.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+
+                let totalCost = 0;
+                const rowsData = [];
+
+                const table = document.createElement('div');
+                table.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+
+                extraState.betQueue.forEach((bet, i) => {
+                    let totalOdds = 1;
+                    let hasPirate = false;
+                    let pirateNames = [];
+
+                    bet.arenaSelections.forEach((pid, aIdx) => {
+                        if (pid) {
+                            hasPirate = true;
+                            totalOdds *= (globalOddsMap[pid] || 1);
+                            const pName = arenas[aIdx]?.pirates.find(p => p.id === pid)?.name || 'Unknown';
+                            pirateNames.push(pName);
+                        }
+                    });
+
+                    if (!hasPirate) totalOdds = 0;
+
+                                        // Cap Logic Enforcement
+                    let finalAmt = bet.amount || maxBet;
+                    if (totalOdds > 0) {
+                        const maxPayoutCap = Math.floor(MAX_WIN / totalOdds);
+
+                        // Compare the intended amount against both limits
+                        finalAmt = Math.min(finalAmt, maxBet, maxPayoutCap);
+
+                        // Neopets hard-coded minimum bet is 50 NP
+                        finalAmt = Math.max(50, finalAmt);
+                    }
+
+
+                    totalCost += finalAmt;
+                    const payout = totalOdds * finalAmt;
+
+                    const row = document.createElement('div');
+                    row.className = 'nui-surface-2';
+                    row.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-sm);padding:8px 12px;display:flex;justify-content:space-between;align-items:center;';
+                    row.innerHTML = `
+                        <div style="flex:1;font-size:12px;color:var(--nui-text);">${pirateNames.join(', ')}</div>
+                        <div style="display:flex;gap:12px;font-size:12px;font-weight:700;text-align:right;align-items:center;">
+                            <div style="width:40px;color:var(--nui-text-muted);">${totalOdds}:1</div>
+                            <div style="width:60px;color:var(--nui-text);">${finalAmt.toLocaleString()}</div>
+                            <div style="width:70px;color:var(--nui-success);">${payout.toLocaleString()}</div>
+                            <div id="q-status-${i}" style="width:60px;color:var(--nui-text-faint);text-align:center;">Ready</div>
+                        </div>
+                    `;
+                    table.appendChild(row);
+                    rowsData.push({ selections: bet.arenaSelections, amt: finalAmt, idx: i, odds: totalOdds });
+                });
+
+                const summary = document.createElement('div');
+                summary.style.cssText = 'padding:12px;background:var(--nui-surface-2);border-radius:var(--nui-radius-md);margin-bottom:8px;font-weight:800;display:flex;justify-content:space-between;border:1px solid var(--nui-border);';
+                summary.innerHTML = `
+                    <span style="color:var(--nui-text-muted);">Bets: <b style="color:var(--nui-text);">${extraState.betQueue.length}</b></span>
+                    <span style="color:var(--nui-text-muted);">Max Bet: <b style="color:var(--nui-accent);">${maxBet.toLocaleString()} NP</b></span>
+                    <span style="color:var(--nui-text-muted);">Total Cost: <b style="color:var(--nui-danger);">${totalCost.toLocaleString()} NP</b></span>
+                `;
+
+                const placeBtn = document.createElement('button');
+                placeBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
+                placeBtn.textContent = 'Place All Bets';
+                placeBtn.addEventListener('click', async () => {
+                    placeBtn.disabled = true;
+                    for (const r of rowsData) {
+                        if (r.odds === 0) continue;
+                        const st = document.getElementById('q-status-' + r.idx);
+                        st.textContent = '...';
+                        st.style.color = 'var(--nui-warning)';
+
+                        const res = await postBet(r.selections, r.amt);
+                        if (res.ok) {
+                            st.textContent = 'Placed!';
+                            st.style.color = 'var(--nui-success)';
+                        } else {
+                            st.textContent = 'Error';
+                            st.style.color = 'var(--nui-danger)';
+                            st.title = res.message;
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 600)); // Be nice to the servers
+                    }
+                    placeBtn.textContent = 'Finished!';
+                });
+
+                const backBtn = document.createElement('button');
+                backBtn.className = 'nui-btn nui-btn-secondary nui-btn-block';
+                backBtn.textContent = 'Cancel / Back to Single Bet';
+                backBtn.style.marginTop = '8px';
+                backBtn.addEventListener('click', () => switchTab('bet'));
+
+                queueCard.appendChild(summary);
+                queueCard.appendChild(table);
+                queueCard.appendChild(placeBtn);
+                queueCard.appendChild(backBtn);
+
+                viewContainer.appendChild(queueCard);
+                return;
+            }
+
+
+            // --- SINGLE VIEW (Default) ---
+            const infoRow = document.createElement('div');
+            infoRow.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:var(--nui-space-3);';
+            infoRow.innerHTML = `
+                <span class="nui-badge" style="background:var(--nui-accent-soft);color:var(--nui-accent);">Max Bet: <b>${maxBet.toLocaleString()} NP</b></span>
+                <span class="nui-badge">Check up to 5 arenas</span>
+            `;
+            viewContainer.appendChild(infoRow);
+
+            const betState = {
+                checked: [false, false, false, false, false],
+                selected: [null, null, null, null, null],
+                amount: 0,
+            };
+
+            const form = document.createElement('form');
+            form.method = 'post';
+            form.action = 'process_foodclub.phtml';
+            form.style.cssText = 'display:flex;flex-direction:column;gap:var(--nui-space-3);';
+            form.innerHTML = '<input type="hidden" name="type" value="bet">';
+
+            const oddsCard = document.createElement('div');
+            oddsCard.style.cssText = 'background:var(--nui-surface-2);border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:12px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;';
+            oddsCard.innerHTML = `
+                <div style="display:flex;flex-direction:column;align-items:center;">
+                    <div id="nui-fc-total-odds" style="font-family:var(--nui-font-display);font-size:26px;font-weight:800;color:var(--nui-accent);">0</div>
+                    <div style="font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Odds</div>
+                </div>
+                <div style="flex:1;min-width:120px;">
+                    <label style="font-size:12px;font-weight:700;color:var(--nui-text-muted);display:block;margin-bottom:4px;">Bet Amount (NP)</label>
+                    <div style="display:flex;gap:8px;">
+                        <input class="nui-input" id="nui-fc-bet-amount" type="number" min="50" max="${maxBet}" value="" placeholder="Enter NP…" style="font-size:14px;padding:8px 12px;flex:1;">
+                        <button type="button" class="nui-btn nui-btn-secondary" id="nui-fc-max-btn" style="padding:8px 12px;font-size:12px;">Max</button>
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;">
+                    <div id="nui-fc-payoff" style="font-family:var(--nui-font-display);font-size:22px;font-weight:800;color:var(--nui-success);">0</div>
+                    <div style="font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Potential Payoff</div>
+                </div>
+            `;
+
+            const arenaContainer = document.createElement('div');
+            arenaContainer.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
+
+            arenas.forEach((arena, idx) => {
+                const cbWrap = document.createElement('div');
+                cbWrap.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:10px 14px;background:var(--nui-surface);transition:border-color 0.15s;display:flex;flex-direction:column;gap:8px;';
+
+                const topRow = document.createElement('div');
+                topRow.style.cssText = 'display:flex;align-items:center;gap:10px;';
+
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.name = 'matches[]';
+                cb.value = String(idx + 1);
+                cb.style.cssText = 'width:18px;height:18px;accent-color:var(--nui-accent);cursor:pointer;flex-shrink:0;';
+                cb.checked = betState.checked[idx];
+
+                const arenaLabel = document.createElement('span');
+                arenaLabel.style.cssText = 'font-weight:800;font-size:15px;color:var(--nui-text);flex:1;';
+                arenaLabel.textContent = arena.name;
+
+                const oddsChip = document.createElement('span');
+                oddsChip.id = `nui-fc-arena-odds-${idx}`;
+                oddsChip.className = 'nui-badge';
+                oddsChip.style.cssText = 'font-size:12px;';
+                oddsChip.textContent = '—';
+
+                topRow.appendChild(cb);
+                topRow.appendChild(arenaLabel);
+                topRow.appendChild(oddsChip);
+                cbWrap.appendChild(topRow);
+
+                const pillsRow = document.createElement('div');
+                pillsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding-left:28px;';
+
+                const hiddenSelect = document.createElement('select');
+                hiddenSelect.name = `winner${idx + 1}`;
+                hiddenSelect.style.display = 'none';
+
+                const blankOpt = document.createElement('option');
+                blankOpt.value = '';
+                hiddenSelect.appendChild(blankOpt);
+
+                arena.pirates.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = String(p.id);
+                    opt.textContent = p.name;
+                    hiddenSelect.appendChild(opt);
+
+                    const pill = document.createElement('button');
+                    pill.type = 'button';
+                    pill.setAttribute('data-pid', p.id);
+                    pill.style.cssText = 'padding:5px 11px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);font-size:12px;font-weight:700;cursor:pointer;transition:all 0.1s;background:var(--nui-surface-2);color:var(--nui-text-muted);display:flex;align-items:center;gap:5px;';
+                    pill.innerHTML = `${p.name} <span style="background:var(--nui-surface);border-radius:4px;padding:1px 5px;font-size:11px;color:var(--nui-text-faint);">${p.odds}:1</span>`;
+
+                    pill.addEventListener('click', () => {
+                        if (betState.selected[idx] === p.id) {
+                            betState.selected[idx] = null;
+                            hiddenSelect.value = '';
+                        } else {
+                            betState.selected[idx] = p.id;
+                            hiddenSelect.value = String(p.id);
+                        }
+                        if (betState.selected[idx]) betState.checked[idx] = true;
+                        cb.checked = betState.checked[idx];
+
+                        pillsRow.querySelectorAll('button[data-pid]').forEach(btn => {
+                            const isActive = parseInt(btn.getAttribute('data-pid')) === betState.selected[idx];
+                            btn.style.background = isActive ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
+                            btn.style.color = isActive ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                            btn.style.borderColor = isActive ? 'var(--nui-accent)' : 'var(--nui-border)';
+                        });
+
+                        updateOdds();
+                    });
+
+                    pillsRow.appendChild(pill);
+                });
+
+                cbWrap.appendChild(pillsRow);
+                cbWrap.appendChild(hiddenSelect);
+                arenaContainer.appendChild(cbWrap);
+
+                cb.addEventListener('change', () => {
+                    betState.checked[idx] = cb.checked;
+                    cbWrap.style.borderColor = cb.checked ? 'var(--nui-accent)' : 'var(--nui-border)';
+                    if (!cb.checked) {
+                        betState.selected[idx] = null;
+                        hiddenSelect.value = '';
+                        pillsRow.querySelectorAll('button[data-pid]').forEach(btn => {
+                            btn.style.background = 'var(--nui-surface-2)';
+                            btn.style.color = 'var(--nui-text-muted)';
+                            btn.style.borderColor = 'var(--nui-border)';
+                        });
+                    }
+                    updateOdds();
+                });
+
+                if (betState.checked[idx]) cbWrap.style.borderColor = 'var(--nui-accent)';
+
+                function updateArenaChip() {
+                    const sel = betState.selected[idx];
+                    const chip = document.getElementById(`nui-fc-arena-odds-${idx}`);
+                    if (!chip) return;
+                    if (sel && betState.checked[idx]) {
+                        const o = globalOddsMap[sel] || 1;
+                        chip.textContent = `${o}:1`;
+                        chip.style.background = 'var(--nui-accent-soft)';
+                        chip.style.color = 'var(--nui-accent)';
+                    } else {
+                        chip.textContent = '—';
+                        chip.style.background = '';
+                        chip.style.color = '';
+                    }
+                }
+
+                cbWrap._updateChip = updateArenaChip;
+                if (betState.checked[idx] && betState.selected[idx]) updateArenaChip();
+            });
+
+            function updateOdds() {
+                let totalOdds = 0;
+                arenas.forEach((arena, idx) => {
+                    if (!betState.checked[idx] || !betState.selected[idx]) return;
+                    const o = globalOddsMap[betState.selected[idx]] || 1;
+                    totalOdds = totalOdds === 0 ? o : totalOdds * o;
+                });
+
+                const oddsEl = document.getElementById('nui-fc-total-odds');
+                const payEl = document.getElementById('nui-fc-payoff');
+                if (oddsEl) oddsEl.textContent = totalOdds > 0 ? `${totalOdds}:1` : '0';
+
+                const amtInput = document.getElementById('nui-fc-bet-amount');
+                const amt = amtInput ? Math.min(parseInt(amtInput.value) || 0, maxBet) : 0;
+                const payoff = Math.min(totalOdds * amt, MAX_WIN);
+                if (payEl) payEl.textContent = payoff > 0 ? payoff.toLocaleString() + ' NP' : '0';
+
+                arenaContainer.childNodes.forEach(node => node._updateChip && node._updateChip());
+            }
+
+            oddsCard.querySelector('#nui-fc-bet-amount').addEventListener('input', updateOdds);
+
+            oddsCard.querySelector('#nui-fc-max-btn').addEventListener('click', () => {
+                let currentOdds = 0;
+                arenas.forEach((arena, idx) => {
+                    if (!betState.checked[idx] || !betState.selected[idx]) return;
+                    const o = globalOddsMap[betState.selected[idx]] || 1;
+                    currentOdds = currentOdds === 0 ? o : currentOdds * o;
+                });
+
+                let amt = maxBet;
+                if (currentOdds > 0) {
+                    const cap = Math.floor(MAX_WIN / currentOdds);
+                    amt = Math.min(amt, maxBet, cap);
+                    amt = Math.max(50, amt);
+                }
+                document.getElementById('nui-fc-bet-amount').value = amt;
+                updateOdds();
+            });
+
+            const submitBtn = document.createElement('button');
+            submitBtn.type = 'submit';
+            submitBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
+            submitBtn.textContent = 'Place This Bet!';
+            submitBtn.style.marginTop = 'var(--nui-space-2)';
+
+            submitBtn.addEventListener('click', (e) => {
+                const anyChecked = betState.checked.some((c, i) => c && betState.selected[i]);
+                if (!anyChecked) {
+                    e.preventDefault();
+                    showToast('Check at least one arena and pick a pirate!', true);
+                    return;
+                }
+                const amt = parseInt(document.getElementById('nui-fc-bet-amount').value) || 0;
+                if (amt < 1) {
+                    e.preventDefault();
+                    showToast('Enter a bet amount!', true);
+                    return;
+                }
+                if (amt > maxBet) {
+                    e.preventDefault();
+                    showToast(`Max bet is ${maxBet.toLocaleString()} NP!`, true);
+                    return;
+                }
+                let amtInput = form.querySelector('input[name="bet_amount"]');
+                if (!amtInput) {
+                    amtInput = document.createElement('input');
+                    amtInput.type = 'hidden';
+                    amtInput.name = 'bet_amount';
+                    form.appendChild(amtInput);
+                }
+                amtInput.value = String(amt);
+            });
+
+            form.appendChild(oddsCard);
+            form.appendChild(arenaContainer);
+            form.appendChild(submitBtn);
+            viewContainer.appendChild(form);
+
+            updateOdds();
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // RENDER: MY BETS TAB
+        // ─────────────────────────────────────────────────────────────────────
+        async function renderMyBets() {
+            const { doc } = await fetchFC('current_bets');
+            const bets = scrapeCurrentBets(doc);
+
+            contentInner.innerHTML = '';
+
+            if (bets === null || bets.length === 0) {
+                contentInner.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">📋</span>No bets placed for this round yet.</div>`;
+                return;
+            }
+
+            const heading = document.createElement('div');
+            heading.style.cssText = 'font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-text);margin-bottom:var(--nui-space-3);';
+            heading.textContent = `Current Bets (${bets.length})`;
+            contentInner.appendChild(heading);
+
+            bets.forEach(bet => {
+                const card = document.createElement('div');
+                card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:12px 14px;background:var(--nui-surface-2);margin-bottom:10px;display:flex;flex-direction:column;gap:6px;';
+
+                card.innerHTML = `
+                    <div style="font-size:13px;color:var(--nui-text-muted);">${bet.betInfo}</div>
+                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                        <div style="display:flex;flex-direction:column;align-items:center;">
+                            <span style="font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-text);">${bet.amount}</span>
+                            <span style="font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Bet</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;">
+                            <span style="font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-accent);">${bet.odds}</span>
+                            <span style="font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Odds</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;">
+                            <span style="font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-success);">${bet.winnings}</span>
+                            <span style="font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Potential Win</span>
+                        </div>
+                    </div>
+                `;
+
+                contentInner.appendChild(card);
+            });
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // RENDER: COLLECT TAB
+        // ─────────────────────────────────────────────────────────────────────
+        async function renderCollect() {
+            const { doc } = await fetchFC('collect');
+            const { hasWinnings, rows } = scrapeCollect(doc);
+
+            contentInner.innerHTML = '';
+
+            if (!hasWinnings) {
+                contentInner.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">💰</span>No winning bets to collect right now.</div>`;
+                return;
+            }
+
+            const heading = document.createElement('div');
+            heading.style.cssText = 'font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-text);margin-bottom:var(--nui-space-3);';
+            heading.textContent = `Winnings Available!`;
+            contentInner.appendChild(heading);
+
+            let totalWin = 0;
+            rows.forEach(r => {
+                const n = parseInt((r.winnings || '').replace(/[^0-9]/g, ''));
+                if (!isNaN(n)) totalWin += n;
+            });
+
+            if (totalWin > 0) {
+                const totalBadge = document.createElement('div');
+                totalBadge.style.cssText = 'display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:var(--nui-success-soft);border:1px solid var(--nui-success);border-radius:var(--nui-radius-pill);font-weight:800;color:var(--nui-success);font-size:15px;margin-bottom:var(--nui-space-3);';
+                totalBadge.innerHTML = `🎉 Total: ${totalWin.toLocaleString()} NP`;
+                contentInner.appendChild(totalBadge);
+            }
+
+            rows.forEach(r => {
+                const card = document.createElement('div');
+                card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:12px 14px;background:var(--nui-surface-2);margin-bottom:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;';
+                card.innerHTML = `
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:12px;color:var(--nui-text-faint);font-weight:700;margin-bottom:3px;">Round ${r.round}</div>
+                        <div style="font-size:13px;color:var(--nui-text-muted);">${r.betInfo}</div>
+                    </div>
+                    <div style="display:flex;gap:12px;align-items:center;">
+                        <div style="text-align:center;">
+                            <div style="font-weight:800;color:var(--nui-text);font-size:15px;">${r.amount}</div>
+                            <div style="font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Bet</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-weight:800;color:var(--nui-accent);font-size:15px;">${r.odds}</div>
+                            <div style="font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Odds</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-weight:800;color:var(--nui-success);font-size:18px;">${r.winnings}</div>
+                            <div style="font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Won</div>
+                        </div>
+                    </div>
+                `;
+                contentInner.appendChild(card);
+            });
+
+            const collectForm = document.createElement('form');
+            collectForm.method = 'post';
+            collectForm.action = 'process_foodclub.phtml';
+            collectForm.innerHTML = '<input type="hidden" name="type" value="collect_all">';
+            const collectBtn = document.createElement('button');
+            collectBtn.type = 'submit';
+            collectBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
+            collectBtn.style.marginTop = 'var(--nui-space-3)';
+            collectBtn.textContent = 'Collect All Winnings';
+            collectForm.appendChild(collectBtn);
+            contentInner.appendChild(collectForm);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // RENDER: HISTORY TAB
+        // ─────────────────────────────────────────────────────────────────────
+        async function renderHistory() {
+            const { doc } = await fetchFC('history');
+            const historyData = scrapeHistory(doc);
+
+            contentInner.innerHTML = '';
+
+            if (!historyData) {
+                contentInner.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">📜</span>No bet history found.</div>`;
+                return;
+            }
+
+            const heading = document.createElement('div');
+            heading.style.cssText = 'font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-text);margin-bottom:var(--nui-space-3);';
+            heading.textContent = `Bet History`;
+            contentInner.appendChild(heading);
+
+            const card = document.createElement('div');
+            card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:16px 20px;background:var(--nui-surface-2);display:flex;gap:16px;justify-content:space-around;flex-wrap:wrap;text-align:center;';
+
+            const diffText = historyData.differenceHtml.replace(/<[^>]+>/g, '');
+            const diffVal = parseInt(diffText.replace(/,/g, '')) || 0;
+            const diffColor = diffVal >= 0 ? 'var(--nui-success)' : 'var(--nui-danger)';
+
+            card.innerHTML = `
+                <div>
+                    <div style="font-size:11px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Bets Placed</div>
+                    <div style="font-family:var(--nui-font-display);font-size:22px;font-weight:800;color:var(--nui-text);">${historyData.betsPlaced}</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Bet Total</div>
+                    <div style="font-family:var(--nui-font-display);font-size:22px;font-weight:800;color:var(--nui-text);">${historyData.betTotal}</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Win Total</div>
+                    <div style="font-family:var(--nui-font-display);font-size:22px;font-weight:800;color:var(--nui-accent);">${historyData.winTotal}</div>
+                </div>
+                <div>
+                    <div style="font-size:11px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Difference</div>
+                    <div style="font-family:var(--nui-font-display);font-size:22px;font-weight:800;color:${diffColor};">${diffText}</div>
+                </div>
+            `;
+
+            contentInner.appendChild(card);
+        }
+
+        switchTab(activeTab);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ENTRY POINT
+    // ─────────────────────────────────────────────────────────────────────────
     let booted = false;
     function boot() {
         if (booted) return;
