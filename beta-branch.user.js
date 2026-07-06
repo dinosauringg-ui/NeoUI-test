@@ -5006,7 +5006,7 @@
                 }
             }
         } catch (err) {
-            container.innerHTML = `<div class="nui-empty" style="color: var(--nui-danger);">Failed to load thread.</div>`;
+    container.innerHTML = `<div class="nui-empty" style="color: var(--nui-danger);">Failed to load thread.<br><pre style="font-size:10px; white-space:pre-wrap; word-break:break-all;">${err && err.stack ? err.stack : String(err)}</pre></div>`;
         } finally {
             // Always restore opacity/clicks when done
             container.style.opacity = '1';
@@ -5116,14 +5116,16 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
 
         const formEl = doc.querySelector('form[name="message_form"]');
         if (formEl) {
+            const resolvedAction = formEl.getAttribute('action') || 'process_topic.phtml';
             replyFormData = {
-                action: formEl.action,
-                hiddenInputs: Array.from(formEl.querySelectorAll('input[type="hidden"]')).map(inp => ({ name: inp.name, value: inp.value })),
+                action: resolvedAction,
+                hiddenInputs: Array.from(formEl.querySelectorAll('input[type="hidden"], input[type="submit"]')).map(inp => ({ name: inp.name, value: inp.value })),
                 pens: Array.from(formEl.querySelectorAll('.neoboardPen')).map(pen => {
-                    const label = pen.querySelector('label').textContent.trim();
-                    const val = pen.querySelector('input').value;
-                    return { label, val };
-                })
+                    const labelEl = pen.querySelector('label');
+                    const inputEl = pen.querySelector('input');
+                    if (!labelEl || !inputEl) return null;
+                    return { label: labelEl.textContent.trim(), val: inputEl.value };
+                }).filter(Boolean)
             };
         }
 
@@ -5541,45 +5543,60 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             });
 
             const form = replyWrap.querySelector('form');
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const submitBtn = form.querySelector('button[type="submit"]');
-                const statusText = form.querySelector('#nui-reply-status');
-                submitBtn.disabled = true;
-                statusText.textContent = 'Posting...';
 
-                const realPens = replyFormData.pens.map(p => p.val);
-                let finalPenVal = savedPenVal; // safe default: never the literal 'remember'/'random' strings
-                if (penMode === '__random__') {
-                    if (realPens.length > 0) {
-                        finalPenVal = realPens[Math.floor(Math.random() * realPens.length)];
-                    }
-                    // else: no real pens scraped, fall back to savedPenVal above
-                } else if (penMode === '__remember__') {
-                    finalPenVal = savedPenVal;
-                } else if (realPens.includes(penMode)) {
-                    finalPenVal = penMode;
-                }
+            form.addEventListener('submit', (e) => {
+    // 1. Stop our custom NeoUI form from submitting natively
+    e.preventDefault();
 
-                const fd = new FormData(form);
-                fd.append('select_pen', finalPenVal);
+    const submitBtn = form.querySelector('button[type="submit"]');
+    setTimeout(() => { submitBtn.disabled = true; }, 0);
 
-                try {
-                    const res = await fetch(form.action, { method: 'POST', body: fd });
-                    if (res.ok) {
-                        statusText.style.color = 'var(--nui-success)';
-                        statusText.textContent = 'Posted!';
-                        textarea.value = '';
-                        setTimeout(() => fetchThread(currentUrl, threadId, container), 800);
-                    } else {
-                        throw new Error('Server error');
-                    }
-                } catch (err) {
-                    statusText.style.color = 'var(--nui-danger)';
-                    statusText.textContent = 'Failed to post.';
-                    submitBtn.disabled = false;
-                }
-            });
+    // 2. Resolve the selected pen
+    const realPens = replyFormData.pens.map(p => p.val);
+    let finalPenVal = savedPenVal;
+    if (penMode === '__random__') {
+        if (realPens.length > 0) finalPenVal = realPens[Math.floor(Math.random() * realPens.length)];
+    } else if (penMode === '__remember__') {
+        finalPenVal = savedPenVal;
+    } else if (realPens.includes(penMode)) {
+        finalPenVal = penMode;
+    }
+
+    // 3. Grab the ORIGINAL untouched Neopets form from the scraped document
+    const originalForm = doc.querySelector('form[name="message_form"]');
+    if (!originalForm) {
+        alert("Error: Could not locate the original Neopets reply form.");
+        submitBtn.disabled = false;
+        return;
+    }
+
+    // 4. Clone it and hide it so we can safely inject it into the live page
+    const ghostForm = originalForm.cloneNode(true);
+    ghostForm.style.display = 'none';
+
+    // 5. Inject your written message into the Ghost Form
+    const ghostTextarea = ghostForm.querySelector('textarea[name="message"]');
+    if (ghostTextarea) {
+        ghostTextarea.value = form.querySelector('textarea[name="message"]').value;
+    }
+
+    // 6. Select the correct pen radio button in the Ghost Form
+    const ghostPenRadios = ghostForm.querySelectorAll('input[name="select_pen"]');
+    ghostPenRadios.forEach(radio => {
+        radio.checked = (radio.value === finalPenVal);
+    });
+
+    // 7. Append it to the live DOM and LITERALLY click the Neopets submit button
+    document.body.appendChild(ghostForm);
+    const realSubmitBtn = ghostForm.querySelector('input[type="submit"], button[type="submit"], input[name="message_reply"]');
+
+    if (realSubmitBtn) {
+        realSubmitBtn.click();
+    } else {
+        ghostForm.submit(); // Fallback just in case
+    }
+});
+
 
             wrapper.appendChild(replyWrap);
         }
@@ -5949,6 +5966,7 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
         });
     }
 })();
+
 // ==============================================================================
 // MODULE 9: MYSTERY ISLAND TRAINING SCHOOL (FULL SPA)
 // ==============================================================================
@@ -7619,4 +7637,441 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
         document.addEventListener('DOMContentLoaded', boot);
     }
 
+})();
+// ==============================================================================
+// MODULE 11: NEOPIAN TIMES (SPA OVERHAUL WITH BOOKMARKS)
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/ntimes\//.test(location.pathname)) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Neopian Times crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    function run() {
+        const NeoUI = window.NeoUI;
+        if (!NeoUI || !NeoUI.__ready) { throw new Error('NeoUI Core Framework was not found.'); }
+
+        // 1. Scrape profile info using the cache-fallback wrapper
+        const profile = NeoUI.scrapeLegacyProfile();
+
+        const weekMatch = document.body.innerHTML.match(/Issue:\s*(\d+)/i) || document.body.innerHTML.match(/week=(\d+)/i);
+        const currentWeek = weekMatch ? weekMatch[1] : '';
+
+        // 2. Local Storage Bookmarks State
+        let bookmarks = [];
+        try {
+            bookmarks = JSON.parse(localStorage.getItem('nui_nt_bookmarks') || '[]');
+        } catch (e) { bookmarks = []; }
+
+        function saveBookmarks() {
+            try { localStorage.setItem('nui_nt_bookmarks', JSON.stringify(bookmarks)); } catch (e) {}
+        }
+
+        // 3. Nuke the legacy DOM layout safely
+        Array.from(document.body.children).forEach(child => {
+            const tag = child.tagName.toLowerCase();
+            if (['script', 'style', 'link'].includes(tag)) return;
+            if (['panelPopups', 'neoFade', 'colorbox', 'cboxOverlay', 'cboxWrapper'].includes(child.id)) return;
+            child.style.display = 'none';
+        });
+
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        // 4. Initialize NeoUI & Topbar
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // 5. Build App View layout
+        const appWrapper = document.createElement('div');
+        appWrapper.id = 'nui-nt-app';
+        appWrapper.style.cssText = 'display: flex; flex-direction: column; height: 100vh; padding-top: var(--nui-topbar-h); box-sizing: border-box;';
+
+        const topRow = document.createElement('div');
+        topRow.style.cssText = 'display: flex; align-items: center; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border); flex-shrink: 0;';
+
+        const tabBar = document.createElement('div');
+        tabBar.id = 'nui-nt-tabs';
+        tabBar.style.cssText = 'display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px; scrollbar-width: none; flex: 1; min-width: 0; -webkit-overflow-scrolling: touch;';
+        topRow.appendChild(tabBar);
+
+        const actionBar = document.createElement('div');
+        actionBar.id = 'nui-nt-actionbar';
+        actionBar.style.cssText = 'display: none; gap: 8px; padding: 8px 12px; flex-shrink: 0;';
+        actionBar.innerHTML = `
+            <button type="button" id="nui-nt-bookmark-btn" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding: 6px 10px; display: flex; align-items: center; gap: 4px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+            </button>
+        `;
+        topRow.appendChild(actionBar);
+        appWrapper.appendChild(topRow);
+
+        const contentArea = document.createElement('div');
+        contentArea.id = 'nui-content-area';
+        contentArea.style.cssText = 'flex: 1; overflow-y: auto; padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; -webkit-overflow-scrolling: touch;';
+        appWrapper.appendChild(contentArea);
+
+        document.body.appendChild(appWrapper);
+
+        // 6. Section Configurations
+        const SECTIONS = [
+            { id: 'home', label: '🏠 Home', path: `/ntimes/index.phtml${currentWeek ? '?week='+currentWeek : ''}` },
+            { id: 'articles', label: '📰 Articles', path: `/ntimes/index.phtml?section=articles${currentWeek ? '&week='+currentWeek : ''}` },
+            { id: 'editorial', label: '🗣️ Editorial', path: `/ntimes/index.phtml?section=editorial${currentWeek ? '&week='+currentWeek : ''}` },
+            { id: 'shorts', label: '📖 Shorts', path: `/ntimes/index.phtml?section=shorts${currentWeek ? '&week='+currentWeek : ''}` },
+            { id: 'comics', label: '🎨 Comics', path: `/ntimes/index.phtml?section=comics${currentWeek ? '&week='+currentWeek : ''}` },
+            { id: 'series', label: '📚 New Series', path: `/ntimes/index.phtml?section=series${currentWeek ? '&week='+currentWeek : ''}` },
+            { id: 'cont', label: '⏭️ Continued', path: `/ntimes/index.phtml?section=cont${currentWeek ? '&week='+currentWeek : ''}` },
+            { id: 'poetry', label: '✒️ Poetry', path: `/ntimes/index.phtml?section=poetry${currentWeek ? '&week='+currentWeek : ''}` },
+            { id: 'bookmarks', label: '🔖 Bookmarks', path: '#bookmarks' }
+        ];
+
+        function renderNav(activeUrl) {
+            tabBar.innerHTML = '';
+            let activeId = 'home';
+
+            if (activeUrl === '#bookmarks') {
+                activeId = 'bookmarks';
+            } else if (activeUrl.match(/[?&]section=\d+/)) {
+                activeId = null;
+            } else {
+                const match = activeUrl.match(/[?&]section=([a-z_]+)/i);
+                if (match) {
+                    const sec = SECTIONS.find(s => s.id === match[1]);
+                    if (sec) activeId = sec.id;
+                }
+            }
+
+            SECTIONS.forEach(sec => {
+                const btn = document.createElement('a');
+                btn.href = sec.path;
+                btn.className = `nui-pill ${activeId === sec.id ? 'is-active' : ''}`;
+                btn.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 6px 12px; text-decoration: none; flex-shrink: 0;';
+                btn.textContent = sec.label;
+
+                btn.addEventListener('click', e => {
+                    e.preventDefault();
+                    loadPage(sec.path);
+                });
+
+                tabBar.appendChild(btn);
+            });
+        }
+
+        // 7. Parsers & Layout Engines
+        function renderArticle(contentTd) {
+            let title = 'The Neopian Times';
+            let author = '';
+            let bodyHtml = '';
+
+            const h1 = contentTd.querySelector('h1');
+            if (h1) title = h1.innerHTML;
+
+            const byMatch = contentTd.innerHTML.match(/by\s+<a[^>]+>([^<]+)<\/a>/i);
+            if (byMatch) author = byMatch[1];
+
+            if (contentTd.innerHTML.includes('<!-- BEGIN ARTICLE CONTENT -->')) {
+                bodyHtml = contentTd.innerHTML.split('<!-- BEGIN ARTICLE CONTENT -->')[1];
+            } else if (contentTd.innerHTML.includes('--------<BR><BR>')) {
+                bodyHtml = contentTd.innerHTML.split('--------<BR><BR>')[1];
+            } else {
+                const imgs = Array.from(contentTd.querySelectorAll('img:not(.story_img)'));
+                if (imgs.length > 0) {
+                    bodyHtml = imgs.map(img => `<img src="${img.src}" style="max-width:100%; border-radius:var(--nui-radius-sm); margin:0 auto; display:block; box-shadow:0 4px 12px var(--nui-shadow);">`).join('<br><br>');
+                } else {
+                    bodyHtml = contentTd.innerHTML;
+                }
+            }
+
+            return `
+                <div class="nui-surface" style="border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); padding: var(--nui-space-5); box-shadow: 0 4px 12px var(--nui-shadow); width: 100%; max-width: 800px;">
+                    <div style="font-family: var(--nui-font-display); font-size: 26px; font-weight: 800; color: var(--nui-text); line-height: 1.2;">
+                        ${title}
+                    </div>
+                    ${author ? `<div style="font-size: 14px; font-weight: 700; color: var(--nui-accent); margin-top: 8px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid var(--nui-surface-2);">By ${author}</div>` : ''}
+                    <div style="font-size: 15px; line-height: 1.6; color: var(--nui-text); overflow-wrap: break-word;">
+                        ${bodyHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderList(contentTd) {
+            let html = '<div style="width: 100%; max-width: 800px; display: flex; flex-direction: column;">';
+
+            const h2 = contentTd.querySelector('h2');
+            if (h2) {
+                html += `<div class="nui-text" style="font-family: var(--nui-font-display); font-size: 24px; font-weight: 800; margin-bottom: 16px;">${h2.textContent}</div>`;
+            }
+
+            const items = [];
+            contentTd.querySelectorAll('table tr').forEach(tr => {
+                const tds = tr.querySelectorAll('td');
+                if (tds.length < 2) return;
+
+                const img = tds[0].querySelector('img.story_img');
+                const link = tds[1].querySelector('a');
+                if (!link) return;
+
+                const title = link.innerHTML;
+                const url = link.href;
+                const authorMatch = tds[1].innerHTML.match(/by\s+<a[^>]+>([^<]+)<\/a>/i);
+                const author = authorMatch ? authorMatch[1] : '';
+
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = tds[1].innerHTML;
+                tempDiv.querySelectorAll('a, b, br, p').forEach(el => el.remove());
+                const blurb = tempDiv.textContent.trim().replace(/^by\s+/i, '');
+
+                items.push({ title, url, author, blurb, imgSrc: img ? img.src : '' });
+            });
+
+            html += `<div style="display:flex; flex-direction:column; gap:var(--nui-space-3);">`;
+            items.forEach(item => {
+                html += `
+                    <a href="${item.url}" class="nui-item nui-reset" style="text-decoration:none; margin:0; border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:var(--nui-space-3); transition: transform 0.1s; display:flex; gap:16px; align-items:center;">
+                        ${item.imgSrc ? `<div style="width:70px; height:70px; border-radius:var(--nui-radius-sm); overflow:hidden; flex-shrink:0; background:var(--nui-surface-2); border:1px solid var(--nui-border); display:flex; align-items:center; justify-content:center;"><img src="${item.imgSrc}" style="width:100%; height:100%; object-fit:cover;"></div>` : ''}
+                        <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px;">
+                            <div style="font-weight:800; font-size:16px; color:var(--nui-accent); line-height: 1.2;">${item.title}</div>
+                            ${item.author ? `<div style="font-size:12px; font-weight:700; color:var(--nui-text-muted);">By <span style="color:var(--nui-text);">${item.author}</span></div>` : ''}
+                            ${item.blurb ? `<div class="nui-text-muted" style="font-size:13.5px; line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-top:2px;">${item.blurb}</div>` : ''}
+                        </div>
+                    </a>
+                `;
+            });
+            html += `</div></div>`;
+            return html;
+        }
+
+                        function renderHome(doc) {
+            let html = '<div style="width: 100%; max-width: 800px; display: flex; flex-direction: column;">';
+            html += `<div class="nui-text" style="font-family: var(--nui-font-display); font-size: 24px; font-weight: 800; margin-bottom: 16px; text-align: center;">Issue ${currentWeek} Highlights</div>`;
+            html += `<div style="display:flex; flex-direction:column; gap:8px;">`; // List container
+
+            const seenUrls = new Set();
+            const articles = [];
+
+            // A. Scrape Main Content
+            const mainContent = doc.querySelector('td.content');
+            if (mainContent) {
+                mainContent.querySelectorAll('a').forEach(link => {
+                    if (!link.textContent.includes('More')) return;
+                    const url = link.href;
+                    if (seenUrls.has(url) || !url.match(/[?&]section=\d+/)) return;
+                    seenUrls.add(url);
+                    const container = link.closest('td');
+                    if (!container) return;
+
+                    const h1 = container.querySelector('h1');
+                    const b = container.querySelector('b');
+                    const title = h1 ? h1.textContent.trim() : (b ? b.textContent.replace(/"/g, '').trim() : 'Story');
+                    const authorMatch = container.innerHTML.match(/by\s+<a[^>]+>([^<]+)<\/a>/i);
+                    const author = authorMatch ? authorMatch[1].trim() : '';
+                    const img = container.querySelector('img.story_img');
+
+                    articles.push({ url, title, author, imgSrc: img ? img.src : '', isComic: !!img });
+                });
+            }
+
+            // B. Scrape Sidebar ("Great Stories")
+            const rightBar = doc.querySelector('td.rightBar');
+            if (rightBar) {
+                rightBar.querySelectorAll('table td').forEach(td => {
+                    const titleLink = Array.from(td.querySelectorAll('a')).find(a => a.querySelector('b'));
+                    if (!titleLink) return;
+                    const url = titleLink.href;
+                    if (seenUrls.has(url)) return;
+                    seenUrls.add(url);
+                    articles.push({
+                        url,
+                        title: titleLink.textContent.trim(),
+                        author: td.querySelector('a[href*="randomfriend"]')?.textContent.trim() || '',
+                        imgSrc: td.querySelector('img')?.src || '',
+                        isComic: false
+                    });
+                });
+            }
+
+            // C. Build Compact List
+            articles.forEach(art => {
+                html += `
+                    <a href="${art.url}" class="nui-item nui-reset" style="text-decoration:none; margin:0; border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:10px; display:flex; gap:12px; align-items:center; background:var(--nui-surface);">
+                        <div style="width:50px; height:50px; border-radius:var(--nui-radius-sm); overflow:hidden; flex-shrink:0; background:var(--nui-surface-2); border:1px solid var(--nui-border); display:flex; align-items:center; justify-content:center;">
+                            ${art.imgSrc ? `<img src="${art.imgSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<span style="font-size:20px;">📰</span>`}
+                        </div>
+                        <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;">
+                            <div style="font-weight:800; font-size:14px; color:var(--nui-accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${art.title}</div>
+                            ${art.author ? `<div style="font-size:11px; font-weight:700; color:var(--nui-text-muted);">By <span style="color:var(--nui-text);">${art.author}</span></div>` : ''}
+                        </div>
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:var(--nui-text-faint);"><path d="M9 5l7 7-7 7"/></svg>
+                    </a>
+                `;
+            });
+
+            html += `</div></div>`;
+            return html;
+        }
+
+
+
+
+        function renderBookmarksView() {
+            let html = '<div style="width: 100%; max-width: 800px; display: flex; flex-direction: column;">';
+            html += `<div class="nui-text" style="font-family: var(--nui-font-display); font-size: 24px; font-weight: 800; margin-bottom: 16px;">🔖 Saved Bookmarks</div>`;
+
+            if (bookmarks.length === 0) {
+                html += `<div class="nui-empty"><span class="nui-empty-emoji">🔖</span>Your bookmarks ledger is clean.</div>`;
+            } else {
+                html += `<div style="display:flex; flex-direction:column; gap:var(--nui-space-3);">`;
+                bookmarks.forEach((bm, index) => {
+                    html += `
+                        <div class="nui-item nui-reset" style="margin:0; border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:var(--nui-space-3); display:flex; gap:16px; align-items:center;">
+                            <a href="${bm.url}" class="nui-spa-link" style="flex:1; display:flex; flex-direction:column; gap:4px; text-decoration:none;">
+                                <div style="font-weight:800; font-size:16px; color:var(--nui-accent); line-height:1.2;">${bm.title}</div>
+                                <div style="font-size:12px; font-weight:700; color:var(--nui-text-muted);">${bm.meta || 'Saved Article'}</div>
+                            </a>
+                            <button type="button" class="nui-btn nui-btn-danger nui-btn-sm btn-del-bookmark" data-index="${index}" style="padding:6px 12px; font-size:11px;">Remove</button>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+            html += `</div>`;
+
+            contentArea.innerHTML = html;
+
+            contentArea.querySelectorAll('.btn-del-bookmark').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const index = parseInt(btn.getAttribute('data-index'), 10);
+                    bookmarks.splice(index, 1);
+                    saveBookmarks();
+                    renderBookmarksView();
+                });
+            });
+        }
+
+        // 8. Core Router Engine
+        async function loadPage(url) {
+            const isReadingView = !!url.match(/[?&]section=\d+/);
+            actionBar.style.display = isReadingView ? 'flex' : 'none';
+
+            if (url === '#bookmarks') {
+                renderNav(url);
+                renderBookmarksView();
+                contentArea.scrollTop = 0;
+                window.history.pushState({ path: url }, '', url);
+                return;
+            }
+
+            contentArea.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">📰</span><br>Fetching the presses...</div>`;
+            renderNav(url);
+
+            try {
+                let doc;
+                if (url === window.location.href && document.querySelector('td.content')) {
+                    doc = document;
+                } else {
+                    const res = await fetch(url);
+                    const html = await res.text();
+                    doc = new DOMParser().parseFromString(html, 'text/html');
+                }
+
+                const contentTd = doc.querySelector('td.content');
+                if (!contentTd) throw new Error("NT content slot not isolated");
+
+                let viewHtml = '';
+
+                if (url.includes('section=editorial')) {
+                    contentTd.querySelectorAll('table').forEach(t => t.style.backgroundColor = 'transparent');
+                    viewHtml = `<div class="nui-surface" style="border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); padding: var(--nui-space-5); box-shadow: 0 4px 12px var(--nui-shadow); width: 100%; max-width: 800px; font-size: 15px; line-height: 1.6; color: var(--nui-text);">${contentTd.innerHTML}</div>`;
+                } else if (isReadingView) {
+                    viewHtml = renderArticle(contentTd);
+
+                    const h1 = contentTd.querySelector('h1');
+                    const rawTitle = h1 ? h1.textContent.trim() : 'Neopian Times Piece';
+                    const issueMatch = url.match(/[?&]issue=(\d+)/) || currentWeek;
+                    const metaLabel = `Issue ${issueMatch ? (Array.isArray(issueMatch) ? issueMatch[1] : issueMatch) : 'Archives'}`;
+
+                    const bmBtn = actionBar.querySelector('#nui-nt-bookmark-btn');
+                    const refreshBtnState = () => {
+                        const saved = bookmarks.some(b => b.url === url);
+                        bmBtn.className = `nui-btn nui-btn-sm ${saved ? 'nui-btn-primary' : 'nui-btn-secondary'}`;
+                        bmBtn.querySelector('svg').setAttribute('fill', saved ? 'currentColor' : 'none');
+                    };
+                    refreshBtnState();
+
+                    const newBmBtn = bmBtn.cloneNode(true);
+                    bmBtn.parentNode.replaceChild(newBmBtn, bmBtn);
+                    newBmBtn.addEventListener('click', () => {
+                        const exists = bookmarks.findIndex(b => b.url === url);
+                        if (exists > -1) {
+                            bookmarks.splice(exists, 1);
+                        } else {
+                            bookmarks.push({ title: rawTitle, url: url, meta: metaLabel });
+                        }
+                        saveBookmarks();
+                        const saved = bookmarks.some(b => b.url === url);
+                        newBmBtn.className = `nui-btn nui-btn-sm ${saved ? 'nui-btn-primary' : 'nui-btn-secondary'}`;
+                        newBmBtn.querySelector('svg').setAttribute('fill', saved ? 'currentColor' : 'none');
+                    });
+
+                } else if (url.includes('section=')) {
+                    viewHtml = renderList(contentTd);
+                } else {
+                    viewHtml = renderHome(doc);
+                }
+
+                contentArea.innerHTML = viewHtml;
+
+                contentArea.querySelectorAll('img').forEach(img => {
+                    img.style.maxWidth = '100%';
+                    img.style.height = 'auto';
+                    img.style.borderRadius = 'var(--nui-radius-sm)';
+                });
+
+                contentArea.scrollTop = 0;
+
+                if (url !== window.location.href) {
+                    window.history.pushState({ path: url }, '', url);
+                }
+
+            } catch (err) {
+                contentArea.innerHTML = `<div class="nui-empty" style="color: var(--nui-danger);">Failed to load page.</div>`;
+            }
+        }
+
+        // 9. Event Interceptors
+        document.body.addEventListener('click', e => {
+            const link = e.target.closest('a');
+            if (link && link.href.includes('/ntimes/') && !link.href.includes('submit') && !e.ctrlKey && !e.metaKey && link.target !== '_blank') {
+                e.preventDefault();
+                loadPage(link.href);
+            }
+        });
+
+        window.addEventListener('popstate', () => {
+            loadPage(window.location.href);
+        });
+
+        // Initialize view routing execution
+        loadPage(window.location.href);
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        try { run(); } catch (err) { showFatalError(err); }
+    } else {
+        document.addEventListener('DOMContentLoaded', () => { try { run(); } catch (err) { showFatalError(err); } });
+    }
 })();
