@@ -313,8 +313,8 @@
     // ==========================================================================
     // These don't change per-theme — they're the "retro-modern" shape language.
 
-    const STATIC_TOKENS = `
-        --nui-font-display: "Museo", "Segoe UI Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+   const STATIC_TOKENS = `
+        --nui-font-display: "TP Cafeteria", "Museo", "Segoe UI Rounded", sans-serif;
         --nui-font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
         --nui-radius-sm: 8px;
@@ -363,6 +363,10 @@
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
         }
+
+        /* Force sans-serif globally to kill Neopets' legacy Times New Roman */
+        .nui-reset { font-family: var(--nui-font-body); }
+        .nui-spa-active { font-family: var(--nui-font-body); }
 
         /* ---------- Surfaces & Type ---------- */
         .nui-surface { background: var(--nui-surface); }
@@ -499,11 +503,13 @@
         }
         .nui-hnav::-webkit-scrollbar { display: none; }
 
-        .nui-pill {
+       .nui-pill {
             color: var(--nui-text-muted);
             text-decoration: none;
-            font-weight: 600;
-            font-size: 13.5px;
+            font-family: var(--nui-font-display);
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            font-size: 18px;
             background: var(--nui-surface-2);
             padding: 7px 14px;
             border-radius: var(--nui-radius-pill);
@@ -791,7 +797,8 @@
 
         .nui-drawer-item {
             display: flex; align-items: center; gap: 10px;
-            padding: 10px 6px; font-size: 14px; font-weight: 600; color: var(--nui-text);
+            padding: 10px 6px; font-size: 18px; font-weight: 400; color: var(--nui-text);
+            font-family: var(--nui-font-display); letter-spacing: 0.5px;
             text-decoration: none; border-radius: var(--nui-radius-sm);
             transition: background var(--nui-dur-fast) var(--nui-ease);
         }
@@ -4732,7 +4739,7 @@
             render: function (container) {
                 function renderPenSettings() {
                     const isPerBoard = localStorage.getItem('nui_per_board_pen') === 'true';
-                                        container.innerHTML = `
+                    container.innerHTML = `
                         <details class="nui-drawer-section">
                             <summary class="nui-drawer-section-title" style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;">
                                 Pen Options <span style="font-size:10px; opacity:0.5;">▼</span>
@@ -4766,7 +4773,7 @@
             }
         });
 
-                NeoUI.registerSettingsSection({
+        NeoUI.registerSettingsSection({
             id: 'neoboards_vibe',
             title: 'Vibe Rater',
             render: function (container) {
@@ -4797,7 +4804,7 @@
                         </div>
                     `).join('');
 
-                                        container.innerHTML = `
+                    container.innerHTML = `
                         <details class="nui-drawer-section">
                             <summary class="nui-drawer-section-title" style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;">
                                 Vibe Rater <span style="font-size:10px; opacity:0.5;">▼</span>
@@ -4947,7 +4954,7 @@
         });
     }
 
-    function switchTab(id) {
+   function switchTab(id) {
         activeTabId = id;
         renderTabs();
 
@@ -4957,10 +4964,17 @@
         if (id === 'board') {
             const actionBar = document.getElementById('nui-thread-actionbar');
             if (actionBar) actionBar.style.display = 'none';
+
+            // Update address bar to the board URL
+            if (currentBoardUrl) window.history.replaceState(null, '', currentBoardUrl);
+
             loadBoardList(currentBoardUrl, contentArea);
         } else {
             const thread = openThreads.find(t => t.id === id);
             if (thread) {
+                // Update address bar to the thread URL so the Referer header is correct
+                window.history.replaceState(null, '', thread.url);
+
                 if (thread.htmlCache) {
                     renderThreadUI(thread.htmlCache, contentArea, thread.url, thread.id);
                 } else {
@@ -4969,14 +4983,13 @@
             }
         }
     }
-
     function closeThread(id) {
         openThreads = openThreads.filter(t => t.id !== id);
         if (activeTabId === id) switchTab('board');
         else renderTabs();
     }
 
-        async function fetchThread(url, id, container, preserveScroll = false) {
+    async function fetchThread(url, id, container, preserveScroll = false) {
         const savedScroll = container.scrollTop;
 
         // If we're refreshing, don't wipe the screen. Just dim it slightly.
@@ -5006,7 +5019,7 @@
                 }
             }
         } catch (err) {
-    container.innerHTML = `<div class="nui-empty" style="color: var(--nui-danger);">Failed to load thread.<br><pre style="font-size:10px; white-space:pre-wrap; word-break:break-all;">${err && err.stack ? err.stack : String(err)}</pre></div>`;
+            container.innerHTML = `<div class="nui-empty" style="color: var(--nui-danger);">Failed to load thread.<br><pre style="font-size:10px; white-space:pre-wrap; word-break:break-all;">${err && err.stack ? err.stack : String(err)}</pre></div>`;
         } finally {
             // Always restore opacity/clicks when done
             container.style.opacity = '1';
@@ -5068,23 +5081,22 @@
             if (!li.querySelector('.boardPostByline')) return;
 
             // Neoboard avatar (.postAuthorIcon img) — robust fallback for new layouts
-const avatarImgEl = li.querySelector('.postAuthorIcon img, .authorIcon img');
-const avatarDivEl = li.querySelector('.postAuthorIcon, .authorIcon');
-let avatarUrl = 'https://images.neopets.com/neoboards/avatars/default.gif';
+            const avatarImgEl = li.querySelector('.postAuthorIcon img, .authorIcon img');
+            const avatarDivEl = li.querySelector('.postAuthorIcon, .authorIcon');
+            let avatarUrl = 'https://images.neopets.com/neoboards/avatars/default.gif';
 
-if (avatarImgEl && avatarImgEl.getAttribute('src')) {
-    let src = avatarImgEl.getAttribute('src');
-    if (src.startsWith('//')) src = 'https:' + src; else if (src.startsWith('/')) src = 'https://images.neopets.com' + src;
-    avatarUrl = src;
-} else if (avatarDivEl && avatarDivEl.style.backgroundImage) {
-    const match = avatarDivEl.style.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
-    if (match) {
-        let src = match[1];
-        if (src.startsWith('//')) src = 'https:' + src; else if (src.startsWith('/')) src = 'https://images.neopets.com' + src;
-        avatarUrl = src;
-    }
-}
-
+            if (avatarImgEl && avatarImgEl.getAttribute('src')) {
+                let src = avatarImgEl.getAttribute('src');
+                if (src.startsWith('//')) src = 'https:' + src; else if (src.startsWith('/')) src = 'https://images.neopets.com' + src;
+                avatarUrl = src;
+            } else if (avatarDivEl && avatarDivEl.style.backgroundImage) {
+                const match = avatarDivEl.style.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
+                if (match) {
+                    let src = match[1];
+                    if (src.startsWith('//')) src = 'https:' + src; else if (src.startsWith('/')) src = 'https://images.neopets.com' + src;
+                    avatarUrl = src;
+                }
+            }
 
             // Active pet icon (.postAuthorPetIcon img) — shown alongside avatar
             const petIconEl = li.querySelector('.postAuthorPetIcon img');
@@ -5110,16 +5122,24 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             const messageEl = li.querySelector('.boardPostMessage');
             const messageHtml = messageEl ? messageEl.innerHTML : '';
 
-            posts.push({ avatarUrl, petIconUrl, authorName, authorMetaStr, dateStr, messageHtml }); //
+            posts.push({ avatarUrl, petIconUrl, authorName, authorMetaStr, dateStr, messageHtml });
         });
         smilies.push(...NEOBOARD_SMILIES);
 
         const formEl = doc.querySelector('form[name="message_form"]');
         if (formEl) {
+            // Remove any previously attached hidden forms to prevent duplicates
+            document.querySelectorAll('form.nui-hidden-native-form').forEach(f => f.remove());
+
+            // Append the actual native Neopets form from the fetched thread to the LIVE document
+            formEl.classList.add('nui-hidden-native-form');
+            formEl.style.display = 'none';
+            document.body.appendChild(formEl);
+
             const resolvedAction = formEl.getAttribute('action') || 'process_topic.phtml';
             replyFormData = {
                 action: resolvedAction,
-                hiddenInputs: Array.from(formEl.querySelectorAll('input[type="hidden"], input[type="submit"]')).map(inp => ({ name: inp.name, value: inp.value })),
+                hiddenInputs: [], // Kept as empty array so the quick reply UI mapping doesn't break
                 pens: Array.from(formEl.querySelectorAll('.neoboardPen')).map(pen => {
                     const labelEl = pen.querySelector('label');
                     const inputEl = pen.querySelector('input');
@@ -5140,9 +5160,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
         `;
         wrapper.appendChild(headerCard);
 
-        // Fave/refresh live in the fixed top action bar (next to the tabs,
-        // always visible without scrolling), not in the header card. Reveal it
-        // and (re)bind it for this thread every time renderThreadUI runs.
         const actionBar = document.getElementById('nui-thread-actionbar');
         if (actionBar) {
             actionBar.style.display = 'flex';
@@ -5156,7 +5173,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             }
             setFavBtnState(favBtn, isFav);
 
-            // Clone+replace to drop any listeners bound for a previously open thread.
             const newFavBtn = favBtn.cloneNode(true);
             favBtn.parentNode.replaceChild(newFavBtn, favBtn);
             newFavBtn.addEventListener('click', () => {
@@ -5191,7 +5207,7 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
                 ? `<img src="${post.petIconUrl}" alt="pet" style="width:50px; height:50px; object-fit:contain; flex-shrink:0; filter:drop-shadow(0 1px 3px var(--nui-shadow));">`
                 : '';
 
-                                    postCard.innerHTML = `
+            postCard.innerHTML = `
                 <div data-post-header style="display: flex; flex-wrap: wrap; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border); border-radius: calc(var(--nui-radius-md) - 1px) calc(var(--nui-radius-md) - 1px) 0 0;">
                     <div style="padding: 12px 16px; display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
                         <a href="/userlookup.phtml?user=${encodeURIComponent(post.authorName)}" target="_blank" rel="noopener" style="display: block; width: 50px; height: 50px; background: var(--nui-surface) url('${post.avatarUrl}') center/cover no-repeat; flex-shrink: 0; text-decoration: none;"></a>
@@ -5214,13 +5230,9 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
                 </div>
             `;
 
-
-
             postCard.querySelectorAll('.boardPostMessage img').forEach(img => { img.style.maxWidth = '100%'; img.style.height = 'auto'; });
             postCard.querySelectorAll('.boardPostMessage p, .boardPostMessage div').forEach(el => { el.style.maxWidth = '100%'; el.style.overflowWrap = 'break-word'; });
 
-            // --- User action buttons + @reply (ported from NES: Actions) ---
-            // Icons match the NES script's icon set; layout fits the NeoUI card style.
             const actionsRow = document.createElement('div');
             actionsRow.style.cssText = 'display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 16px 10px; border-top: 1px solid var(--nui-border); background: var(--nui-surface-2);';
 
@@ -5245,7 +5257,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
                 actionsRow.appendChild(a);
             });
 
-            // Copy username
             const copyBtn = document.createElement('button');
             copyBtn.type = 'button'; copyBtn.title = `Copy "${p}"`; copyBtn.style.cssText = btnStyle;
             copyBtn.innerHTML = `<img src="https://images.neopets.com/themes/h5/basic/images/v3/profile-icon.svg" alt="Copy" style="${iconStyle}">`;
@@ -5258,7 +5269,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             });
             actionsRow.appendChild(copyBtn);
 
-            // ---- Vibe Rater button ----
             const postHeader = postCard.querySelector('[data-post-header]');
             const vibeKey = p.toLowerCase().trim();
 
@@ -5330,7 +5340,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             });
             actionsRow.appendChild(vibeBtn);
 
-            // @Reply shortcut
             const replyBtn = document.createElement('button');
             replyBtn.type = 'button'; replyBtn.title = `Reply to ${p}`;
             replyBtn.style.cssText = 'cursor: pointer; margin-left: auto; font-size: 11px; font-weight: 700; color: var(--nui-text-muted); background: none; border: none; padding: 3px 6px; border-radius: 4px; transition: color 0.15s, transform 0.15s; letter-spacing: 0.2px; text-transform: uppercase;';
@@ -5352,7 +5361,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             actionsRow.appendChild(replyBtn);
             postCard.appendChild(actionsRow);
 
-            // Impress link enhancement
             const impressPattern = /(https?:\/\/)?(impress(?:-2020)?\.openneo\.net\/(?:user\S*?\/(?:closet|lists)|outfits\/\d+))/g;
             Array.from(postCard.querySelectorAll('div')).filter(d => impressPattern.test(d.innerHTML)).forEach(node => {
                 impressPattern.lastIndex = 0;
@@ -5383,16 +5391,11 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             replyWrap.className = 'nui-surface';
             replyWrap.style.cssText = 'margin-top: var(--nui-space-4); border: 2px solid var(--nui-accent-soft); border-radius: var(--nui-radius-lg); padding: var(--nui-space-4); box-shadow: 0 4px 16px var(--nui-shadow);';
 
-            // If we've never remembered a real pen (or the remembered one no longer
-            // exists on this account), fall back to the first pen the account owns
-            // instead of leaving savedPenVal at the hardcoded '0' default.
             if (replyFormData.pens.length > 0 && !replyFormData.pens.some(p => p.val === savedPenVal)) {
                 savedPenVal = replyFormData.pens[0].val;
                 saveState();
             }
 
-            // Mode toggle row: Remember and Random are behaviours, not pens.
-            // The actual pen list sits below, filtered to real pen values only.
             const modeHtml = `
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                     <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--nui-text-faint); flex-shrink: 0;">Mode</span>
@@ -5411,7 +5414,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
                 </div>
             `;
 
-            // Pen strip: actual pens only
             const penStripHtml = replyFormData.pens.length > 0 ? `
                 <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; scrollbar-width: none; -webkit-overflow-scrolling: touch;">
                     ${replyFormData.pens.map(pen => `
@@ -5429,7 +5431,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
 
             let smiliesHtml = '';
             if (smilies.length > 0) {
-                // Build one hidden panel per category; tabs swap which is visible
                 const panelsHtml = SMILEY_CATEGORIES.map((cat, ci) => {
                     const slice = smilies.slice(cat.start, cat.start + cat.count);
                     const imgs = slice.map(s =>
@@ -5483,7 +5484,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
                     smileyDrawer.style.display = open ? 'none' : 'flex';
                 });
 
-                // Category tabs
                 replyWrap.querySelectorAll('.nui-smiley-tab').forEach(tab => {
                     tab.addEventListener('click', () => {
                         const ci = tab.getAttribute('data-tab');
@@ -5506,7 +5506,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
                 });
             });
 
-            // Mode toggle buttons (Remember / Random)
             replyWrap.querySelectorAll('.nui-pen-mode').forEach(btn => {
                 btn.addEventListener('click', () => {
                     penMode = btn.getAttribute('data-mode');
@@ -5519,20 +5518,16 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
                 });
             });
 
-            // Pen strip buttons — clicking a pen always switches to Remember mode
-            // and saves that pen, consistent with NES behaviour.
             replyWrap.querySelectorAll('.nui-pen-opt').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const val = btn.getAttribute('data-val');
                     savedPenVal = val;
                     penMode = '__remember__';
-                    // Update mode buttons
                     replyWrap.querySelectorAll('.nui-pen-mode').forEach(b => {
                         const active = b.getAttribute('data-mode') === '__remember__';
                         b.style.background = active ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
                         b.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
                     });
-                    // Update pen strip
                     replyWrap.querySelectorAll('.nui-pen-opt').forEach(b => {
                         const active = b.getAttribute('data-val') === val;
                         b.style.background = active ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
@@ -5545,58 +5540,56 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             const form = replyWrap.querySelector('form');
 
             form.addEventListener('submit', (e) => {
-    // 1. Stop our custom NeoUI form from submitting natively
-    e.preventDefault();
+                // Prevent our custom NeoUI form from natively submitting
+                e.preventDefault();
 
-    const submitBtn = form.querySelector('button[type="submit"]');
-    setTimeout(() => { submitBtn.disabled = true; }, 0);
+                const submitBtn = form.querySelector('button[type="submit"]');
+                setTimeout(() => { submitBtn.disabled = true; }, 0);
 
-    // 2. Resolve the selected pen
-    const realPens = replyFormData.pens.map(p => p.val);
-    let finalPenVal = savedPenVal;
-    if (penMode === '__random__') {
-        if (realPens.length > 0) finalPenVal = realPens[Math.floor(Math.random() * realPens.length)];
-    } else if (penMode === '__remember__') {
-        finalPenVal = savedPenVal;
-    } else if (realPens.includes(penMode)) {
-        finalPenVal = penMode;
-    }
+                const realPens = replyFormData.pens.map(p => p.val);
+                let finalPenVal = savedPenVal;
+                if (penMode === '__random__') {
+                    if (realPens.length > 0) finalPenVal = realPens[Math.floor(Math.random() * realPens.length)];
+                } else if (penMode === '__remember__') {
+                    finalPenVal = savedPenVal;
+                } else if (realPens.includes(penMode)) {
+                    finalPenVal = penMode;
+                }
 
-    // 3. Grab the ORIGINAL untouched Neopets form from the scraped document
-    const originalForm = doc.querySelector('form[name="message_form"]');
-    if (!originalForm) {
-        alert("Error: Could not locate the original Neopets reply form.");
-        submitBtn.disabled = false;
-        return;
-    }
+                // 1. Locate the actual Neopets form we secretly appended earlier
+                const nativeForm = document.querySelector('form.nui-hidden-native-form');
 
-    // 4. Clone it and hide it so we can safely inject it into the live page
-    const ghostForm = originalForm.cloneNode(true);
-    ghostForm.style.display = 'none';
+                if (!nativeForm) {
+                    alert("Fatal Error: Could not find the native Neopets reply form.");
+                    submitBtn.disabled = false;
+                    return;
+                }
 
-    // 5. Inject your written message into the Ghost Form
-    const ghostTextarea = ghostForm.querySelector('textarea[name="message"]');
-    if (ghostTextarea) {
-        ghostTextarea.value = form.querySelector('textarea[name="message"]').value;
-    }
+                // 2. Inject the message text into the native form
+                const nativeTextarea = nativeForm.querySelector('textarea[name="message"]');
+                if (nativeTextarea) {
+                    nativeTextarea.value = form.querySelector('textarea[name="message"]').value;
+                }
 
-    // 6. Select the correct pen radio button in the Ghost Form
-    const ghostPenRadios = ghostForm.querySelectorAll('input[name="select_pen"]');
-    ghostPenRadios.forEach(radio => {
-        radio.checked = (radio.value === finalPenVal);
-    });
+                // 3. Set the pen value on the native form
+                let penInput = nativeForm.querySelector('input[name="select_pen"]');
+                if (!penInput) {
+                    penInput = document.createElement('input');
+                    penInput.type = 'hidden';
+                    penInput.name = 'select_pen';
+                    nativeForm.appendChild(penInput);
+                }
+                penInput.value = finalPenVal;
 
-    // 7. Append it to the live DOM and LITERALLY click the Neopets submit button
-    document.body.appendChild(ghostForm);
-    const realSubmitBtn = ghostForm.querySelector('input[type="submit"], button[type="submit"], input[name="message_reply"]');
-
-    if (realSubmitBtn) {
-        realSubmitBtn.click();
-    } else {
-        ghostForm.submit(); // Fallback just in case
-    }
-});
-
+                // 4. Force the native submit button to be clicked.
+                // This ensures the browser bundles the button's name/value in the POST payload!
+                const realSubmitBtn = nativeForm.querySelector('input[type="submit"], button[type="submit"], input[name="message_reply"]');
+                if (realSubmitBtn) {
+                    realSubmitBtn.click();
+                } else {
+                    nativeForm.submit(); // Ultimate fallback
+                }
+            });
 
             wrapper.appendChild(replyWrap);
         }
@@ -5645,7 +5638,7 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
             if (recentThreads.length > 0) {
                 html += `<div style="padding: 10px 14px; background: var(--nui-surface-2); font-weight: 800; font-size: 13px; text-transform: uppercase; color: var(--nui-text); border-bottom: 1px solid var(--nui-border); display: flex; align-items: center; justify-content: space-between;">
                     <span>🕒 Recently Read</span>
-                    <button type="button" id="nui-clear-recent" style="font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: var(--nui-radius-pill); border: 1px solid var(--nui-border); background: var(--nui-surface); color: var(--nui-text-muted); cursor: pointer;">Clear</button>
+                    <button type="button" id="nui-clear-recent" style="font-size: 13px; font-weight: 700; padding: 8px 16px; border-radius: var(--nui-radius-pill); border: 1px solid var(--nui-border); background: var(--nui-surface); color: var(--nui-text-muted); cursor: pointer; min-height: 36px; display: flex; align-items: center; justify-content: center;">Clear</button>
                 </div><div style="display: flex; flex-direction: column;">`;
                 recentThreads.slice(0, 5).forEach(t => {
                     html += `<a href="${t.url}" class="nui-thread-link" data-id="${t.id}" data-title="${t.title}" style="padding: 12px 14px; border-bottom: 1px solid var(--nui-border); text-decoration: none; color: var(--nui-text); font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${t.title}</a>`;
@@ -5966,7 +5959,6 @@ if (avatarImgEl && avatarImgEl.getAttribute('src')) {
         });
     }
 })();
-
 // ==============================================================================
 // MODULE 9: MYSTERY ISLAND TRAINING SCHOOL (FULL SPA)
 // ==============================================================================
