@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.0.11
-// @description  Mobile-forward Neopets overhaul suite (Core design system + Neomail + Wishing Well + Item Transfer Log) bundled as a single script. Each module self-activates only on its own page.
+// @version      1.1.2
+// @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
 // @grant        none
@@ -14,63 +14,47 @@
  * ============================================================================
  * NEOUI: UNIFIED SUITE
  * ----------------------------------------------------------------------------
- * This file bundles four previously-separate userscripts into one so there's
- * a single install/update instead of juggling @require URLs:
+ * A single install for a mobile-forward Neopets experience: a shared design
+ * system, a polished theme picker, a custom theme builder, a global search
+ * overlay, and a daily-timer hub for timed dailies.
  *
- *   1. NeoUI Core Framework   - design tokens, component CSS, window.NeoUI
- *                               runtime, PLUS shared scrapeLegacyProfile()
- *                               and buildTopbar() helpers so every page's
- *                               header looks/behaves identically instead of
- *                               each module keeping its own copy in sync.
- *   2. NeoUI Neomail          - mobile SPA overhaul for /neomessages.phtml
- *   3. NeoUI Wishing Well     - mobile overhaul for /wishing.phtml, now
- *                               using the shared topbar/scrape helpers
- *   4. Item Transfer Log      - reformatted /items/transfer_list.phtml,
- *                               restyled onto NeoUI's design tokens, given a
- *                               real mobile viewport, a responsive card
- *                               layout, and the same shared topbar - plus a
- *                               visible crash box like the other modules
- *                               instead of failing silently.
- *
- * v1.0.11: Custom Theme editor overhaul — it's now a proper modal (opened
- *   from a button in the drawer section, instead of being inlined into the
- *   drawer itself) with a live sample preview (mini topbar + card + button +
- *   badge) that updates instantly as you edit. Colors are picked with a
- *   custom canvas-based hue/saturation picker + hex field instead of the
- *   OS-native <input type="color"> swatch, so it looks and behaves the same
- *   on every browser/platform. Save/Cancel replace the old always-visible
- *   save button.
- *
- * v1.0.10 fixes:
- *   - Custom-theme "Dots" and "Sand" texture presets used a background
- *     `position/size` shorthand (e.g. "0 0/16px 16px") that's only legal on
- *     the `background` shorthand property, not on `background-image` (which
- *     is what the theme engine writes to). The invalid value voided the
- *     whole background-image declaration, so any custom theme using those
- *     two presets rendered no texture at all. Rewritten as self-tiling
- *     repeating-radial-gradients that don't need a size shorthand.
- *   - Virtupets is a genuinely dark palette (near-black bg, neon-green text)
- *     but was missing from DARK_THEMES, so it was mis-filed under "Light"
- *     in the theme picker. Added.
- *   - Krawk Island recolored from teal/sand/gold to black/silver/red.
- *   - Meridell's primary accent moved from forest green to heraldic blue
- *     (red stays/strengthens as the secondary accent) so it's no longer
- *     visually similar to Tyrannia's earthy greens.
- *
- * v1.0.1 fix: the legacy chrome-hiding CSS in the Transfer Log module used
- * to hide `.premium_bar_spacer`, which on this Neopets template is the class
- * on #main itself (the wrapper around the ENTIRE page - header, content,
- * footer). That hid the whole page body, including the cards we'd just
- * built, while leaving the topbar (appended directly to <body>, outside
- * #main) and the premium ad dock (which sits after #main closes) visible -
- * exactly the blank-page symptom. Fixed to hide only the specific legacy
- * pieces meant to be replaced (#header, #footer, #ban, sidebar, premium
- * dock) and never #main/.premium_bar_spacer itself.
- *
- * Each module below still starts life as its own IIFE and only takes action
- * once it confirms (via location.pathname) that it's on the right page, so
- * behavior is identical to running the four scripts side-by-side - just one
- * file, one version number, one theme applied everywhere.
+ * v1.1.2
+ *   - Dailies Hub rewritten for density: each timer is now a single compact
+ *     row (icon, label, one short note, countdown, open/done) instead of a
+ *     tall bordered card, and every note was trimmed to a short, concrete
+ *     phrase (no more padded filler like "which is pleasantly efficient").
+ *     Sections are collapsible <details> (Daily/Timed/Seasonal/Special),
+ *     each showing its ready count, and items now sort soonest-first within
+ *     their section so what to check next is always on top.
+ *   - Texture system overhaul: each theme's --nui-texture recipe was redrawn
+ *     with a distinct pattern grammar (dot-scatter, spiderweb, embers,
+ *     starfield, ripples, clouds, newsprint stipple, crackle, circuit nodes,
+ *     chainmail, wood-grain) instead of most themes sharing the same
+ *     "two diagonal crosshatch lines + one radial glow" formula at
+ *     different angles. Added per-theme --nui-texture-opacity/-blend/-rotate
+ *     tokens; dark themes now use `screen` blending instead of `multiply` so
+ *     their light-colored texture actually shows against dark surfaces
+ *     (multiply was muting it to near-invisibility). Added a reusable
+ *     `.nui-textured` utility class and applied it to the new Dailies rows
+ *     so real content — not just chrome like the topbar and buttons — picks
+ *     up the per-theme texture.
+ * v1.1.1
+ *   - Fixed Neomail inbox not loading: always fetch fresh from the server
+ *     instead of scraping the hidden Neopets DOM form (which nui-spa-active
+ *     hides, causing scrapeInboxData to return 0 rows).
+ *   - Fixed theme builder modal invisible on Firefox for Android: switched
+ *     from single rAF to double-rAF so the element is in a visible layer
+ *     before the opacity/scale animation fires.
+ *   - Removed redundant Dailies button from topbar (hub is in the drawer).
+ *   - Removed Theme Builder shortcut from drawer nav quick-actions
+ *     (it lives in Settings → Custom Theme; now reached from one place).
+ *   - Dailies hub: removed "Jellyneo-inspired" badge; replaced all generic
+ *     placeholder descriptions with accurate, informative notes.
+ *   - Texture system: expanded ::before texture overlay to nui-btn, nui-pill,
+ *     nui-item, nui-hnav, nui-drawer-section, and nui-drawer-section-title.
+ *     Added position/isolation/overflow to all new targets so the pseudo is
+ *     clipped correctly. Added a low-opacity full-page texture wash on SPA
+ *     pages via body::after.
  * ============================================================================
  */
 
@@ -142,7 +126,13 @@
                 '--nui-danger-soft':   '#FCD2CE',
                 '--nui-shadow':        'rgba(46, 36, 16, 0.14)',
                 '--nui-overlay':       'rgba(46, 36, 16, 0.48)',
-                '--nui-texture':       'repeating-linear-gradient(45deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 12px)',
+                // Scrapbook dot-scatter — reads as flecked paper/corkboard,
+                // not a printed grid. Distinct in kind (dots, not lines)
+                // from every other warm theme below.
+                '--nui-texture':       'radial-gradient(circle at 8% 18%, rgba(255,138,0,0.4) 1.6px, transparent 2.2px), radial-gradient(circle at 28% 52%, rgba(46,36,16,0.16) 1.4px, transparent 2px), radial-gradient(circle at 52% 22%, rgba(255,138,0,0.36) 1.6px, transparent 2.2px), radial-gradient(circle at 74% 60%, rgba(46,36,16,0.14) 1.4px, transparent 2px), radial-gradient(circle at 90% 30%, rgba(255,138,0,0.34) 1.6px, transparent 2.2px), radial-gradient(circle at 20% 86%, rgba(255,138,0,0.3) 1.4px, transparent 2px), radial-gradient(circle at 64% 90%, rgba(46,36,16,0.12) 1.4px, transparent 2px), radial-gradient(circle at 15% 20%, rgba(255,138,0,0.08) 0, transparent 42%)',
+                '--nui-texture-opacity': '0.55',
+                '--nui-texture-blend':  'multiply',
+                '--nui-texture-rotate': '0deg',
             },
         },
         haunted: {
@@ -169,7 +159,14 @@
                 '--nui-danger-soft':   '#452228',
                 '--nui-shadow':        'rgba(0, 0, 0, 0.5)',
                 '--nui-overlay':       'rgba(0, 0, 0, 0.65)',
-                '--nui-texture':       'radial-gradient(ellipse 55% 40% at 15% 20%, var(--nui-accent-2-soft) 0%, transparent 70%), radial-gradient(ellipse 45% 35% at 82% 65%, var(--nui-accent-soft) 0%, transparent 70%), radial-gradient(ellipse 40% 30% at 45% 90%, var(--nui-accent-2-soft) 0%, transparent 70%)',
+                // Spiderweb strands (wide diagonal cross) plus a scatter of
+                // drifting dust motes — a linear/dot combo unique to this
+                // theme. Screen blend so faint light strands actually show
+                // up against the near-black surface instead of vanishing.
+                '--nui-texture':       'repeating-linear-gradient(32deg, rgba(199,124,255,0.16) 0, rgba(199,124,255,0.16) 1px, transparent 1px, transparent 34px), repeating-linear-gradient(-58deg, rgba(61,220,114,0.12) 0, rgba(61,220,114,0.12) 1px, transparent 1px, transparent 40px), radial-gradient(circle at 25% 30%, rgba(241,235,255,0.5) 1px, transparent 1.6px), radial-gradient(circle at 68% 60%, rgba(241,235,255,0.4) 1px, transparent 1.6px), radial-gradient(circle at 45% 82%, rgba(241,235,255,0.35) 1px, transparent 1.6px)',
+                '--nui-texture-opacity': '0.6',
+                '--nui-texture-blend':  'screen',
+                '--nui-texture-rotate': '6deg',
             },
         },
         moltara: {
@@ -199,7 +196,14 @@
                 '--nui-danger-soft':   '#4A211A',
                 '--nui-shadow':        'rgba(0, 0, 0, 0.55)',
                 '--nui-overlay':       'rgba(0, 0, 0, 0.7)',
-                '--nui-texture':       'repeating-linear-gradient(115deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 16px), repeating-linear-gradient(25deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 20px)',
+                // Floating embers of mixed size drifting up off molten rock —
+                // dot scatter, no straight lines at all, so it can't be
+                // mistaken for a woven/gridded theme. Screen blend so the
+                // embers actually glow against the charcoal surface.
+                '--nui-texture':       'radial-gradient(circle at 12% 82%, rgba(255,87,34,0.55) 1.8px, transparent 2.4px), radial-gradient(circle at 30% 55%, rgba(255,194,71,0.4) 1.2px, transparent 1.8px), radial-gradient(circle at 48% 90%, rgba(255,87,34,0.5) 1.4px, transparent 2px), radial-gradient(circle at 65% 40%, rgba(255,194,71,0.45) 1.8px, transparent 2.4px), radial-gradient(circle at 80% 70%, rgba(255,87,34,0.4) 1.2px, transparent 1.8px), radial-gradient(circle at 92% 20%, rgba(255,194,71,0.35) 1px, transparent 1.6px), radial-gradient(circle at 20% 20%, rgba(255,87,34,0.14) 0, transparent 40%)',
+                '--nui-texture-opacity': '0.6',
+                '--nui-texture-blend':  'screen',
+                '--nui-texture-rotate': '-4deg',
             },
         },
         spacefaerie: {
@@ -228,7 +232,13 @@
                 '--nui-danger-soft':   '#451A24',
                 '--nui-shadow':        'rgba(0, 0, 0, 0.55)',
                 '--nui-overlay':       'rgba(0, 0, 0, 0.7)',
-                '--nui-texture':       'radial-gradient(circle at 12% 25%, var(--nui-accent-2) 1px, transparent 1.5px), radial-gradient(circle at 30% 65%, var(--nui-text) 1px, transparent 1.5px), radial-gradient(circle at 55% 20%, var(--nui-accent) 1px, transparent 1.5px), radial-gradient(circle at 72% 55%, var(--nui-text) 1px, transparent 1.5px), radial-gradient(circle at 88% 30%, var(--nui-accent-2) 1px, transparent 1.5px), radial-gradient(circle at 45% 85%, var(--nui-text) 1px, transparent 1.5px), radial-gradient(circle at 95% 75%, var(--nui-accent) 1px, transparent 1.5px)',
+                // Starfield — pure dot scatter, no glow blob, so it never
+                // reads as the same "soft glow" shape used by Faerieland or
+                // the crackle/ripple shapes used elsewhere.
+                '--nui-texture':       'radial-gradient(circle at 12% 25%, rgba(79,224,255,0.6) 1px, transparent 1.6px), radial-gradient(circle at 30% 65%, rgba(255,255,255,0.5) 1px, transparent 1.6px), radial-gradient(circle at 55% 20%, rgba(255,79,216,0.55) 1px, transparent 1.6px), radial-gradient(circle at 72% 55%, rgba(255,255,255,0.4) 1px, transparent 1.6px), radial-gradient(circle at 88% 30%, rgba(79,224,255,0.5) 1px, transparent 1.6px), radial-gradient(circle at 40% 88%, rgba(255,255,255,0.35) 0.8px, transparent 1.3px), radial-gradient(circle at 8% 70%, rgba(255,79,216,0.4) 0.8px, transparent 1.3px)',
+                '--nui-texture-opacity': '0.65',
+                '--nui-texture-blend':  'screen',
+                '--nui-texture-rotate': '0deg',
             },
         },
         maraqua: {
@@ -255,7 +265,12 @@
                 '--nui-danger-soft':   '#F8CFC9',
                 '--nui-shadow':        'rgba(11, 46, 51, 0.16)',
                 '--nui-overlay':       'rgba(7, 35, 39, 0.5)',
-                '--nui-texture':       'repeating-radial-gradient(circle at 50% 130%, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 14px)',
+                // Concentric water ripples — the only theme using rings, so
+                // it can't be confused with anyone else's grid or scatter.
+                '--nui-texture':       'repeating-radial-gradient(circle at 30% 20%, rgba(0,168,188,0.22) 0, rgba(0,168,188,0.22) 1px, transparent 1px, transparent 12px), repeating-radial-gradient(circle at 78% 68%, rgba(0,168,188,0.16) 0, rgba(0,168,188,0.16) 1px, transparent 1px, transparent 16px)',
+                '--nui-texture-opacity': '0.5',
+                '--nui-texture-blend':  'multiply',
+                '--nui-texture-rotate': '0deg',
             },
         },
         faerie: {
@@ -284,7 +299,14 @@
                 '--nui-danger-soft':   '#FAE1E6',
                 '--nui-shadow':        'rgba(59, 46, 74, 0.12)',
                 '--nui-overlay':       'rgba(40, 30, 55, 0.5)',
-                '--nui-texture':       'radial-gradient(ellipse 65% 55% at 18% 30%, var(--nui-accent-soft) 0%, transparent 80%), radial-gradient(ellipse 55% 45% at 78% 70%, var(--nui-accent-2-soft) 0%, transparent 80%), radial-gradient(ellipse 45% 40% at 50% 5%, var(--nui-surface-2) 0%, transparent 80%)',
+                // Soft cloud puffs (kept, its signature look) plus a light
+                // sparkle scatter so more than just one big blur is visible
+                // up close — still the gentlest texture in the suite by
+                // design, per the note above.
+                '--nui-texture':       'radial-gradient(ellipse 70% 60% at 20% 30%, rgba(255,255,255,0.28) 0, transparent 70%), radial-gradient(ellipse 55% 45% at 78% 70%, rgba(166,108,209,0.18) 0, transparent 78%), radial-gradient(ellipse 48% 38% at 46% 8%, rgba(255,255,255,0.22) 0, transparent 72%), radial-gradient(circle at 35% 45%, rgba(255,255,255,0.6) 1.2px, transparent 1.8px), radial-gradient(circle at 62% 65%, rgba(230,143,174,0.5) 1px, transparent 1.6px), radial-gradient(circle at 82% 25%, rgba(255,255,255,0.5) 1px, transparent 1.6px)',
+                '--nui-texture-opacity': '0.4',
+                '--nui-texture-blend':  'multiply',
+                '--nui-texture-rotate': '0deg',
             },
         },
         gray: {
@@ -314,7 +336,13 @@
                 '--nui-danger-soft':   '#EBD2D0',
                 '--nui-shadow':        'rgba(50, 46, 40, 0.12)',
                 '--nui-overlay':       'rgba(50, 46, 40, 0.45)',
-                '--nui-texture':       'none',
+                // Fine newsprint/static stipple — tight perpendicular tick
+                // marks instead of the wide diagonal crosshatch used
+                // elsewhere, so it reads as "grainy paper," not "fabric."
+                '--nui-texture':       'repeating-linear-gradient(0deg, rgba(80,80,80,0.16) 0, rgba(80,80,80,0.16) 1px, transparent 1px, transparent 5px), repeating-linear-gradient(90deg, rgba(80,80,80,0.1) 0, rgba(80,80,80,0.1) 1px, transparent 1px, transparent 5px), radial-gradient(circle at 20% 20%, rgba(201,125,140,0.1) 0, transparent 40%)',
+                '--nui-texture-opacity': '0.35',
+                '--nui-texture-blend':  'multiply',
+                '--nui-texture-rotate': '0deg',
             },
         },
         tyrannia: {
@@ -344,7 +372,13 @@
                 '--nui-danger-soft':   '#F0C2B0',
                 '--nui-shadow':        'rgba(46, 32, 16, 0.14)',
                 '--nui-overlay':       'rgba(46, 32, 16, 0.5)',
-                '--nui-texture':       'repeating-linear-gradient(70deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 18px), repeating-linear-gradient(160deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 22px)',
+                // Cracked, dried mud — three uneven-angle lines (not a neat
+                // two-line crosshatch) so the network reads as irregular
+                // crackle, plus a few pebble dots for grit.
+                '--nui-texture':       'repeating-linear-gradient(12deg, rgba(192,98,42,0.16) 0, rgba(192,98,42,0.16) 1px, transparent 1px, transparent 30px), repeating-linear-gradient(100deg, rgba(90,138,60,0.12) 0, rgba(90,138,60,0.12) 1px, transparent 1px, transparent 38px), repeating-linear-gradient(64deg, rgba(90,138,60,0.08) 0, rgba(90,138,60,0.08) 1px, transparent 1px, transparent 46px), radial-gradient(circle at 22% 70%, rgba(192,98,42,0.3) 1.4px, transparent 2px), radial-gradient(circle at 78% 35%, rgba(90,138,60,0.24) 1.2px, transparent 1.8px)',
+                '--nui-texture-opacity': '0.5',
+                '--nui-texture-blend':  'multiply',
+                '--nui-texture-rotate': '3deg',
             },
         },
         virtupets: {
@@ -375,7 +409,15 @@
                 '--nui-danger-soft':   '#301010',
                 '--nui-shadow':        'rgba(0, 0, 0, 0.6)',
                 '--nui-overlay':       'rgba(0, 0, 0, 0.72)',
-                '--nui-texture':       'repeating-linear-gradient(90deg, rgba(30,224,96,0.06) 0, rgba(30,224,96,0.06) 1px, transparent 1px, transparent 22px), repeating-linear-gradient(0deg, rgba(30,224,96,0.04) 0, rgba(30,224,96,0.04) 1px, transparent 1px, transparent 22px)',
+                // Circuit board — rigid right-angle grid (kept, it's the
+                // right motif) plus glowing node dots at a few junctions so
+                // it reads as a live PCB instead of plain graph paper.
+                // Screen blend so the green/blue lines actually light up
+                // against the dark steel surface.
+                '--nui-texture':       'repeating-linear-gradient(90deg, rgba(30,224,96,0.16) 0, rgba(30,224,96,0.16) 1px, transparent 1px, transparent 22px), repeating-linear-gradient(0deg, rgba(68,170,255,0.14) 0, rgba(68,170,255,0.14) 1px, transparent 1px, transparent 22px), radial-gradient(circle at 22% 22%, rgba(30,224,96,0.6) 1.4px, transparent 2px), radial-gradient(circle at 66% 44%, rgba(68,170,255,0.55) 1.4px, transparent 2px), radial-gradient(circle at 44% 88%, rgba(30,224,96,0.5) 1.2px, transparent 1.8px)',
+                '--nui-texture-opacity': '0.55',
+                '--nui-texture-blend':  'screen',
+                '--nui-texture-rotate': '0deg',
             },
         },
         meridell: {
@@ -408,7 +450,13 @@
                 '--nui-danger-soft':   '#EFC0C4',
                 '--nui-shadow':        'rgba(20, 26, 50, 0.16)',
                 '--nui-overlay':       'rgba(20, 26, 50, 0.5)',
-                '--nui-texture':       'radial-gradient(ellipse 60% 50% at 20% 30%, var(--nui-accent-soft) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 75% 70%, var(--nui-accent-2-soft) 0%, transparent 70%)',
+                // Chainmail — tight true 45°/-45° diamond lattice (not a
+                // loose 60°/120° hatch), so it reads as woven metal rings
+                // rather than a generic diagonal grid.
+                '--nui-texture':       'repeating-linear-gradient(45deg, rgba(30,79,160,0.16) 0, rgba(30,79,160,0.16) 1px, transparent 1px, transparent 9px), repeating-linear-gradient(-45deg, rgba(176,30,40,0.1) 0, rgba(176,30,40,0.1) 1px, transparent 1px, transparent 9px)',
+                '--nui-texture-opacity': '0.5',
+                '--nui-texture-blend':  'multiply',
+                '--nui-texture-rotate': '0deg',
             },
         },
         krawkisland: {
@@ -438,7 +486,14 @@
                 '--nui-danger-soft':   '#3A1418',
                 '--nui-shadow':        'rgba(0, 0, 0, 0.6)',
                 '--nui-overlay':       'rgba(0, 0, 0, 0.75)',
-                '--nui-texture':       'repeating-linear-gradient(45deg, rgba(182,184,194,0.08) 0, rgba(182,184,194,0.08) 1px, transparent 1px, transparent 14px), radial-gradient(circle at 18% 25%, rgba(200,20,42,0.14) 0%, transparent 60%), radial-gradient(circle at 80% 72%, rgba(200,20,42,0.12) 0%, transparent 60%)',
+                // Weathered hull planking — horizontal grain lines of
+                // uneven weight, plus a few rivet dots. Previously used the
+                // same 45°/135° diagonal hatch as Neopia Central; this is
+                // now the only theme with plank-grain horizontal lines.
+                '--nui-texture':       'repeating-linear-gradient(0deg, rgba(182,184,194,0.14) 0, rgba(182,184,194,0.14) 1px, transparent 1px, transparent 8px, transparent 9px, rgba(182,184,194,0.06) 9px, transparent 10px, transparent 26px), radial-gradient(circle at 15% 40%, rgba(200,20,42,0.4) 1.3px, transparent 1.9px), radial-gradient(circle at 60% 75%, rgba(182,184,194,0.3) 1.2px, transparent 1.8px), radial-gradient(circle at 85% 20%, rgba(200,20,42,0.35) 1.3px, transparent 1.9px)',
+                '--nui-texture-opacity': '0.55',
+                '--nui-texture-blend':  'screen',
+                '--nui-texture-rotate': '0deg',
             },
         },
     };
@@ -517,8 +572,84 @@
         .nui-reset { font-family: var(--nui-font-body); }
         .nui-spa-active { font-family: var(--nui-font-body); }
 
+        /* Subtle full-page texture wash behind SPA content */
+        .nui-spa-active body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image: var(--nui-texture);
+            background-repeat: repeat;
+            background-size: var(--nui-texture-size, cover);
+            opacity: calc(var(--nui-texture-opacity, 0.42) * 0.4);
+            mix-blend-mode: var(--nui-texture-blend, multiply);
+        }
+
         /* ---------- Surfaces & Type ---------- */
-        .nui-surface { background: var(--nui-surface); }
+        .nui-surface {
+            background: var(--nui-surface);
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+        }
+        .nui-surface::before,
+        .nui-topbar::before,
+        .nui-header-wrapper::before,
+        .nui-drawer::before,
+        .nui-drawer-profile::before,
+        .nui-drawer-stat::before,
+        .nui-theme-option::before,
+        .nui-bubble::before,
+        .nui-badge::before,
+        .nui-icon-btn::before,
+        .nui-neogo-btn::before,
+        .nui-item::before,
+        .nui-btn::before,
+        .nui-pill::before,
+        .nui-hnav::before,
+        .nui-drawer-section::before,
+        .nui-drawer-section-title::before,
+        .nui-textured::before {
+            content: '';
+            position: absolute;
+            inset: -10%;
+            pointer-events: none;
+            z-index: 0;
+            background-image: var(--nui-texture);
+            background-repeat: repeat;
+            background-position: center;
+            background-size: var(--nui-texture-size, cover);
+            opacity: var(--nui-texture-opacity, 0.42);
+            mix-blend-mode: var(--nui-texture-blend, multiply);
+            transform: rotate(var(--nui-texture-rotate, -1deg));
+        }
+        .nui-surface > *,
+        .nui-topbar > *,
+        .nui-header-wrapper > *,
+        .nui-drawer > *,
+        .nui-drawer-profile > *,
+        .nui-drawer-stat > *,
+        .nui-theme-option > *,
+        .nui-bubble > *,
+        .nui-badge > *,
+        .nui-icon-btn > *,
+        .nui-neogo-btn > *,
+        .nui-item > *,
+        .nui-btn > *,
+        .nui-pill > *,
+        .nui-hnav > *,
+        .nui-drawer-section > *,
+        .nui-drawer-section-title > *,
+        .nui-textured > * {
+            position: relative;
+            z-index: 1;
+        }
+        .nui-textured {
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+        }
         .nui-text { color: var(--nui-text); }
         .nui-text-muted { color: var(--nui-text-muted); }
         .nui-font-display { font-family: var(--nui-font-display); }
@@ -528,7 +659,7 @@
             position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
             background-color: var(--nui-bg);
             background-image:
-                linear-gradient(to bottom, transparent 30%, var(--nui-bg) 100%),
+                linear-gradient(to bottom, transparent 24%, var(--nui-bg) 100%),
                 linear-gradient(to bottom, var(--nui-surface) 0%, var(--nui-bg) 100%);
             border-bottom: 2px solid var(--nui-border);
             box-shadow: 0 4px 12px var(--nui-shadow);
@@ -678,6 +809,8 @@
             white-space: nowrap;
             scrollbar-width: none;
             -webkit-overflow-scrolling: touch;
+            position: relative;
+            isolation: isolate;
         }
         .nui-hnav::-webkit-scrollbar { display: none; }
 
@@ -694,6 +827,9 @@
             transition: background var(--nui-dur-fast) var(--nui-ease), color var(--nui-dur-fast) var(--nui-ease), transform var(--nui-dur-fast) var(--nui-ease);
             flex-shrink: 0;
             border: 1px solid transparent;
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
         }
         .nui-pill:active { transform: scale(0.96); }
         .nui-pill.is-active {
@@ -714,6 +850,9 @@
             transition: transform var(--nui-dur-fast) var(--nui-ease-snap), filter var(--nui-dur-fast) var(--nui-ease), opacity var(--nui-dur-fast) var(--nui-ease);
             text-align: center;
             line-height: 1.2;
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
         }
         .nui-btn:active { transform: scale(0.97); }
         .nui-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
@@ -754,16 +893,19 @@
         /* ---------- List Items ---------- */
        .nui-item {
     padding: var(--nui-space-3) var(--nui-space-4);
-    margin: 8px 12px; /* Adds space around each item */
-    border-radius: var(--nui-radius-md); /* Rounds the cards */
+    margin: 8px 12px;
+    border-radius: var(--nui-radius-md);
     border: 1px solid var(--nui-border);
     display: grid;
     grid-template-columns: 48px 1fr;
     gap: 14px;
     align-items: center;
     background: var(--nui-surface);
-    box-shadow: 0 2px 4px var(--nui-shadow); /* Adds a subtle shadow */
+    box-shadow: 0 2px 4px var(--nui-shadow);
     transition: transform var(--nui-dur-fast) var(--nui-ease), background var(--nui-dur-fast) var(--nui-ease);
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
 }
 
 .nui-item:active {
@@ -889,6 +1031,7 @@
             transition: transform var(--nui-dur-slow) var(--nui-ease);
             display: flex; flex-direction: column;
             overflow: hidden;
+            border-right: 1px solid var(--nui-border);
         }
         .nui-drawer-backdrop.is-open .nui-drawer { transform: translateX(0); }
 
@@ -958,7 +1101,7 @@
         .nui-drawer-stat-label { font-size: 10px; font-weight: 700; color: var(--nui-text-faint); text-transform: uppercase; letter-spacing: 0.3px; }
         .nui-drawer-stat-value { font-size: 13.5px; font-weight: 800; color: var(--nui-text); }
 
-        .nui-drawer-section { margin: var(--nui-space-3) 0; }
+        .nui-drawer-section { margin: var(--nui-space-3) 0; position: relative; isolation: isolate; }
         .nui-drawer-section-title {
             font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;
             color: var(--nui-text); font-weight: 800;
@@ -966,6 +1109,9 @@
             padding: 12px 14px; margin-bottom: 4px;
             border-radius: var(--nui-radius-sm);
             transition: filter var(--nui-dur-fast) var(--nui-ease);
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
         }
         .nui-drawer-section-title:active { filter: brightness(0.9); }
 
@@ -984,6 +1130,23 @@
         .nui-drawer-item .nui-drawer-ic { width: 20px; text-align: center; flex-shrink: 0; font-size: 15px; }
         .nui-drawer-item.is-action { color: var(--nui-accent); }
         .nui-drawer-item.is-danger { color: var(--nui-danger); }
+
+        .nui-nav-pill {
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 8px 12px; border-radius: 999px; border: 1px solid var(--nui-border);
+            background: var(--nui-surface-2); color: var(--nui-text); cursor: pointer;
+            font-size: 13px; font-weight: 700; flex-shrink: 0; transition: transform var(--nui-dur-fast) var(--nui-ease-snap), background var(--nui-dur-fast) var(--nui-ease);
+        }
+        .nui-nav-pill:active { transform: scale(0.96); }
+        .nui-nav-pill:hover { background: var(--nui-surface); }
+
+        .nui-icon-btn {
+            width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--nui-border);
+            background: var(--nui-surface-2); color: var(--nui-text); display: flex; align-items: center; justify-content: center;
+            cursor: pointer; font-size: 16px; flex-shrink: 0; transition: transform var(--nui-dur-fast) var(--nui-ease-snap), background var(--nui-dur-fast) var(--nui-ease);
+        }
+        .nui-icon-btn:active { transform: scale(0.92); }
+        .nui-icon-btn:hover { background: var(--nui-surface); }
 
         .nui-drawer-back {
             display: flex; align-items: center; gap: 8px;
@@ -1005,6 +1168,7 @@
             background: var(--nui-surface);
             cursor: pointer;
             overflow: hidden;
+            box-shadow: 0 2px 8px var(--nui-shadow);
             transition: border-color var(--nui-dur-fast) var(--nui-ease),
                         transform var(--nui-dur-fast) var(--nui-ease-snap),
                         box-shadow var(--nui-dur-fast) var(--nui-ease);
@@ -1465,6 +1629,10 @@
         const leftSlot = wrapper.querySelector('#nui-topbar-left-slot');
         leftSlot.appendChild(buildNeoGoButton());
 
+        const searchBtn = h('button', { class: 'nui-icon-btn nui-reset', 'aria-label': 'Open global search', type: 'button' }, '🔎');
+        searchBtn.addEventListener('click', openGlobalSearchModal);
+        leftSlot.appendChild(searchBtn);
+
         // Always append the bell and bind the iframe drawer
         leftSlot.insertAdjacentHTML('beforeend', bellHtml);
 
@@ -1477,6 +1645,476 @@
     }
 
 
+
+    const SEARCH_CATALOG = [
+        { label: 'Wishing Well', icon: '💧', href: '/wishing.phtml', category: 'Dailies' },
+        { label: 'Item Transfer Log', icon: '📦', href: '/items/transfer_list.phtml', category: 'Inventory' },
+        { label: 'Quickref', icon: '🗺️', href: '/quickref.phtml', category: 'Reference' },
+        { label: 'Daily Puzzle', icon: '🧩', href: '/daily.phtml', category: 'Dailies' },
+        { label: 'Wheel of Monotony', icon: '🎡', href: '/wheel.phtml', category: 'Dailies' },
+        { label: 'Neopets Dailies', icon: '🗓️', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'Bank Interest', icon: '🏦', href: '/bank.phtml', category: 'Banking' },
+        { label: 'Buried Treasure', icon: '🏴‍☠️', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'The Snowager', icon: '❄️', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'The Lab Ray', icon: '🧪', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'Giant Jelly', icon: '🫧', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'Fruit Machine', icon: '🎰', href: '/dailies.phtml', category: 'Timed' },
+        { label: 'Tombola', icon: '🎟️', href: '/dailies.phtml', category: 'Timed' },
+        { label: 'Fairground', icon: '🎠', href: '/dailies.phtml', category: 'Timed' },
+        { label: 'Coltzan’s Shrine', icon: '⛏️', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'Soup Faerie', icon: '🍲', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'Mystery Island', icon: '🏝️', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'Daily Tracker', icon: '⏰', action: 'daily-hub', category: 'NeoUI' },
+        { label: 'NeoUI Settings', icon: '⚙️', action: 'open-settings', category: 'NeoUI' },
+    ];
+
+    const DAILY_TIMERS_KEY = 'neoui_daily_timers_v1';
+
+    function getDefaultDailyTimers() {
+        return [
+            { id: 'advent-calendar', label: 'Advent Calendar', icon: '🎁', img: 'https://images.neopets.com/items/fur_mistletoe_wreath.gif', href: '/winter/adventcalendar.phtml', intervalHours: 24.0, note: 'Once a day in December', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'anchor-management', label: 'Anchor Management', icon: '🎁', img: 'https://images.neopets.com/items/fur_pirate_anchor.gif', href: '/pirates/anchormanagement.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'apple-bobbing', label: 'Apple Bobbing', icon: '🎁', img: 'https://images.neopets.com/items/spf_slimy_apple.gif', href: '/halloween/applebobbing.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'bank-interest', label: 'Bank Interest', icon: '🎁', img: 'https://images.neopets.com/items/ltoo_scorch_bank.gif', href: '/bank.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'coltzan-s-shrine', label: 'Coltzan\'s Shrine', icon: '🎁', img: 'https://images.neopets.com/items/bd_desert_deathmask.gif', href: '/desert/shrine.phtml', intervalHours: 13.0, note: 'Once every 13 hours; resets at 12:26 AM', category: 'Timed', timed: true, sourceGroup: 'Freebies' },
+            { id: 'council-chamber', label: 'Council Chamber', icon: '🎁', img: 'https://images.neopets.com/items/toy_kingaltador_figure.gif', href: '/altador/council.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'daily-ad-reward', label: 'Daily Ad Reward', icon: '🎁', img: 'https://images.neopets.com/themes/h5/basic/images/watchadreward-icon.png', href: '/home/', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'daily-puzzle', label: 'Daily Puzzle', icon: '🎁', img: 'https://images.neopets.com/events/500neopoints.gif', href: '/community/', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'dark-cave', label: 'Dark Cave', icon: '🎁', img: 'https://images.neopets.com/items/mmat_moltite.gif', href: '/magma/darkcave.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'deadly-dice', label: 'Deadly Dice', icon: '🎁', img: 'https://images.neopets.com/items/bd_vonroo_dice.gif', href: '/worlds/deadlydice.phtml', intervalHours: 24.0, note: 'Once a day, between 12:00am and 1:00am NST', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'deserted-tomb', label: 'Deserted Tomb', icon: '🎁', img: 'https://images.neopets.com/items/bd_ger_goldtalisman.gif', href: '/worlds/geraptiku/tomb.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'faerie-crossword', label: 'Faerie Crossword', icon: '🎁', img: 'https://images.neopets.com/items/fbo_library_tales.gif', href: '/games/crossword/index.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'forgotten-shore', label: 'Forgotten Shore', icon: '🎁', img: 'https://images.neopets.com/items/bg_forgotten_shore.gif', href: '/pirates/forgottenshore.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'fruit-machine', label: 'Fruit Machine', icon: '🎁', img: 'https://images.neopets.com/items/food_desert3.gif', href: '/desert/fruitmachine.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'giant-jelly', label: 'Giant Jelly', icon: '🎁', img: 'https://images.neopets.com/items/jel_cornupepper_whole.gif', href: '/jelly/jelly.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'giant-omelette', label: 'Giant Omelette', icon: '🎁', img: 'https://images.neopets.com/items/om_sausage_pepperoni1.gif', href: '/prehistoric/omelette.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'grave-danger', label: 'Grave Danger', icon: '🎁', img: 'https://images.neopets.com/items/boo_zombiehandbook.gif', href: '/halloween/gravedanger/', intervalHours: 10.0, note: 'Once every 4 to 10 hours', category: 'Timed', timed: true, sourceGroup: 'Freebies' },
+            { id: 'grumpy-old-king', label: 'Grumpy Old King', icon: '🎁', img: 'https://images.neopets.com/items/toy_plushie_skarl.gif', href: '/medieval/grumpyking.phtml', intervalHours: 12.0, note: 'Twice a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'guess-the-weight-of-the-marrow', label: 'Guess the Weight of the Marrow', icon: '🎁', img: 'https://images.neopets.com/items/marrow_veg.gif', href: '/medieval/guessmarrow.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'haunted-woods-hunt', label: 'Haunted Woods Hunt', icon: '🎁', img: 'https://images.neopets.com/items/spookyfoo_putridpumpkin.gif', href: '/halloween/haunted_woods_hunt.phtml', intervalHours: 12.0, note: 'Up to twice per day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'healing-springs', label: 'Healing Springs', icon: '🎁', img: 'https://images.neopets.com/items/mag_healing_striped.gif', href: '/faerieland/springs.phtml', intervalHours: 0.5, note: 'Once every 30 minutes', category: 'Timed', timed: true, sourceGroup: 'Freebies' },
+            { id: 'kiko-pop', label: 'Kiko Pop', icon: '🎁', img: 'https://images.neopets.com/items/foo_kiko_carmelpopcorn.gif', href: '/worlds/kiko/kpop/', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'lair-of-the-beast', label: 'Lair of the Beast', icon: '🎁', img: 'https://images.neopets.com/items/d8f1a3b609.gif', href: '/prehistoric/thebeast.phtml', intervalHours: 24.0, note: 'Once per day, available after clearing Orion\'s Quest in The Void Within Epilogue', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'lost-in-the-dark', label: 'Lost in the Dark', icon: '🎁', img: 'https://images.neopets.com/items/gwl_empty_lantern.gif', href: '/games/lostinthedark/index.phtml', intervalHours: 12.0, note: 'Up to twice per day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'lunar-temple', label: 'Lunar Temple', icon: '🎁', img: 'https://images.neopets.com/items/fur_lunar_chart.gif', href: '/shenkuu/lunar/', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'meteor', label: 'Meteor', icon: '🎁', img: 'https://images.neopets.com/items/bd_meteor_rock.gif', href: '/moon/meteor.phtml', intervalHours: 1.0, note: 'Once every hour, one prize a day', category: 'Timed', timed: true, sourceGroup: 'Freebies' },
+            { id: 'moltara-quarry', label: 'Moltara Quarry', icon: '🎁', img: 'https://images.neopets.com/items/mmat_obsidian.gif', href: '/magma/quarry.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'money-tree', label: 'Money Tree', icon: '🎁', img: 'https://images.neopets.com/items/mini_moneytree.gif', href: '/donations.phtml', intervalHours: 24.0, note: 'Up to 10 items a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'monthly-freebies', label: 'Monthly Freebies', icon: '🎁', img: 'https://images.neopets.com/items/fur_y7_calendar.gif', href: '/freebies/', intervalHours: 24.0, note: 'Once a month', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'mysterious-negg-cave', label: 'Mysterious Negg Cave', icon: '🎁', img: 'https://images.neopets.com/items/gif_fony14_fg_darkmagic.gif', href: '/shenkuu/neggcave/', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'qasalan-expellibox', label: 'Qasalan Expellibox', icon: '🎁', img: 'https://images.neopets.com/items/bat_desert_scarab.gif', href: 'http://ncmall.neopets.com/mall/shop.phtml?page=giveaway', intervalHours: 7.0, note: 'Once every 7 hours 7 minutes', category: 'Timed', timed: true, sourceGroup: 'Freebies' },
+            { id: 'rich-slorg-shop-of-offers', label: 'Rich Slorg  (Shop of Offers)', icon: '🎁', img: 'https://images.neopets.com/items/mall_roamingwindslorg.gif', href: '/shop_of_offers.phtml?slorg_payout=yes', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'rubbish-dump', label: 'Rubbish Dump', icon: '🎁', img: 'https://images.neopets.com/items/med_zeenanapeel.gif', href: '/medieval/rubbishdump.phtml', intervalHours: 24.0, note: 'Up to 10 items a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'second-hand-shoppe', label: 'Second-Hand Shoppe', icon: '🎁', img: 'https://images.neopets.com/items/clo_zombie_buzz_shirt.gif', href: '/thriftshoppe/index.phtml', intervalHours: 24.0, note: 'Up to 10 items a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'soup-kitchen', label: 'Soup Kitchen', icon: '🎁', img: 'https://images.neopets.com/items/bd_soupfaerie_soup.gif', href: '/soupkitchen.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Freebies' },
+            { id: 'symol-hole', label: 'Symol Hole', icon: '🎁', img: 'https://images.neopets.com/items/symol_brown.gif', href: '/medieval/symolhole.phtml', intervalHours: 1.0, note: '4-minute hourly window; one hour cooldown after trying', category: 'Timed', timed: true, sourceGroup: 'Freebies' },
+            { id: 'tarla-s-non-toolbar-treasures', label: 'Tarla\'s Non-Toolbar Treasures', icon: '🎁', img: 'https://images.neopets.com/items/plu_tarla.gif', href: '/freebies/tarlastoolbar.phtml', intervalHours: 24.0, note: 'Once a day, random which days and times', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'the-discarded-magical-blue-grundo-plushie-of-prosperity', label: 'The Discarded Magical Blue Grundo Plushie of Prosperity', icon: '🎁', img: 'https://images.neopets.com/items/plu_TDMBGPOP_replica.gif', href: '/faerieland/tdmbgpop.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'tombola', label: 'Tombola', icon: '🎁', img: 'https://images.neopets.com/items/toy_squeezy_tombola.gif', href: '/island/tombola.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'trudy-s-surprise', label: 'Trudy\'s Surprise', icon: '🎁', img: 'https://images.neopets.com/items/boo_defender_mynci.gif', href: '/trudys_surprise.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'wise-old-king', label: 'Wise Old King', icon: '🎁', img: 'https://images.neopets.com/items/usuki_hagan.gif', href: '/medieval/wiseking.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Freebies' },
+            { id: 'ye-olde-fishing-vortex', label: 'Ye Olde Fishing Vortex', icon: '🎁', img: 'https://images.neopets.com/items/vor_evilcarp.gif', href: '/water/fishing.phtml', intervalHours: 24.0, note: 'Random', category: 'Special', sourceGroup: 'Freebies' },
+            { id: 'desert-kiosk', label: 'Desert Kiosk', icon: '🎫', img: 'https://images.neopets.com/items/scr_coltzans_cash.gif', href: '/desert/sc/kiosk.phtml', intervalHours: 4.0, note: 'Once every four hours', category: 'Timed', timed: true, sourceGroup: 'Scratchcards' },
+            { id: 'haunted-fairgrounds-kiosk', label: 'Haunted Fairgrounds Kiosk', icon: '🎫', img: 'https://images.neopets.com/items/bd_sssidney_tickets.gif', href: '/halloween/scratch.phtml', intervalHours: 2.0, note: 'Once every two hours', category: 'Timed', timed: true, sourceGroup: 'Scratchcards' },
+            { id: 'ice-caves-kiosk', label: 'Ice Caves Kiosk', icon: '🎫', img: 'https://images.neopets.com/items/toy_kiosk_plushie.gif', href: '/winter/kiosk.phtml', intervalHours: 6.0, note: 'Once every six hours', category: 'Timed', timed: true, sourceGroup: 'Scratchcards' },
+            { id: 'black-pawkeet-slots', label: 'Black Pawkeet Slots', icon: '🕹️', img: 'https://images.neopets.com/items/krawk_pirate.gif', href: '/games/game.phtml?game_id=1099', intervalHours: 0.096, note: '250 times a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'brucey-b-slots', label: 'Brucey B Slots', icon: '🕹️', img: 'https://images.neopets.com/items/plu_advc2013_bruceyb.gif', href: '/games/game.phtml?game_id=1121', intervalHours: 0.096, note: '250 times a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'cosy-campfire-collection', label: 'Cosy Campfire Collection', icon: '🕹️', img: 'https://images.neopets.com/items/spf_angry_marshmallows.gif', href: '/games/cosycampfire/', intervalHours: 12.0, note: 'Up to twice per day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'destruct-o-match-iii', label: 'Destruct O Match III', icon: '🕹️', img: 'https://images.neopets.com/items/foo_destruct_munch.gif', href: '/games/game.phtml?game_id=999', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'dice-a-roo', label: 'Dice-a-Roo', icon: '🕹️', img: 'https://images.neopets.com/items/fur_dice_gold.gif', href: '/games/dicearoo.phtml', intervalHours: 24.0, note: 'Daily until pet is bored', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'doglefetch', label: 'Doglefetch', icon: '🕹️', img: 'https://images.neopets.com/items/r5n36yd833.gif', href: '/games/doglefetch/', intervalHours: 12.0, note: 'Up to twice per day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'dr-landelbrot-s-voidworks', label: 'Dr. Landelbrot\'s Voidworks', icon: '🕹️', img: 'https://images.neopets.com/items/c8m85che0f.gif', href: '/games/voidworks/', intervalHours: 24.0, note: 'Once per day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'dubloon-disaster', label: 'Dubloon Disaster', icon: '🕹️', img: 'https://images.neopets.com/items/gif_dubdis_mine.gif', href: '/games/game.phtml?game_id=772', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'faerie-bubbles', label: 'Faerie Bubbles', icon: '🕹️', img: 'https://images.neopets.com/items/clo_faeriebub_brac.gif', href: '/games/game.phtml?game_id=358', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'fashion-fever', label: 'Fashion Fever', icon: '🕹️', img: 'https://images.neopets.com/items/clo_ff_shirt.gif', href: '/games/game.phtml?game_id=805', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'hasee-bounce', label: 'Hasee Bounce', icon: '🕹️', img: 'https://images.neopets.com/items/toy_haseebounce_set.gif', href: '/games/h5game.phtml?game_id=1393', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'kass-basher', label: 'Kass Basher', icon: '🕹️', img: 'https://images.neopets.com/items/toy_whackakass_home.gif', href: '/games/h5game.phtml?game_id=1310', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'meerca-chase-ii', label: 'Meerca Chase II', icon: '🕹️', img: 'https://images.neopets.com/items/toy_meercachase_pullcart.gif', href: '/games/game.phtml?game_id=500', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'potato-counter', label: 'Potato Counter', icon: '🕹️', img: 'https://images.neopets.com/items/food_potatoe.gif', href: '/games/game.phtml?game_id=158', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'puzzles-of-the-past', label: 'Puzzles of the Past', icon: '🕹️', img: 'https://images.neopets.com/items/toy_fon_jigsawnegg.gif', href: '/games/puzzlesofthepast/', intervalHours: 12.0, note: 'Twice per day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'splat-a-sloth', label: 'Splat-A-Sloth', icon: '🕹️', img: 'https://images.neopets.com/items/stamp_spa_splat.gif', href: '/games/game.phtml?game_id=81', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'turmac-roll', label: 'Turmac Roll', icon: '🕹️', img: 'https://images.neopets.com/items/petpet_turmac.gif', href: '/games/game.phtml?game_id=1392', intervalHours: 8.0, note: 'Three plays a day', category: 'Daily', sourceGroup: 'Popular Games' },
+            { id: 'almost-abandoned-attic', label: 'Almost Abandoned Attic', icon: '💰', img: 'https://images.neopets.com/items/fur_cobwebs.gif', href: '/halloween/garage.phtml', intervalHours: 24.0, note: '5 items per day, restock times vary', category: 'Special', sourceGroup: 'Some NP Required' },
+            { id: 'bagatelle', label: 'Bagatelle', icon: '💰', img: 'https://images.neopets.com/items/gar_bagatelle.gif', href: '/halloween/bagatelle.phtml', intervalHours: 1.2, note: '20 times a day', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'buried-treasure', label: 'Buried Treasure', icon: '💰', img: 'https://images.neopets.com/items/mall_jjpb_treasurechesttrinket.gif', href: '/pirates/buriedtreasure/index.phtml', intervalHours: 3.0, note: 'Once every three hours', category: 'Timed', timed: true, sourceGroup: 'Some NP Required' },
+            { id: 'cheeseroller', label: 'Cheeseroller', icon: '💰', img: 'https://images.neopets.com/items/med_cheese_0.gif', href: '/medieval/cheeseroller.phtml', intervalHours: 8.0, note: 'Three times a day', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'coconut-shy', label: 'Coconut Shy', icon: '💰', img: 'https://images.neopets.com/items/spo_coconut_15.gif', href: '/halloween/coconutshy.phtml', intervalHours: 1.2, note: '20 times a day', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'cork-gun-gallery', label: 'Cork Gun Gallery', icon: '💰', img: 'https://images.neopets.com/items/can_box_fruitbeans.gif', href: '/halloween/corkgun.phtml', intervalHours: 1.2, note: '20 times a day', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'employment-agency', label: 'Employment Agency', icon: '💰', img: 'https://images.neopets.com/items/purple_ticket.gif', href: '/faerieland/employ/employment.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Some NP Required' },
+            { id: 'faerie-caverns', label: 'Faerie Caverns', icon: '💰', img: 'https://images.neopets.com/items/bg_faerie_caverns.gif', href: '/faerieland/caverns/index.phtml', intervalHours: 12.0, note: 'Up to twice per day', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'food-club', label: 'Food Club', icon: '💰', img: 'https://images.neopets.com/games/pages/trophies/88_1.png', href: '/pirates/foodclub.phtml?type=bet', intervalHours: 2.4, note: '10 bets per daily round', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'hidden-tower', label: 'Hidden Tower', icon: '💰', img: 'https://images.neopets.com/items/fyora_supreme_doll.gif', href: '/faerieland/hiddentower938.phtml', intervalHours: 24.0, note: 'Can purchase one item every 24 hours', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'igloo-garage-sale', label: 'Igloo Garage Sale', icon: '💰', img: 'https://images.neopets.com/items/gar_igloo.gif', href: '/winter/igloo.phtml', intervalHours: 2.4, note: '10 items per day, restock times vary', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'lever-of-doom', label: 'Lever of Doom', icon: '💰', img: 'https://images.neopets.com/items/coi_leverofdoom.gif', href: '/space/strangelever.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Some NP Required' },
+            { id: 'neolodge', label: 'Neolodge', icon: '💰', img: 'https://images.neopets.com/items/fur_fyorabed.gif', href: '/neolodge.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Some NP Required' },
+            { id: 'neopian-lottery', label: 'Neopian Lottery', icon: '💰', img: 'https://images.neopets.com/games/clicktoplay/icon_58.gif', href: '/games/lottery.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'pick-your-own', label: 'Pick Your Own', icon: '💰', img: 'https://images.neopets.com/items/4clover.gif', href: '/medieval/pickyourown_index.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'poogle-racing', label: 'Poogle Racing', icon: '💰', img: 'https://images.neopets.com/items/toy_poogle_blue.gif', href: '/faerieland/poogleracing.phtml', intervalHours: 0.25, note: 'Once every 15 minutes', category: 'Timed', timed: true, sourceGroup: 'Some NP Required' },
+            { id: 'stock-market-bargain-list', label: 'Stock Market - Bargain List', icon: '💰', img: 'https://images.neopets.com/games/game_stocks.gif', href: '/stockmarket.phtml?type=list&search=%&bargain=true', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Some NP Required' },
+            { id: 'stock-market-portfolio', label: 'Stock Market - Portfolio', icon: '💰', img: 'https://images.neopets.com/games/game_stocks.gif', href: '/stockmarket.phtml?type=portfolio', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Some NP Required' },
+            { id: 'tarla-s-shop-of-mystery', label: 'Tarla\'s Shop of Mystery', icon: '💰', img: 'https://images.neopets.com/items/toy_tarla_squirty.gif', href: '/winter/shopofmystery.phtml', intervalHours: 24.0, note: 'Restock times vary', category: 'Special', sourceGroup: 'Some NP Required' },
+            { id: 'test-your-strength', label: 'Test Your Strength', icon: '💰', img: 'https://images.neopets.com/items/gar_testyourstrength.gif', href: '/halloween/strtest/index.phtml', intervalHours: 6.0, note: 'Once every six hours', category: 'Timed', timed: true, sourceGroup: 'Some NP Required' },
+            { id: 'turdle-racing', label: 'Turdle Racing', icon: '💰', img: 'https://images.neopets.com/items/pet_turdle.gif', href: '/medieval/turdleracing.phtml', intervalHours: 8.0, note: 'Three times a day', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'tyrannian-ticket-booth', label: 'Tyrannian Ticket Booth', icon: '💰', img: 'https://images.neopets.com/items/ticket_mmband.gif', href: '/prehistoric/ticketbooth.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'wishing-well', label: 'Wishing Well', icon: '💰', img: 'https://images.neopets.com/items/stamp_neo_well.gif', href: '/wishing.phtml', intervalHours: 24.0, note: 'Seven wishes per 12-hour window', category: 'Daily', sourceGroup: 'Some NP Required' },
+            { id: 'brain-tree-quests', label: 'Brain Tree Quests', icon: '📜', img: 'https://images.neopets.com/items/toy_brain1.gif', href: '/halloween/braintree.phtml', intervalHours: 24.0, note: 'Once every 24 hours', category: 'Timed', timed: true, sourceGroup: 'Quests' },
+            { id: 'edna-s-quests', label: 'Edna\'s Quests', icon: '📜', img: 'https://images.neopets.com/items/toy_plushie_edna.gif', href: '/halloween/witchtower.phtml', intervalHours: 2.4, note: '10 times a day', category: 'Daily', sourceGroup: 'Quests' },
+            { id: 'esophagor-s-quests', label: 'Esophagor\'s Quests', icon: '📜', img: 'https://images.neopets.com/items/mall_miniesophagor.gif', href: '/halloween/esophagor.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Quests' },
+            { id: 'faerie-quests', label: 'Faerie Quests', icon: '📜', img: 'https://images.neopets.com/items/toy_faerie_princess.gif', href: '/quests.phtml', intervalHours: 24.0, note: 'Randomly given out', category: 'Special', sourceGroup: 'Quests' },
+            { id: 'illusen-s-glade', label: 'Illusen\'s Glade', icon: '📜', img: 'https://images.neopets.com/items/toy_faerie_illusen.gif', href: '/medieval/earthfaerie.phtml', intervalHours: 12.0, note: 'Once every 12 hours', category: 'Timed', timed: true, sourceGroup: 'Quests' },
+            { id: 'jhudora-s-bluff', label: 'Jhudora\'s Bluff', icon: '📜', img: 'https://images.neopets.com/items/toy_faerie_jhudora.gif', href: '/faerieland/darkfaerie.phtml', intervalHours: 12.0, note: 'Once every 12 hours', category: 'Timed', timed: true, sourceGroup: 'Quests' },
+            { id: 'kitchen-quests', label: 'Kitchen Quests', icon: '📜', img: 'https://images.neopets.com/items/toy_kitchenquest_flotsam.gif', href: '/island/kitchen.phtml', intervalHours: 2.4, note: '10 times a day', category: 'Daily', sourceGroup: 'Quests' },
+            { id: 'quest-log', label: 'Quest Log', icon: '📜', img: 'https://images.neopets.com/items/toy_hannah_action.gif', href: '/questlog/', intervalHours: 24.0, note: 'Daily', category: 'Daily', sourceGroup: 'Quests' },
+            { id: 'taelia-s-quests', label: 'Taelia\'s Quests', icon: '📜', img: 'https://images.neopets.com/items/toy_faerie_snow.gif', href: '/winter/snowfaerie.phtml', intervalHours: 2.4, note: '10 times a day', category: 'Daily', sourceGroup: 'Quests' },
+            { id: 'tea-time-with-tavi', label: 'Tea Time with Tavi', icon: '📜', img: 'https://images.neopets.com/items/plu_tavi.gif', href: '/games/teatime/', intervalHours: 4.8, note: '5 times a day', category: 'Daily', sourceGroup: 'Quests' },
+            { id: 'the-coincidence', label: 'The Coincidence', icon: '📜', img: 'https://images.neopets.com/items/rpp_reu2014_robotassispetpet.gif', href: '/space/coincidence.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Quests' },
+            { id: 'battledome', label: 'Battledome', icon: '🗺️', img: 'https://images.neopets.com/items/bd_spirit_blade.gif', href: '/dome/', intervalHours: 24.0, note: 'Anytime, 15 items per day', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'favourite-games', label: 'Favourite Games', icon: '🗺️', img: 'https://images.neopets.com/items/boo_dd_ilovegames.gif', href: '/games/favourites.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'games-room', label: 'Games Room', icon: '🗺️', img: 'https://images.neopets.com/items/mall_bckground_arcade2010gmc.gif', href: '/games/', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'haiku-generator', label: 'Haiku Generator', icon: '🗺️', img: 'https://images.neopets.com/items/toy_plushie_rorru.gif', href: '/island/haiku/haiku.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Other Places' },
+            { id: 'island-mystic', label: 'Island Mystic', icon: '🗺️', img: 'https://images.neopets.com/items/toy_plushie_mystic.gif', href: '/island/mystichut.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Other Places' },
+            { id: 'lab-ray', label: 'Lab Ray', icon: '🗺️', img: 'https://images.neopets.com/items/labmap_09.gif', href: '/lab.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Other Places' },
+            { id: 'magma-pool', label: 'Magma Pool', icon: '🗺️', img: 'https://images.neopets.com/items/bg_magma_pool.gif', href: '/magma/pool.phtml', intervalHours: 192.0, note: 'Once every 8 days', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'mystery-island-training-school', label: 'Mystery Island Training School', icon: '🗺️', img: 'https://images.neopets.com/items/bg_mystery_training.gif', href: '/island/training.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'new-features', label: 'New Features', icon: '🗺️', img: 'https://images.neopets.com/items/fur_ntpaperrack.gif', href: '/nf.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'petpet-lab-ray', label: 'Petpet Lab Ray', icon: '🗺️', img: 'https://images.neopets.com/items/petpetlab_soot.gif', href: '/petpetlab.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Other Places' },
+            { id: 'quick-reference', label: 'Quick Reference', icon: '🗺️', img: 'https://images.neopets.com/items/tornado_ring.gif', href: '/quickref.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'secret-ninja-training-school', label: 'Secret Ninja Training School', icon: '🗺️', img: 'https://images.neopets.com/items/nin_smoke_bomb.gif', href: '/island/fight_training.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'smuggler-s-cove', label: 'Smuggler\'s Cove', icon: '🗺️', img: 'https://images.neopets.com/items/toy_smugglers_cove.gif', href: '/pirates/smugglerscove.phtml', intervalHours: 24.0, note: 'Random', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'snowager', label: 'Snowager', icon: '🗺️', img: 'https://images.neopets.com/items/toy_snowager_plushie.gif', href: '/winter/snowager.phtml', intervalHours: 24.0, note: 'Once per time slot: 6-7am NST, 2-3pm NST, 10-11pm NST', category: 'Daily', sourceGroup: 'Other Places' },
+            { id: 'swashbuckling-academy', label: 'Swashbuckling Academy', icon: '🗺️', img: 'https://images.neopets.com/items/toy_pirate_cutlass.gif', href: '/pirates/academy.phtml', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'the-kadoatery', label: 'The Kadoatery', icon: '🗺️', img: 'https://images.neopets.com/items/kadoatie_pink.gif', href: '/games/kadoatery/index.phtml?', intervalHours: 24.0, note: 'Random', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'turmaculus', label: 'Turmaculus', icon: '🗺️', img: 'https://images.neopets.com/items/toy_turmaculus_figure.gif', href: '/medieval/turmaculus.phtml', intervalHours: 24.0, note: 'Once a day, during predicted times', category: 'Daily', sourceGroup: 'Other Places' },
+            { id: 'tyrannian-battleground', label: 'Tyrannian Battleground', icon: '🗺️', img: 'https://images.neopets.com/items/bd_tyweof2013_itsashovel.gif', href: '/prehistoric/battleground/', intervalHours: 24.0, note: 'Two-week rotation, 3 days to sign up, 4 days to battle, 7 days of boons', category: 'Daily', sourceGroup: 'Other Places' },
+            { id: 'your-shop-till', label: 'Your Shop Till', icon: '🗺️', img: 'https://images.neopets.com/items/broken_bag_np.gif', href: '/market.phtml?type=till', intervalHours: 24.0, note: 'Anytime', category: 'Special', sourceGroup: 'Other Places' },
+            { id: 'wheel-of-excitement', label: 'Wheel of Excitement', icon: '🎡', img: 'https://images.neopets.com/items/toy_faerie_light.gif', href: '/faerieland/wheel.phtml', intervalHours: 2.0, note: 'Once every two hours', category: 'Timed', timed: true, sourceGroup: 'Wheels' },
+            { id: 'wheel-of-extravagance', label: 'Wheel of Extravagance', icon: '🎡', img: 'https://images.neopets.com/items/sta_wheel_of_extravagance.gif', href: '/desert/extravagance.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Wheels' },
+            { id: 'wheel-of-knowledge', label: 'Wheel of Knowledge', icon: '🎡', img: 'https://images.neopets.com/items/toy_bv_wheelofknowledge.gif', href: '/medieval/knowledge.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Wheels' },
+            { id: 'wheel-of-mediocrity', label: 'Wheel of Mediocrity', icon: '🎡', img: 'https://images.neopets.com/items/toy_action_plesio.gif', href: '/prehistoric/mediocrity.phtml', intervalHours: 0.667, note: 'Once every 40 minutes', category: 'Timed', timed: true, sourceGroup: 'Wheels' },
+            { id: 'wheel-of-misfortune', label: 'Wheel of Misfortune', icon: '🎡', img: 'https://images.neopets.com/items/gar_wheelmisfortune.gif', href: '/halloween/wheel/index.phtml', intervalHours: 2.0, note: 'Once every two hours', category: 'Timed', timed: true, sourceGroup: 'Wheels' },
+            { id: 'wheel-of-monotony', label: 'Wheel of Monotony', icon: '🎡', img: 'https://images.neopets.com/items/toy_monotony_plushie.gif', href: '/prehistoric/monotony/monotony.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Wheels' },
+            { id: 'wheel-of-starlight-premium-only', label: 'Wheel of Starlight (Premium Only)', icon: '🎡', img: 'https://images.neopets.com/items/185mjdi5jd.gif', href: '/premium/wheel.phtml', intervalHours: 24.0, note: 'Once a day', category: 'Daily', sourceGroup: 'Wheels' },
+        ];
+    }
+
+    function normalizeDailyTimers(items) {
+        const defaults = getDefaultDailyTimers();
+        const byId = {};
+        defaults.forEach(function (item) { byId[item.id] = item; });
+        const saved = Array.isArray(items) ? items : [];
+        return defaults.map(function (item) {
+            const found = saved.find(function (entry) { return entry && entry.id === item.id; });
+            const nextAt = found && found.nextAt ? found.nextAt : Date.now() + item.intervalHours * 60 * 60 * 1000;
+            return Object.assign({}, item, found || {}, { nextAt: nextAt });
+        });
+    }
+
+    function normalizeSearchText(value) {
+        return (value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    function buildSiteSearchCatalog() {
+        const items = [];
+        const seen = {};
+        const addItem = function (item) {
+            const key = (item.label || '') + '|' + (item.href || '') + '|' + (item.action || '');
+            const normalized = normalizeSearchText(key);
+            if (!normalized || seen[normalized]) return;
+            seen[normalized] = true;
+            items.push(item);
+        };
+
+        SEARCH_CATALOG.forEach(addItem);
+
+        // The hard-coded SEARCH_CATALOG above is tiny; the real "sitewide"
+        // coverage comes from the full dailies list (~120 real neopets.com
+        // destinations), so search finds them by name no matter what page
+        // you're currently on — not just the handful of links visible here.
+        // Hidden dailies are still searchable (hiding only affects the hub).
+        try {
+            normalizeDailyTimers(loadDailyTimers()).forEach(function (t) {
+                addItem({ label: t.label, icon: t.icon, href: t.href, category: (t.sourceGroup || 'Dailies'), note: t.note });
+            });
+        } catch (e) {}
+
+        Array.prototype.forEach.call(document.querySelectorAll('a[href], button, [role="button"]'), function (el) {
+            const href = el.getAttribute('href') || el.getAttribute('data-href') || '';
+            const label = (el.textContent || el.getAttribute('aria-label') || el.getAttribute('title') || '').replace(/\s+/g, ' ').trim();
+            if (!label) return;
+            if (href && href.indexOf('#') === 0) return;
+            addItem({ label: label, icon: '🔗', href: href || null, category: 'This page' });
+        });
+
+        if (location.pathname && location.pathname !== '/') {
+            addItem({ label: 'Open current page', icon: '📍', href: location.pathname, category: 'Current page' });
+        }
+
+        // No cap here — the caller filters by query and slices to a
+        // reasonable on-screen count, but capping earlier would silently
+        // drop dailies/pages from the pool before the person even searches.
+        return items;
+    }
+
+    function loadDailyTimers() {
+        try {
+            const raw = localStorage.getItem(DAILY_TIMERS_KEY);
+            if (!raw) return normalizeDailyTimers([]);
+            const parsed = JSON.parse(raw);
+            return normalizeDailyTimers(Array.isArray(parsed) ? parsed : []);
+        } catch (e) { return normalizeDailyTimers([]); }
+    }
+
+    function saveDailyTimers(items) {
+        try { localStorage.setItem(DAILY_TIMERS_KEY, JSON.stringify(items)); } catch (e) {}
+    }
+
+    function sortDailyTimers(items) {
+        return items.slice().sort(function (a, b) { return (a.nextAt || 0) - (b.nextAt || 0); });
+    }
+
+    function formatCountdown(timestamp) {
+        const diff = Math.max(0, timestamp - Date.now());
+        if (!diff) return 'Ready now';
+        const hrs = Math.floor(diff / 3600000);
+        const mins = Math.floor((diff % 3600000) / 60000);
+        if (hrs >= 24) return Math.floor(hrs / 24) + 'd ' + (hrs % 24) + 'h';
+        if (hrs) return hrs + 'h ' + mins + 'm';
+        return mins + 'm';
+    }
+
+    function getDailyHubSummary(items) {
+        const visible = items.filter(function (item) { return !item.hidden; });
+        if (!visible.length) return 'All dailies are hidden.';
+        const ready = visible.filter(function (item) { return (item.nextAt || 0) <= Date.now(); }).length;
+        const upcoming = visible.length - ready;
+        if (!ready) return 'Next up: ' + visible[0].label;
+        if (ready === visible.length) return 'Everything is ready now.';
+        return ready + ' ready • ' + upcoming + ' upcoming';
+    }
+
+    function openDayTimerHub() {
+        const timers = normalizeDailyTimers(loadDailyTimers());
+        const summary = getDailyHubSummary(timers);
+        let showHidden = false;
+        const backdrop = document.createElement('div');
+        backdrop.id = 'nui-daily-hub';
+        backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
+        backdrop.style.zIndex = '100010';
+        backdrop.innerHTML = '<div class="nui-drawer" style="left: 0; right: auto; transform: translateX(-100%); transition: transform var(--nui-dur-slow) var(--nui-ease); box-shadow: 8px 0 24px var(--nui-shadow); border-right: 1px solid var(--nui-border); width: min(92vw, 420px);"><div style="padding: 10px var(--nui-space-4); border-bottom: 1px solid var(--nui-border); background: linear-gradient(135deg, var(--nui-accent-soft), var(--nui-surface-2));"><div style="display:flex; justify-content:space-between; align-items:center; gap:10px;"><div style="min-width:0;"><div style="font-size: 15px; font-weight: 800; color: var(--nui-text); line-height:1.2;">📅 Dailies</div><div style="font-size: 11px; color: var(--nui-text-muted); margin-top: 2px;">' + summary + '</div></div><div style="font-size: 10px; padding: 3px 7px; border-radius: var(--nui-radius-pill); background: var(--nui-surface); color: var(--nui-accent); font-weight: 700; flex-shrink:0;">NeoUI</div></div><div style="margin-top: 8px; display:flex; gap:6px;"><input id="nui-daily-filter" type="text" placeholder="Search dailies" style="flex:1; min-width:0; padding: 7px 10px; font-size: 13px; border-radius: var(--nui-radius-sm); border: 1px solid var(--nui-border); background: var(--nui-surface); color: var(--nui-text);" /><button type="button" id="nui-daily-toggle-hidden" title="Show hidden dailies" style="flex-shrink:0; font-size:11px; font-weight:700; padding:0 10px; border-radius: var(--nui-radius-sm); border: 1px solid var(--nui-border); background: var(--nui-surface); color: var(--nui-text-muted); cursor:pointer; white-space:nowrap;">🙈 0</button></div></div><div id="nui-daily-hub-body" style="padding: 8px var(--nui-space-3); display: flex; flex-direction: column; gap: 4px; overflow-y: auto; height: calc(100% - 92px);"></div></div>';
+        document.body.appendChild(backdrop);
+        requestAnimationFrame(function () {
+            backdrop.classList.add('is-open');
+            backdrop.querySelector('.nui-drawer').style.transform = 'translateX(0)';
+        });
+        function render(filter) {
+            const body = backdrop.querySelector('#nui-daily-hub-body');
+            const q = normalizeSearchText(filter || '');
+            body.innerHTML = '';
+
+            const hiddenCount = timers.filter(function (item) { return item.hidden; }).length;
+            const toggleBtn = backdrop.querySelector('#nui-daily-toggle-hidden');
+            if (toggleBtn) {
+                toggleBtn.textContent = '🙈 ' + hiddenCount;
+                toggleBtn.style.background = showHidden ? 'var(--nui-accent-soft)' : 'var(--nui-surface)';
+                toggleBtn.style.color = showHidden ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                toggleBtn.title = showHidden ? 'Showing hidden dailies — tap to hide them again' : (hiddenCount ? 'Show ' + hiddenCount + ' hidden daily/dailies' : 'No hidden dailies yet');
+            }
+
+            const groups = { Daily: [], Timed: [], Seasonal: [], Special: [] };
+            timers.filter(function (item) {
+                if (!showHidden && item.hidden) return false;
+                if (!q) return true;
+                const hay = normalizeSearchText([item.label, item.note || '', item.category || '', item.sourceGroup || ''].join(' '));
+                return hay.indexOf(q) !== -1;
+            }).forEach(function (item) {
+                const bucket = groups[item.category] || groups.Daily;
+                bucket.push(item);
+            });
+            ['Daily', 'Timed', 'Seasonal', 'Special'].forEach(function (category) {
+                const items = groups[category];
+                if (!items || !items.length) return;
+                // Soonest reset first, so the thing worth checking next is
+                // always at the top of its section.
+                const sorted = items.slice().sort(function (a, b) { return (a.nextAt || 0) - (b.nextAt || 0); });
+                const readyCount = sorted.filter(function (item) { return !item.hidden && (item.nextAt || 0) <= Date.now(); }).length;
+
+                const details = document.createElement('details');
+                details.className = 'nui-drawer-section';
+                details.style.cssText = 'margin: 0;';
+                details.open = true;
+
+                const summary = document.createElement('summary');
+                summary.className = 'nui-drawer-section-title';
+                summary.style.cssText = 'cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center; padding:6px 4px;';
+                summary.innerHTML = '<span style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.6px; color:var(--nui-text-faint);">' + category + ' · ' + sorted.length + (readyCount ? ' <span style="color:var(--nui-success);">· ' + readyCount + ' ready</span>' : '') + '</span><span style="font-size:10px; opacity:0.5;">▼</span>';
+                details.appendChild(summary);
+
+                const list = document.createElement('div');
+                list.style.cssText = 'display:flex; flex-direction:column;';
+
+                sorted.forEach(function (item) {
+                    const isReady = (item.nextAt || 0) <= Date.now();
+                    const row = document.createElement('div');
+                    row.className = 'nui-textured';
+                    row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:7px 4px; border-bottom:1px solid var(--nui-border);' + (item.hidden ? ' opacity:0.5;' : '');
+                    row.innerHTML = [
+                        '<span style="font-size:17px; width:20px; text-align:center; flex-shrink:0;">' + item.icon + '</span>',
+                        '<div style="min-width:0; flex:1; display:flex; flex-direction:column; gap:0;">',
+                        '<span style="font-weight:700; font-size:13px; color:var(--nui-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + item.label + '</span>',
+                        '<span style="font-size:11px; color:var(--nui-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (item.note || item.sourceGroup || category) + '</span>',
+                        '</div>',
+                        '<span style="font-size:10.5px; font-weight:700; padding:3px 6px; border-radius:var(--nui-radius-pill); background:' + (isReady ? 'var(--nui-success-soft)' : 'var(--nui-accent-soft)') + '; color:' + (isReady ? 'var(--nui-success)' : 'var(--nui-accent)') + '; flex-shrink:0; white-space:nowrap;">' + formatCountdown(item.nextAt) + '</span>',
+                        '<button type="button" class="nui-icon-btn" data-act="go" data-href="' + item.href + '" title="Open" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">↗</button>',
+                        '<button type="button" class="nui-icon-btn" data-act="edit" data-id="' + item.id + '" title="Edit name/note" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">✏️</button>',
+                        '<button type="button" class="nui-icon-btn" data-act="hide" data-id="' + item.id + '" title="' + (item.hidden ? 'Unhide' : 'Hide from list') + '" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">' + (item.hidden ? '👁️' : '🙈') + '</button>',
+                        item.hidden ? '' : '<button type="button" class="nui-icon-btn" data-act="done" data-id="' + item.id + '" title="Mark done" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">✓</button>'
+                    ].join('');
+                    list.appendChild(row);
+                });
+
+                details.appendChild(list);
+                body.appendChild(details);
+            });
+            if (!body.children.length) {
+                body.innerHTML = '<div style="padding: 12px 4px; color: var(--nui-text-muted); font-size: 13px;">No matches. Try a different keyword' + (hiddenCount && !showHidden ? ', or tap 🙈 above to see hidden dailies' : '') + '.</div>';
+            }
+            body.querySelectorAll('[data-act="go"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const href = this.getAttribute('data-href');
+                    if (href) window.location.assign(href);
+                });
+            });
+            body.querySelectorAll('[data-act="done"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const id = this.getAttribute('data-id');
+                    const next = timers.find(function (item) { return item.id === id; });
+                    if (next) {
+                        next.nextAt = Date.now() + next.intervalHours * 60 * 60 * 1000;
+                        saveDailyTimers(timers);
+                        render(backdrop.querySelector('#nui-daily-filter').value);
+                    }
+                });
+            });
+            body.querySelectorAll('[data-act="hide"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const id = this.getAttribute('data-id');
+                    const next = timers.find(function (item) { return item.id === id; });
+                    if (next) {
+                        next.hidden = !next.hidden;
+                        saveDailyTimers(timers);
+                        render(backdrop.querySelector('#nui-daily-filter').value);
+                    }
+                });
+            });
+            body.querySelectorAll('[data-act="edit"]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    const id = this.getAttribute('data-id');
+                    const next = timers.find(function (item) { return item.id === id; });
+                    if (!next) return;
+                    // Freeform text is intentional here — any label/note the
+                    // person types is accepted as-is and persisted verbatim,
+                    // including blank/odd entries. Cancel leaves it untouched.
+                    const newLabel = window.prompt('Name for this daily:', next.label);
+                    if (newLabel === null) return;
+                    const newNote = window.prompt('Short note (shown under the name):', next.note || '');
+                    if (newNote === null) { // still apply the label change even if note prompt was cancelled
+                        next.label = newLabel.trim() ? newLabel : next.label;
+                        saveDailyTimers(timers);
+                        render(backdrop.querySelector('#nui-daily-filter').value);
+                        return;
+                    }
+                    next.label = newLabel.trim() ? newLabel : next.label;
+                    next.note = newNote;
+                    saveDailyTimers(timers);
+                    render(backdrop.querySelector('#nui-daily-filter').value);
+                });
+            });
+        }
+        const filterInput = backdrop.querySelector('#nui-daily-filter');
+        filterInput.addEventListener('input', function () { render(this.value); });
+        const toggleHiddenBtn = backdrop.querySelector('#nui-daily-toggle-hidden');
+        toggleHiddenBtn.addEventListener('click', function () {
+            showHidden = !showHidden;
+            render(filterInput.value);
+        });
+        render('');
+        backdrop.addEventListener('click', function (e) {
+            if (e.target === backdrop) {
+                backdrop.querySelector('.nui-drawer').style.transform = 'translateX(-100%)';
+                backdrop.classList.remove('is-open');
+                setTimeout(function () { backdrop.remove(); }, 300);
+            }
+        });
+        const esc = function (e) { if (e.key === 'Escape') { backdrop.remove(); document.removeEventListener('keydown', esc); } };
+        document.addEventListener('keydown', esc);
+    }
+
+    function isEditingTextTarget(target) {
+        if (!target) return false;
+        const tag = (target.tagName || '').toLowerCase();
+        return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+    }
+
+    function openGlobalSearchModal() {
+        const existing = document.getElementById('nui-global-search');
+        if (existing) { existing.remove(); return; }
+        const backdrop = document.createElement('div');
+        backdrop.id = 'nui-global-search';
+        backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
+        backdrop.style.zIndex = '100011';
+        backdrop.innerHTML = '<div class="nui-surface" style="width:min(92vw, 520px); max-height:84vh; border-radius:var(--nui-radius-lg); border:1px solid var(--nui-border); overflow:hidden; box-shadow:0 18px 48px rgba(0,0,0,0.26); display:flex; flex-direction:column;">' +
+            '<div style="padding:var(--nui-space-4); border-bottom:1px solid var(--nui-border); background:var(--nui-surface-2);"><div style="font-size:18px; font-weight:800; color:var(--nui-text);">🔎 Sitewide Search</div><input id="nui-search-input" type="text" placeholder="Search pages, tools, and dailies" style="margin-top:10px; width:100%; padding:8px 10px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface); color:var(--nui-text);" /></div>' +
+            '<div id="nui-search-results" style="padding:10px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>' +
+        '</div>';
+        document.body.appendChild(backdrop);
+        const input = backdrop.querySelector('#nui-search-input');
+        const results = backdrop.querySelector('#nui-search-results');
+        function render(query) {
+            const q = normalizeSearchText(query);
+            const filtered = buildSiteSearchCatalog().filter(function (item) {
+                if (!q) return true;
+                const hay = normalizeSearchText([item.label, item.category, item.href || '', item.action || '', item.note || ''].join(' '));
+                return hay.indexOf(q) !== -1;
+            }).slice(0, 24);
+            results.innerHTML = '';
+            if (!filtered.length) {
+                results.innerHTML = '<div style="padding:16px 8px; color:var(--nui-text-muted); font-size:13px;">No matches yet. Try a page name, daily, or NeoUI tool.</div>';
+                return;
+            }
+            filtered.forEach(function (item) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'nui-reset';
+                btn.style.cssText = 'display:flex; align-items:center; justify-content:space-between; width:100%; padding:10px 12px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface); color:var(--nui-text); text-align:left; cursor:pointer;';
+                btn.innerHTML = '<span style="display:flex; flex-direction:column; gap:2px; min-width:0;"><span style="font-weight:700;">' + item.icon + ' ' + item.label + '</span><span style="font-size:12px; color:var(--nui-text-muted);">' + (item.category || 'Go') + '</span></span><span style="font-size:12px; color:var(--nui-text-muted);">' + (item.href ? 'Open' : 'Go') + '</span>';
+                btn.addEventListener('click', function () {
+                    if (item.action === 'theme-editor') { openThemeEditorModal(); }
+                    else if (item.action === 'daily-hub') { openDayTimerHub(); }
+                    else if (item.action === 'open-settings') { openDrawer(); setTimeout(function () { var settingBtn = document.querySelector('[data-action="open-settings"]'); if (settingBtn) settingBtn.click(); }, 80); }
+                    else if (item.href) { window.location.assign(item.href); }
+                    backdrop.remove();
+                });
+                results.appendChild(btn);
+            });
+        }
+        render('');
+        input.addEventListener('input', function () { render(this.value); });
+        backdrop.addEventListener('click', function (e) { if (e.target === backdrop) { backdrop.remove(); } });
+        input.addEventListener('keydown', function (e) { if (e.key === 'Escape') backdrop.remove(); });
+        input.focus();
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            openGlobalSearchModal();
+            return;
+        }
+        if (e.key === '/' && !isEditingTextTarget(e.target)) {
+            e.preventDefault();
+            openGlobalSearchModal();
+        }
+    });
 
     // ---- Settings panel sections (extensible) ----
     // Each section is {id, title, render(container)}. Theme picker ships
@@ -1873,6 +2511,8 @@
 
     // ---- Full-screen modal theme editor with a live sample preview ----
     function openThemeEditorModal() {
+        if (document.getElementById('nui-theme-editor-backdrop')) return;
+
         let baseKey = getStoredTheme();
         let working = {};
         let workingTexture = 'none';
@@ -1885,12 +2525,13 @@
         seedFromBase();
 
         const backdrop = document.createElement('div');
+        backdrop.id = 'nui-theme-editor-backdrop';
         backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
-        backdrop.style.cssText = 'position: fixed; inset: 0; z-index: 100000; background: var(--nui-overlay); display: flex; align-items: center; justify-content: center; padding: var(--nui-space-4); transition: opacity var(--nui-dur-fast) var(--nui-ease);';
+        backdrop.style.cssText = 'position: fixed; inset: 0; z-index: 2147483647; isolation: isolate; background: var(--nui-overlay); display: flex; align-items: center; justify-content: center; padding: var(--nui-space-4); transition: opacity var(--nui-dur-fast) var(--nui-ease);';
 
         const modal = document.createElement('div');
         modal.className = 'nui-surface';
-        modal.style.cssText = 'width: 100%; max-width: 420px; max-height: 88vh; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95); opacity: 0; transition: all var(--nui-dur-fast) var(--nui-ease-snap);';
+        modal.style.cssText = 'position: relative; z-index: 2147483647; width: 100%; max-width: 420px; max-height: 88vh; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95); opacity: 0; transition: all var(--nui-dur-fast) var(--nui-ease-snap);';
 
         const header = document.createElement('div');
         header.style.cssText = 'padding: var(--nui-space-4); border-bottom: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;';
@@ -2046,10 +2687,10 @@
 
         footer.querySelector('#nui-ct-cancel').addEventListener('click', close);
 
-        requestAnimationFrame(() => {
+        requestAnimationFrame(() => requestAnimationFrame(() => {
             modal.style.transform = 'scale(1)';
             modal.style.opacity = '1';
-        });
+        }));
     }
 
     // ---- Drawer entry point: quick list + button that opens the full editor ----
@@ -2110,7 +2751,14 @@
 
     function registerSettingsSection(section) {
         if (section && section.id && typeof section.render === 'function') {
-            settingsSections.push(section);
+            const existingIndex = settingsSections.findIndex(function (item) {
+                return item && item.id === section.id;
+            });
+            if (existingIndex >= 0) {
+                settingsSections[existingIndex] = section;
+            } else {
+                settingsSections.push(section);
+            }
         }
     }
 
@@ -2154,7 +2802,7 @@
                 // (The redundant stats block has been deleted from here)
 
                 '<a class="nui-drawer-item is-action" href="/quickref.phtml">Quickref</a>' + navHtml +
-                '<div class="nui-drawer-section"><div class="nui-drawer-item" data-action="open-settings">NeoUI Settings</div><a class="nui-drawer-item is-danger" href="/logout.phtml">Logout</a></div>' +
+                '<div class="nui-drawer-section"><div class="nui-drawer-item" data-action="open-daily-hub">📅 Dailies Hub</div><div class="nui-drawer-item" data-action="open-global-search">🔎 Search</div><div class="nui-drawer-item" data-action="open-settings">⚙️ NeoUI Settings</div><a class="nui-drawer-item is-danger" href="/logout.phtml">Logout</a></div>' +
             '</div><div class="nui-drawer-view" data-view="settings"><div class="nui-drawer-back" data-action="back-to-nav">&larr; Back</div><div data-slot="settings-sections"></div></div></div></div>'
         );
 
@@ -2181,7 +2829,12 @@
         backdrop.addEventListener('click', function (e) {
             if (e.target === backdrop) closeDrawer();
         });
-        backdrop.querySelector('[data-action="open-settings"]').addEventListener('click', function () {
+        const globalSearchAction = backdrop.querySelector('[data-action="open-global-search"]');
+        if (globalSearchAction) globalSearchAction.addEventListener('click', function () { openGlobalSearchModal(); closeDrawer(); });
+        const dailyHubAction = backdrop.querySelector('[data-action="open-daily-hub"]');
+        if (dailyHubAction) dailyHubAction.addEventListener('click', function () { openDayTimerHub(); closeDrawer(); });
+        const settingsAction = backdrop.querySelector('[data-action="open-settings"]');
+        if (settingsAction) settingsAction.addEventListener('click', function () {
             renderSettings();
             drawer.setAttribute('data-active-view', 'settings');
         });
@@ -2268,6 +2921,9 @@
         registerSettingsSection: registerSettingsSection,
         get isInitialized() { return initialized; },
         openNotificationDrawer: openNotificationDrawer,
+        openThemeEditor: openThemeEditorModal,
+        openGlobalSearch: openGlobalSearchModal,
+        openDailyTimerHub: openDayTimerHub,
         addCustomTheme: function(key, def) { THEMES[key] = def; saveCustomTheme(key, def); },
         deleteCustomTheme: function(key) { delete THEMES[key]; deleteCustomTheme(key); },
     };
