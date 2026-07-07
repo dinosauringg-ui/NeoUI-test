@@ -2242,7 +2242,7 @@
     }
 
     // Which built-in themes are "dark" — everything else is treated as light.
-    const DARK_THEMES = new Set(['haunted', 'moltara', 'spacefaerie', 'kreludor', 'virtupets', 'krawkisland', 'maractite]);
+    const DARK_THEMES = new Set(['haunted', 'moltara', 'spacefaerie', 'kreludor', 'virtupets', 'krawkisland', 'maractite']);
 
     function renderThemeSection(container) {
         // Split built-in themes into light/dark groups; custom themes go at the end
