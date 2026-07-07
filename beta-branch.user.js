@@ -102,6 +102,37 @@
     // an entry here.
 
     const THEMES = {
+        maractite: {
+            label: 'Maractite',
+            emoji: '🌊',
+            tokens: {
+                '--nui-bg':            '#060B19',
+                '--nui-surface':       '#0D162B',
+                '--nui-surface-2':     '#162340',
+                '--nui-border':        '#263A64',
+                '--nui-text':          '#E2E8F0',
+                '--nui-text-muted':    '#829AC1',
+                '--nui-text-faint':    '#485D82',
+                '--nui-accent':        '#3B82F6',
+                '--nui-accent-ink':    '#FFFFFF',
+                '--nui-accent-soft':   '#162A5E',
+                '--nui-accent-2':      '#06B6D4',
+                '--nui-accent-2-soft': '#083344',
+                '--nui-success':       '#10B981',
+                '--nui-success-soft':  '#064E3B',
+                '--nui-warning':       '#F59E0B',
+                '--nui-warning-soft':  '#452908',
+                '--nui-danger':        '#EF4444',
+                '--nui-danger-soft':   '#4A1212',
+                '--nui-shadow':        'rgba(0, 0, 0, 0.7)',
+                '--nui-overlay':       'rgba(0, 0, 0, 0.8)',
+                // Deep underwater overlapping ripples
+                '--nui-texture':       'repeating-radial-gradient(circle at 20% 120%, rgba(59,130,246,0.12) 0, rgba(59,130,246,0.12) 1px, transparent 1px, transparent 24px), repeating-radial-gradient(circle at 80% -20%, rgba(6,182,212,0.1) 0, rgba(6,182,212,0.1) 1px, transparent 1px, transparent 18px)',
+                '--nui-texture-opacity': '0.5',
+                '--nui-texture-blend':  'screen',
+                '--nui-texture-rotate': '0deg',
+            },
+        },
         neopia: {
             label: 'Neopia Central',
             emoji: '🏠 ',
@@ -2211,7 +2242,7 @@
     }
 
     // Which built-in themes are "dark" — everything else is treated as light.
-    const DARK_THEMES = new Set(['haunted', 'moltara', 'spacefaerie', 'kreludor', 'virtupets', 'krawkisland']);
+    const DARK_THEMES = new Set(['haunted', 'moltara', 'spacefaerie', 'kreludor', 'virtupets', 'krawkisland', 'maractite]);
 
     function renderThemeSection(container) {
         // Split built-in themes into light/dark groups; custom themes go at the end
