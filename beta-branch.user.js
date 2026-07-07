@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.0.8
+// @version      1.0.11
 // @description  Mobile-forward Neopets overhaul suite (Core design system + Neomail + Wishing Well + Item Transfer Log) bundled as a single script. Each module self-activates only on its own page.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -31,6 +31,31 @@
  *                               layout, and the same shared topbar - plus a
  *                               visible crash box like the other modules
  *                               instead of failing silently.
+ *
+ * v1.0.11: Custom Theme editor overhaul — it's now a proper modal (opened
+ *   from a button in the drawer section, instead of being inlined into the
+ *   drawer itself) with a live sample preview (mini topbar + card + button +
+ *   badge) that updates instantly as you edit. Colors are picked with a
+ *   custom canvas-based hue/saturation picker + hex field instead of the
+ *   OS-native <input type="color"> swatch, so it looks and behaves the same
+ *   on every browser/platform. Save/Cancel replace the old always-visible
+ *   save button.
+ *
+ * v1.0.10 fixes:
+ *   - Custom-theme "Dots" and "Sand" texture presets used a background
+ *     `position/size` shorthand (e.g. "0 0/16px 16px") that's only legal on
+ *     the `background` shorthand property, not on `background-image` (which
+ *     is what the theme engine writes to). The invalid value voided the
+ *     whole background-image declaration, so any custom theme using those
+ *     two presets rendered no texture at all. Rewritten as self-tiling
+ *     repeating-radial-gradients that don't need a size shorthand.
+ *   - Virtupets is a genuinely dark palette (near-black bg, neon-green text)
+ *     but was missing from DARK_THEMES, so it was mis-filed under "Light"
+ *     in the theme picker. Added.
+ *   - Krawk Island recolored from teal/sand/gold to black/silver/red.
+ *   - Meridell's primary accent moved from forest green to heraldic blue
+ *     (red stays/strengthens as the secondary accent) so it's no longer
+ *     visually similar to Tyrannia's earthy greens.
  *
  * v1.0.1 fix: the legacy chrome-hiding CSS in the Transfer Log module used
  * to hide `.premium_bar_spacer`, which on this Neopets template is the class
@@ -292,6 +317,130 @@
                 '--nui-texture':       'none',
             },
         },
+        tyrannia: {
+            // Prehistoric badlands — cracked terracotta earth, bone-white
+            // text, and mossy green accents. Warm and earthy, distinct from
+            // both Neopia Central's golden warmth and Moltara's fiery darks.
+            label: 'Tyrannia',
+            emoji: '🦕',
+            tokens: {
+                '--nui-bg':            '#F5EDD8',
+                '--nui-surface':       '#FFFDF5',
+                '--nui-surface-2':     '#EDE0C4',
+                '--nui-border':        '#C9AD7A',
+                '--nui-text':          '#2E2010',
+                '--nui-text-muted':    '#7A6440',
+                '--nui-text-faint':    '#B09A70',
+                '--nui-accent':        '#5A8A3C',
+                '--nui-accent-ink':    '#FFFFFF',
+                '--nui-accent-soft':   '#C8DDB8',
+                '--nui-accent-2':      '#C0622A',
+                '--nui-accent-2-soft': '#F0CBB0',
+                '--nui-success':       '#4E8C3A',
+                '--nui-success-soft':  '#C8E0BA',
+                '--nui-warning':       '#B87A20',
+                '--nui-warning-soft':  '#F0DBA8',
+                '--nui-danger':        '#C0422A',
+                '--nui-danger-soft':   '#F0C2B0',
+                '--nui-shadow':        'rgba(46, 32, 16, 0.14)',
+                '--nui-overlay':       'rgba(46, 32, 16, 0.5)',
+                '--nui-texture':       'repeating-linear-gradient(70deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 18px), repeating-linear-gradient(160deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 22px)',
+            },
+        },
+        virtupets: {
+            // Sloth's space station — clinical steel grey with neon green
+            // terminal readouts and hard-edged circuit-board geometry.
+            // A cold, industrial dark theme distinct from Kreludor's
+            // warm-ember moon and Space Faerie's cosmic magenta.
+            label: 'Virtupets',
+            emoji: '🛸',
+            tokens: {
+                '--nui-bg':            '#0E1218',
+                '--nui-surface':       '#161C24',
+                '--nui-surface-2':     '#1E2830',
+                '--nui-border':        '#2C3C44',
+                '--nui-text':          '#D8F0E0',
+                '--nui-text-muted':    '#7AAA90',
+                '--nui-text-faint':    '#3E6050',
+                '--nui-accent':        '#1EE060',
+                '--nui-accent-ink':    '#021408',
+                '--nui-accent-soft':   '#0A3020',
+                '--nui-accent-2':      '#44AAFF',
+                '--nui-accent-2-soft': '#0A2840',
+                '--nui-success':       '#1EE060',
+                '--nui-success-soft':  '#0A3020',
+                '--nui-warning':       '#FFD020',
+                '--nui-warning-soft':  '#302800',
+                '--nui-danger':        '#FF4040',
+                '--nui-danger-soft':   '#301010',
+                '--nui-shadow':        'rgba(0, 0, 0, 0.6)',
+                '--nui-overlay':       'rgba(0, 0, 0, 0.72)',
+                '--nui-texture':       'repeating-linear-gradient(90deg, rgba(30,224,96,0.06) 0, rgba(30,224,96,0.06) 1px, transparent 1px, transparent 22px), repeating-linear-gradient(0deg, rgba(30,224,96,0.04) 0, rgba(30,224,96,0.04) 1px, transparent 1px, transparent 22px)',
+            },
+        },
+        meridell: {
+            // Medieval kingdom — heraldic blue and red on aged parchment.
+            // Previously leaned on forest greens for its primary accent,
+            // which read too close to Tyrannia's mossy-green badlands.
+            // Swapped the identity color to banner blue (kept green only
+            // as the semantic "success" color) so the two are unmistakable
+            // at a glance.
+            label: 'Meridell',
+            emoji: '🛡️',
+            tokens: {
+                '--nui-bg':            '#EDEADC',
+                '--nui-surface':       '#FAFAF2',
+                '--nui-surface-2':     '#DEDAC4',
+                '--nui-border':        '#5C74A0',
+                '--nui-text':          '#1A2038',
+                '--nui-text-muted':    '#3A4868',
+                '--nui-text-faint':    '#8290A8',
+                '--nui-accent':        '#1E4FA0',
+                '--nui-accent-ink':    '#FFFFFF',
+                '--nui-accent-soft':   '#BACCEA',
+                '--nui-accent-2':      '#B01E28',
+                '--nui-accent-2-soft': '#EFC0C4',
+                '--nui-success':       '#3A7A2A',
+                '--nui-success-soft':  '#C0DCA8',
+                '--nui-warning':       '#A07818',
+                '--nui-warning-soft':  '#EADBA0',
+                '--nui-danger':        '#B01E28',
+                '--nui-danger-soft':   '#EFC0C4',
+                '--nui-shadow':        'rgba(20, 26, 50, 0.16)',
+                '--nui-overlay':       'rgba(20, 26, 50, 0.5)',
+                '--nui-texture':       'radial-gradient(ellipse 60% 50% at 20% 30%, var(--nui-accent-soft) 0%, transparent 70%), radial-gradient(ellipse 50% 40% at 75% 70%, var(--nui-accent-2-soft) 0%, transparent 70%)',
+            },
+        },
+        krawkisland: {
+            // Pirate cove gone dark — black hull timbers, silver cutlass
+            // steel, and blood-red accents. A moody, dangerous smuggler's-
+            // den palette instead of a sunny beach one.
+            label: 'Krawk Island',
+            emoji: '🏴‍☠️',
+            tokens: {
+                '--nui-bg':            '#0A0A0A',
+                '--nui-surface':       '#161616',
+                '--nui-surface-2':     '#242424',
+                '--nui-border':        '#585860',
+                '--nui-text':          '#EAEAEC',
+                '--nui-text-muted':    '#ACACB4',
+                '--nui-text-faint':    '#6E6E76',
+                '--nui-accent':        '#C8142A',
+                '--nui-accent-ink':    '#FFFFFF',
+                '--nui-accent-soft':   '#3A1418',
+                '--nui-accent-2':      '#B6B8C2',
+                '--nui-accent-2-soft': '#34343C',
+                '--nui-success':       '#3DA85A',
+                '--nui-success-soft':  '#173A22',
+                '--nui-warning':       '#D0A82C',
+                '--nui-warning-soft':  '#3A3014',
+                '--nui-danger':        '#E01E30',
+                '--nui-danger-soft':   '#3A1418',
+                '--nui-shadow':        'rgba(0, 0, 0, 0.6)',
+                '--nui-overlay':       'rgba(0, 0, 0, 0.75)',
+                '--nui-texture':       'repeating-linear-gradient(45deg, rgba(182,184,194,0.08) 0, rgba(182,184,194,0.08) 1px, transparent 1px, transparent 14px), radial-gradient(circle at 18% 25%, rgba(200,20,42,0.14) 0%, transparent 60%), radial-gradient(circle at 80% 72%, rgba(200,20,42,0.12) 0%, transparent 60%)',
+            },
+        },
     };
 
     // Fix a stray typo-safe fallback in case of any malformed hex above.
@@ -457,6 +606,35 @@
                 linear-gradient(to bottom, var(--nui-surface) 0%, var(--nui-bg) 100%);
         }
         /* gray: intentionally no override, falls back to the plain base rule above */
+        [data-neoui-theme="tyrannia"] .nui-header-wrapper {
+            background-image:
+                linear-gradient(to bottom, transparent 30%, var(--nui-bg) 100%),
+                repeating-linear-gradient(70deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 18px),
+                repeating-linear-gradient(160deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 22px),
+                linear-gradient(to bottom, var(--nui-surface) 0%, var(--nui-bg) 100%);
+        }
+        [data-neoui-theme="lostdesert"] .nui-header-wrapper {
+            background-image:
+                linear-gradient(to bottom, transparent 30%, var(--nui-bg) 100%),
+                repeating-linear-gradient(90deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 20px),
+                repeating-linear-gradient(0deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 20px),
+                linear-gradient(to bottom, var(--nui-surface) 0%, var(--nui-bg) 100%);
+        }
+        [data-neoui-theme="meridell"] .nui-header-wrapper {
+            background-image:
+                linear-gradient(to bottom, transparent 30%, var(--nui-bg) 100%),
+                radial-gradient(ellipse 60% 50% at 20% 30%, var(--nui-accent-soft) 0%, transparent 70%),
+                radial-gradient(ellipse 50% 40% at 75% 70%, var(--nui-accent-2-soft) 0%, transparent 70%),
+                linear-gradient(to bottom, var(--nui-surface) 0%, var(--nui-bg) 100%);
+        }
+        [data-neoui-theme="kreludor"] .nui-header-wrapper {
+            background-image:
+                linear-gradient(to bottom, transparent 30%, var(--nui-bg) 100%),
+                radial-gradient(ellipse 40% 30% at 20% 70%, var(--nui-accent-soft) 0%, transparent 80%),
+                radial-gradient(ellipse 35% 25% at 75% 30%, var(--nui-accent-2-soft) 0%, transparent 80%),
+                radial-gradient(ellipse 30% 20% at 50% 50%, var(--nui-accent-soft) 0%, transparent 80%),
+                linear-gradient(to bottom, var(--nui-surface) 0%, var(--nui-bg) 100%);
+        }
 
 
 
@@ -1023,6 +1201,28 @@
         try { localStorage.setItem(STORAGE_KEY, name); } catch (e) {}
     }
 
+    // Build the layered background-image value used on .nui-header-wrapper
+    // for a given token set. Shared by applyThemeVars() (real theme switch)
+    // and the custom-theme editor's live preview (scoped, in-memory tokens),
+    // so the preview is guaranteed to match what Save & Apply will produce.
+    function buildHeaderBgImage(tk) {
+        const texVal = tk['--nui-texture'] && tk['--nui-texture'] !== 'none' ? tk['--nui-texture'] : null;
+        const bg = tk['--nui-bg']      || '#f0f0f0';
+        const sf = tk['--nui-surface'] || '#ffffff';
+        if (texVal) {
+            const texLayers = splitTopLevelCommas(texVal);
+            return [
+                'linear-gradient(to bottom, transparent 30%, ' + bg + ' 100%)',
+                ...texLayers,
+                'linear-gradient(to bottom, ' + sf + ' 0%, ' + bg + ' 100%)',
+            ].join(',\n                ');
+        }
+        return [
+            'linear-gradient(to bottom, transparent 30%, ' + bg + ' 100%)',
+            'linear-gradient(to bottom, ' + sf + ' 0%, ' + bg + ' 100%)',
+        ].join(',\n                ');
+    }
+
     function applyThemeVars(name) {
         const theme = THEMES[name] || THEMES[DEFAULT_THEME];
         const root = document.documentElement;
@@ -1030,6 +1230,42 @@
         Object.keys(theme.tokens).forEach(function (key) {
             root.style.setProperty(key, theme.tokens[key]);
         });
+
+        // For custom themes (and any future dynamic theme whose key won't have
+        // a hardcoded CSS rule in COMPONENT_CSS), inject a literal
+        // [data-neoui-theme="..."] .nui-header-wrapper rule so the texture
+        // actually lands on the header. This mirrors exactly how the built-in
+        // theme rules are written — each gradient is a separate layer so
+        // Firefox never has to expand a custom property inside background-image.
+        const DYNAMIC_STYLE_ID = 'neoui-style-dynamic-theme';
+        let dynStyle = document.getElementById(DYNAMIC_STYLE_ID);
+        if (!dynStyle) {
+            dynStyle = document.createElement('style');
+            dynStyle.id = DYNAMIC_STYLE_ID;
+            document.head.appendChild(dynStyle);
+        }
+
+        dynStyle.textContent =
+            '[data-neoui-theme="' + name + '"] .nui-header-wrapper {\n' +
+            '    background-image:\n        ' + buildHeaderBgImage(theme.tokens) + ';\n' +
+            '}';
+    }
+
+    // Split a CSS gradient list on top-level commas only (ignores commas
+    // inside parentheses, which appear inside color-stop and position values).
+    function splitTopLevelCommas(str) {
+        const parts = [];
+        let depth = 0, start = 0;
+        for (let i = 0; i < str.length; i++) {
+            if (str[i] === '(') depth++;
+            else if (str[i] === ')') depth--;
+            else if (str[i] === ',' && depth === 0) {
+                parts.push(str.slice(start, i).trim());
+                start = i + 1;
+            }
+        }
+        parts.push(str.slice(start).trim());
+        return parts;
     }
 
     function injectStylesOnce() {
@@ -1324,8 +1560,28 @@
         );
     }
 
+    // Which built-in themes are "dark" — everything else is treated as light.
+    const DARK_THEMES = new Set(['haunted', 'moltara', 'spacefaerie', 'kreludor', 'virtupets', 'krawkisland']);
+
     function renderThemeSection(container) {
-        const optionsHtml = Object.keys(THEMES).map(buildThemeOptionHtml).join('');
+        // Split built-in themes into light/dark groups; custom themes go at the end
+        const allKeys = Object.keys(THEMES);
+        const lightKeys  = allKeys.filter(k => !k.startsWith('custom_') && !DARK_THEMES.has(k));
+        const darkKeys   = allKeys.filter(k => !k.startsWith('custom_') && DARK_THEMES.has(k));
+        const customKeys = allKeys.filter(k => k.startsWith('custom_'));
+
+        function groupSection(label, keys) {
+            if (!keys.length) return '';
+            return '<div style="margin-bottom:6px;">' +
+                '<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:var(--nui-text-faint);padding:6px 2px 4px;">' + label + '</div>' +
+                '<div class="nui-theme-grid">' + keys.map(buildThemeOptionHtml).join('') + '</div>' +
+            '</div>';
+        }
+
+        const optionsHtml =
+            groupSection('☀️ Light', lightKeys) +
+            groupSection('🌑 Dark',  darkKeys)  +
+            (customKeys.length ? groupSection('🎨 Custom', customKeys) : '');
 
         // Removed the "open" attribute so it collapses by default
         container.innerHTML =
@@ -1333,7 +1589,7 @@
                 '<summary class="nui-drawer-section-title" style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;">' +
                     'Theme <span style="font-size:10px; opacity:0.5;">▼</span>' +
                 '</summary>' +
-                '<div class="nui-theme-grid" id="nui-theme-grid-inner" style="margin-top:10px;">' + optionsHtml + '</div>' +
+                '<div id="nui-theme-grid-inner" style="margin-top:10px;">' + optionsHtml + '</div>' +
             '</details>';
 
         function refresh() {
@@ -1374,22 +1630,253 @@
     }
 
 
-    // ---- Compact custom theme editor ----
-    function renderCustomThemeSection(container) {
+    function safeHex(val) {
+        const m = (val || '').match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/);
+        if (!m) return '#888888';
+        const raw = m[1];
+        return '#' + (raw.length === 3 ? raw.split('').map(c => c + c).join('') : raw);
+    }
+
+    // Loose hex parser for freeform text input (accepts with/without '#', 3 or 6 digits).
+    function parseHexLoose(val) {
+        const m = (val || '').trim().match(/^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/);
+        if (!m) return null;
+        const raw = m[1];
+        return '#' + (raw.length === 3 ? raw.split('').map(c => c + c).join('') : raw).toLowerCase();
+    }
+
+    // ---- Color conversion helpers (for the custom HSV picker) ----
+    function clamp01(n) { return Math.max(0, Math.min(1, n)); }
+    function hexToRgb(hex) {
+        hex = (hex || '000000').replace('#', '');
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        const num = parseInt(hex, 16) || 0;
+        return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+    }
+    function rgbToHex(rgb) {
+        return '#' + rgb.map(c => {
+            const v = Math.round(Math.max(0, Math.min(255, c)));
+            return v.toString(16).padStart(2, '0');
+        }).join('');
+    }
+    function rgbToHsv(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        const d = max - min;
+        let h = 0;
+        if (d !== 0) {
+            if (max === r) h = ((g - b) / d) % 6;
+            else if (max === g) h = (b - r) / d + 2;
+            else h = (r - g) / d + 4;
+            h *= 60;
+            if (h < 0) h += 360;
+        }
+        const v = max;
+        const s = max === 0 ? 0 : d / max;
+        return { h, s, v };
+    }
+    function hsvToRgb(h, s, v) {
+        const c = v * s;
+        const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+        const m = v - c;
+        let r = 0, g = 0, b = 0;
+        if (h < 60)       { r = c; g = x; b = 0; }
+        else if (h < 120) { r = x; g = c; b = 0; }
+        else if (h < 180) { r = 0; g = c; b = x; }
+        else if (h < 240) { r = 0; g = x; b = c; }
+        else if (h < 300) { r = x; g = 0; b = c; }
+        else              { r = c; g = 0; b = x; }
+        return [(r + m) * 255, (g + m) * 255, (b + m) * 255];
+    }
+
+    // Custom saturation/value + hue color picker popover — replaces the OS
+    // native <input type="color"> swatch so every browser/platform gets the
+    // same picker and it can live-update the theme preview as you drag.
+    function openColorPopover(anchor, initialHex, onChange) {
+        const prev = document.getElementById('nui-color-popover');
+        if (prev) prev.remove();
+
+        const pop = document.createElement('div');
+        pop.id = 'nui-color-popover';
+        pop.className = 'nui-surface nui-reset';
+        pop.style.cssText = 'position:fixed; z-index:100010; width:212px; padding:12px; border-radius:var(--nui-radius-md); border:1px solid var(--nui-border); box-shadow:0 10px 32px rgba(0,0,0,0.4); display:flex; flex-direction:column; gap:10px;';
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 188; canvas.height = 110;
+        canvas.style.cssText = 'width:100%; height:110px; border-radius:8px; cursor:crosshair; display:block; touch-action:none;';
+
+        const hueWrap = document.createElement('div');
+        hueWrap.style.cssText = 'position:relative; height:14px; border-radius:7px; cursor:pointer; touch-action:none; background:linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);';
+        const hueThumb = document.createElement('div');
+        hueThumb.style.cssText = 'position:absolute; top:-2px; width:18px; height:18px; margin-left:-9px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.5); pointer-events:none;';
+        hueWrap.appendChild(hueThumb);
+
+        const hexRow = document.createElement('div');
+        hexRow.style.cssText = 'display:flex; align-items:center; gap:8px;';
+        const swatchPreview = document.createElement('div');
+        swatchPreview.style.cssText = 'width:26px; height:26px; border-radius:6px; border:1px solid var(--nui-border); flex-shrink:0;';
+        const hexInput = document.createElement('input');
+        hexInput.type = 'text';
+        hexInput.maxLength = 7;
+        hexInput.spellcheck = false;
+        hexInput.style.cssText = 'flex:1; min-width:0; padding:6px 8px; font-size:12px; font-family:monospace; border-radius:6px; border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);';
+        hexRow.appendChild(swatchPreview);
+        hexRow.appendChild(hexInput);
+
+        pop.appendChild(canvas);
+        pop.appendChild(hueWrap);
+        pop.appendChild(hexRow);
+        document.body.appendChild(pop);
+
+        const r = anchor.getBoundingClientRect();
+        pop.style.top = (r.bottom + 8) + 'px';
+        pop.style.left = r.left + 'px';
+        requestAnimationFrame(() => {
+            const pr = pop.getBoundingClientRect();
+            let top = r.bottom + 8, left = r.left;
+            if (left + pr.width > window.innerWidth - 8) left = window.innerWidth - pr.width - 8;
+            if (left < 8) left = 8;
+            if (top + pr.height > window.innerHeight - 8) top = Math.max(8, r.top - pr.height - 8);
+            pop.style.top = top + 'px';
+            pop.style.left = left + 'px';
+        });
+
+        const rgb0 = hexToRgb(initialHex);
+        let { h, s, v } = rgbToHsv(rgb0[0], rgb0[1], rgb0[2]);
+
+        function currentHex() { return rgbToHex(hsvToRgb(h, s, v)); }
+
+        function drawSV() {
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, ht = canvas.height;
+            const hueRgb = hsvToRgb(h, 1, 1);
+            ctx.fillStyle = 'rgb(' + hueRgb.map(Math.round).join(',') + ')';
+            ctx.fillRect(0, 0, w, ht);
+            const whiteGrad = ctx.createLinearGradient(0, 0, w, 0);
+            whiteGrad.addColorStop(0, 'rgba(255,255,255,1)');
+            whiteGrad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = whiteGrad;
+            ctx.fillRect(0, 0, w, ht);
+            const blackGrad = ctx.createLinearGradient(0, 0, 0, ht);
+            blackGrad.addColorStop(0, 'rgba(0,0,0,0)');
+            blackGrad.addColorStop(1, 'rgba(0,0,0,1)');
+            ctx.fillStyle = blackGrad;
+            ctx.fillRect(0, 0, w, ht);
+            const mx = s * w, my = (1 - v) * ht;
+            ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI * 2);
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.beginPath(); ctx.arc(mx, my, 6, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+        }
+
+        function refresh() {
+            drawSV();
+            hueThumb.style.left = (h / 360 * 100) + '%';
+            const hex = currentHex();
+            swatchPreview.style.background = hex;
+            hexInput.value = hex;
+        }
+        refresh();
+
+        function emit() {
+            const hex = currentHex();
+            swatchPreview.style.background = hex;
+            hexInput.value = hex;
+            onChange(hex);
+        }
+
+        let draggingSV = false;
+        function pickSV(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            s = clamp01((clientX - rect.left) / rect.width);
+            v = clamp01(1 - (clientY - rect.top) / rect.height);
+            drawSV(); emit();
+        }
+        canvas.addEventListener('pointerdown', (e) => { draggingSV = true; canvas.setPointerCapture(e.pointerId); pickSV(e.clientX, e.clientY); });
+        canvas.addEventListener('pointermove', (e) => { if (draggingSV) pickSV(e.clientX, e.clientY); });
+        canvas.addEventListener('pointerup', () => { draggingSV = false; });
+        canvas.addEventListener('pointercancel', () => { draggingSV = false; });
+
+        let draggingHue = false;
+        function pickHue(clientX) {
+            const rect = hueWrap.getBoundingClientRect();
+            h = clamp01((clientX - rect.left) / rect.width) * 360;
+            drawSV(); hueThumb.style.left = (h / 360 * 100) + '%'; emit();
+        }
+        hueWrap.addEventListener('pointerdown', (e) => { draggingHue = true; hueWrap.setPointerCapture(e.pointerId); pickHue(e.clientX); });
+        hueWrap.addEventListener('pointermove', (e) => { if (draggingHue) pickHue(e.clientX); });
+        hueWrap.addEventListener('pointerup', () => { draggingHue = false; });
+        hueWrap.addEventListener('pointercancel', () => { draggingHue = false; });
+
+        hexInput.addEventListener('change', () => {
+            const parsed = parseHexLoose(hexInput.value);
+            if (parsed) {
+                const rgb = hexToRgb(parsed);
+                const hsv = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+                h = hsv.h; s = hsv.s; v = hsv.v;
+                refresh();
+                onChange(parsed);
+            } else {
+                hexInput.value = currentHex();
+            }
+        });
+        hexInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') hexInput.blur(); });
+
+        function outsideClick(e) {
+            if (!pop.contains(e.target) && e.target !== anchor) close();
+        }
+        function onEsc(e) { if (e.key === 'Escape') close(); }
+        function close() {
+            document.removeEventListener('pointerdown', outsideClick, true);
+            document.removeEventListener('keydown', onEsc, true);
+            pop.remove();
+        }
+        setTimeout(() => {
+            document.addEventListener('pointerdown', outsideClick, true);
+            document.addEventListener('keydown', onEsc, true);
+        }, 0);
+
+        return { close };
+    }
+
+    // Texture presets — literal CSS background-image values using fixed colors
+    // so they render correctly in the preview without needing resolved tokens.
+    const TEXTURE_PRESETS = [
+        { label: 'None',       value: 'none' },
+        { label: 'Diagonal',   value: 'repeating-linear-gradient(45deg,rgba(128,128,128,0.12) 0,rgba(128,128,128,0.12) 1px,transparent 1px,transparent 12px)' },
+        { label: 'Crosshatch', value: 'repeating-linear-gradient(0deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 14px),repeating-linear-gradient(90deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 14px)' },
+        { label: 'Dots',       value: 'repeating-radial-gradient(circle at center,rgba(128,128,128,0.2) 0,rgba(128,128,128,0.2) 1px,transparent 1px,transparent 16px)' },
+        { label: 'Stars',      value: 'radial-gradient(circle at 20% 30%,rgba(180,130,255,0.35) 1px,transparent 2px),radial-gradient(circle at 55% 70%,rgba(100,180,255,0.3) 1px,transparent 2px),radial-gradient(circle at 80% 20%,rgba(255,255,255,0.2) 1px,transparent 1.5px),radial-gradient(circle at 40% 85%,rgba(180,130,255,0.25) 1px,transparent 1.5px)' },
+        { label: 'Clouds',     value: 'radial-gradient(ellipse 65% 55% at 18% 30%,rgba(180,200,255,0.18) 0%,transparent 80%),radial-gradient(ellipse 55% 45% at 78% 70%,rgba(200,180,255,0.15) 0%,transparent 80%)' },
+        { label: 'Herringbone',value: 'repeating-linear-gradient(60deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 16px),repeating-linear-gradient(120deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 16px)' },
+        { label: 'Waves',      value: 'repeating-radial-gradient(circle at 50% 130%,rgba(128,128,128,0.12) 0,rgba(128,128,128,0.12) 1px,transparent 1px,transparent 16px)' },
+        { label: 'Embers',     value: 'radial-gradient(circle at 12% 82%,rgba(255,120,40,0.3) 1.5px,transparent 2px),radial-gradient(circle at 28% 55%,rgba(255,190,60,0.25) 1px,transparent 1.5px),radial-gradient(circle at 48% 88%,rgba(255,120,40,0.2) 1px,transparent 1.5px),radial-gradient(circle at 65% 68%,rgba(255,120,40,0.28) 1.5px,transparent 2px),radial-gradient(circle at 82% 80%,rgba(255,190,60,0.22) 1px,transparent 1.5px)' },
+        { label: 'Cracks',     value: 'repeating-linear-gradient(75deg,rgba(128,128,128,0.08) 0,rgba(128,128,128,0.08) 1px,transparent 1px,transparent 20px),repeating-linear-gradient(15deg,rgba(128,128,128,0.06) 0,rgba(128,128,128,0.06) 1px,transparent 1px,transparent 28px)' },
+        { label: 'Sand',       value: 'repeating-radial-gradient(circle at 20% 30%,rgba(180,150,80,0.15) 0,rgba(180,150,80,0.15) 1px,transparent 1px,transparent 10px),repeating-radial-gradient(circle at 70% 75%,rgba(180,150,80,0.1) 0,rgba(180,150,80,0.1) 1px,transparent 1px,transparent 10px)' },
+    ];
+
+    // Merge base theme + in-progress edits into a complete token set — used
+    // both by the live preview (every keystroke/drag) and by Save & Apply,
+    // so the preview can never drift from what actually gets saved.
+    function computeWorkingTokens(baseKey, working, workingTexture) {
+        const base = THEMES[baseKey] || THEMES[DEFAULT_THEME];
+        const finalTokens = Object.assign({}, base.tokens, working);
+        finalTokens['--nui-accent-soft'] = safeHex(working['--nui-accent']) + '28';
+        finalTokens['--nui-accent-2-soft'] = safeHex(working['--nui-accent-2']) + '28';
+        if (workingTexture && workingTexture !== 'none') {
+            finalTokens['--nui-texture'] = workingTexture;
+        } else {
+            delete finalTokens['--nui-texture'];
+        }
+        return finalTokens;
+    }
+
+    // ---- Full-screen modal theme editor with a live sample preview ----
+    function openThemeEditorModal() {
         let baseKey = getStoredTheme();
         let working = {};
         let workingTexture = 'none';
-
-        // Texture presets — literal CSS background-image values using fixed colors
-        // so they render correctly in the preview without needing resolved tokens.
-        const TEXTURE_PRESETS = [
-            { label: 'None',      value: 'none' },
-            { label: 'Diagonal',  value: 'repeating-linear-gradient(45deg,rgba(128,128,128,0.12) 0,rgba(128,128,128,0.12) 1px,transparent 1px,transparent 12px)' },
-            { label: 'Crosshatch',value: 'repeating-linear-gradient(0deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 14px),repeating-linear-gradient(90deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 14px)' },
-            { label: 'Dots',      value: 'radial-gradient(circle,rgba(128,128,128,0.2) 1px,transparent 1.5px) 0 0/16px 16px' },
-            { label: 'Stars',     value: 'radial-gradient(circle at 20% 30%,rgba(180,130,255,0.35) 1px,transparent 2px),radial-gradient(circle at 55% 70%,rgba(100,180,255,0.3) 1px,transparent 2px),radial-gradient(circle at 80% 20%,rgba(255,255,255,0.2) 1px,transparent 1.5px),radial-gradient(circle at 40% 85%,rgba(180,130,255,0.25) 1px,transparent 1.5px)' },
-            { label: 'Clouds',    value: 'radial-gradient(ellipse 65% 55% at 18% 30%,rgba(180,200,255,0.18) 0%,transparent 80%),radial-gradient(ellipse 55% 45% at 78% 70%,rgba(200,180,255,0.15) 0%,transparent 80%)' },
-        ];
+        let openPopover = null;
 
         function seedFromBase() {
             const base = THEMES[baseKey] || THEMES[DEFAULT_THEME];
@@ -1397,38 +1884,182 @@
         }
         seedFromBase();
 
-        function safeHex(val) {
-            const m = (val || '').match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/);
-            if (!m) return '#888888';
-            const raw = m[1];
-            return '#' + (raw.length === 3 ? raw.split('').map(c => c + c).join('') : raw);
+        const backdrop = document.createElement('div');
+        backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
+        backdrop.style.cssText = 'position: fixed; inset: 0; z-index: 100000; background: var(--nui-overlay); display: flex; align-items: center; justify-content: center; padding: var(--nui-space-4); transition: opacity var(--nui-dur-fast) var(--nui-ease);';
+
+        const modal = document.createElement('div');
+        modal.className = 'nui-surface';
+        modal.style.cssText = 'width: 100%; max-width: 420px; max-height: 88vh; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95); opacity: 0; transition: all var(--nui-dur-fast) var(--nui-ease-snap);';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'padding: var(--nui-space-4); border-bottom: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;';
+        header.innerHTML =
+            '<div style="font-family: var(--nui-font-display); font-size: 18px; font-weight: 800; color: var(--nui-text);">🎨 Theme Editor</div>' +
+            '<button type="button" class="nui-reset" id="nui-ct-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--nui-text-muted); line-height: 1;">&times;</button>';
+
+        const content = document.createElement('div');
+        content.style.cssText = 'padding: var(--nui-space-4); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 14px;';
+
+        const footer = document.createElement('div');
+        footer.style.cssText = 'padding: var(--nui-space-3) var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; gap: 8px; flex-shrink: 0;';
+        footer.innerHTML =
+            '<button type="button" class="nui-btn nui-btn-block" id="nui-ct-cancel" style="background: var(--nui-surface); border: 1px solid var(--nui-border); color: var(--nui-text-muted);">Cancel</button>' +
+            '<button type="button" class="nui-btn nui-btn-primary nui-btn-block" id="nui-ct-save">Save &amp; Apply</button>';
+
+        modal.appendChild(header);
+        modal.appendChild(content);
+        modal.appendChild(footer);
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+
+        function close() {
+            if (openPopover) { openPopover.close(); openPopover = null; }
+            modal.style.transform = 'scale(0.95)';
+            modal.style.opacity = '0';
+            backdrop.style.opacity = '0';
+            setTimeout(() => backdrop.remove(), 200);
         }
+        header.querySelector('#nui-ct-close').addEventListener('click', close);
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
 
+        const baseOpts = Object.keys(THEMES).map(k =>
+            '<option value="' + k + '"' + (k === baseKey ? ' selected' : '') + '>' +
+            THEMES[k].emoji + ' ' + THEMES[k].label + '</option>'
+        ).join('');
+
+        content.innerHTML =
+            // Live preview — a self-contained mini "device" whose CSS custom
+            // properties are set locally on this wrapper (never touching the
+            // real page theme), so every nui-btn/badge/surface inside it
+            // renders exactly as it will once the theme is actually applied.
+            '<div id="nui-ct-preview" class="nui-reset" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-lg); overflow:hidden; background:var(--nui-bg);">' +
+                '<div id="nui-ct-preview-header" style="height:56px; display:flex; align-items:center; padding:0 14px; border-bottom:2px solid var(--nui-border);">' +
+                    '<div style="width:28px;height:28px;border-radius:50%;background:var(--nui-accent-soft);display:flex;align-items:center;justify-content:center;color:var(--nui-accent);font-size:14px;flex-shrink:0;">🎨</div>' +
+                    '<div style="margin-left:10px;font-family:var(--nui-font-display);font-weight:800;font-size:14px;color:var(--nui-text);">Sample Page</div>' +
+                '</div>' +
+                '<div style="padding:14px; display:flex; flex-direction:column; gap:10px;">' +
+                    '<div class="nui-surface" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:12px;">' +
+                        '<div style="font-weight:800; font-size:14px; color:var(--nui-text); margin-bottom:4px;">Sample Card</div>' +
+                        '<div style="font-size:12px; color:var(--nui-text-muted); margin-bottom:10px;">Muted text next to primary and secondary colors.</div>' +
+                        '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">' +
+                            '<button type="button" class="nui-btn nui-btn-primary nui-btn-sm" tabindex="-1">Primary</button>' +
+                            '<span style="font-size:11px; font-weight:700; padding:3px 9px; border-radius:var(--nui-radius-pill); background:var(--nui-accent-2-soft); color:var(--nui-accent-2);">Badge</span>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div style="display:flex; align-items:center; gap:8px;">' +
+                '<span style="font-size:12px; font-weight:700; color:var(--nui-text-muted); flex-shrink:0;">Base</span>' +
+                '<select id="nui-ct-base" style="flex:1; padding:6px 8px; font-size:12px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' + baseOpts + '</select>' +
+            '</div>' +
+            '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                CUSTOM_EDITOR_COLORS.map(c =>
+                    '<button type="button" class="nui-ct-swatch-btn nui-reset" data-ckey="' + c.key + '" style="display:flex; align-items:center; gap:8px; padding:6px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); cursor:pointer; text-align:left;">' +
+                        '<span class="nui-ct-swatch" data-ckey="' + c.key + '" style="width:28px; height:28px; border-radius:6px; border:1px solid var(--nui-border); flex-shrink:0; background:' + safeHex(working[c.key]) + ';"></span>' +
+                        '<span style="font-size:12px; font-weight:700; color:var(--nui-text);">' + c.label + '</span>' +
+                    '</button>'
+                ).join('') +
+            '</div>' +
+            '<div>' +
+                '<div style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:6px;">Texture</div>' +
+                '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
+                    TEXTURE_PRESETS.map(tp =>
+                        '<button type="button" class="nui-ct-tex" data-tex="' + tp.value.replace(/"/g, '&quot;') + '" ' +
+                        'style="padding:3px 10px; border-radius:var(--nui-radius-pill); border:1px solid var(--nui-border); font-size:11px; font-weight:700; cursor:pointer; ' +
+                        'background:' + (workingTexture === tp.value ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)') + '; ' +
+                        'color:' + (workingTexture === tp.value ? 'var(--nui-accent)' : 'var(--nui-text-muted)') + ';">' +
+                        tp.label + '</button>'
+                    ).join('') +
+                '</div>' +
+            '</div>' +
+            '<div style="display:flex; gap:6px;">' +
+                '<input id="nui-ct-emoji" type="text" maxlength="2" value="🎨" placeholder="🎨" style="width:38px; text-align:center; font-size:16px; padding:6px 4px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' +
+                '<input id="nui-ct-name" type="text" placeholder="Theme name" style="flex:1; padding:6px 8px; font-size:13px; font-weight:700; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' +
+            '</div>' +
+            '<span id="nui-ct-status" style="font-size:12px; text-align:center; color:var(--nui-success); display:block; min-height:16px;"></span>';
+
+        const previewEl = content.querySelector('#nui-ct-preview');
+        const previewHeaderEl = content.querySelector('#nui-ct-preview-header');
+
+        function updatePreview() {
+            const tk = computeWorkingTokens(baseKey, working, workingTexture);
+            Object.keys(tk).forEach(k => previewEl.style.setProperty(k, tk[k]));
+            previewHeaderEl.style.backgroundImage = buildHeaderBgImage(tk);
+        }
+        updatePreview();
+
+        content.querySelector('#nui-ct-base').addEventListener('change', function () {
+            baseKey = this.value;
+            seedFromBase();
+            workingTexture = 'none'; // reset texture when base changes
+            content.querySelectorAll('.nui-ct-swatch').forEach(s => {
+                s.style.background = safeHex(working[s.getAttribute('data-ckey')]);
+            });
+            content.querySelectorAll('.nui-ct-tex').forEach(b => {
+                const active = b.getAttribute('data-tex') === workingTexture;
+                b.style.background = active ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
+                b.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+            });
+            updatePreview();
+        });
+
+        content.querySelectorAll('.nui-ct-swatch-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const key = this.getAttribute('data-ckey');
+                const swatch = this.querySelector('.nui-ct-swatch');
+                openPopover = openColorPopover(this, safeHex(working[key]), (hex) => {
+                    working[key] = hex;
+                    swatch.style.background = hex;
+                    updatePreview();
+                });
+            });
+        });
+
+        content.querySelectorAll('.nui-ct-tex').forEach(btn => {
+            btn.addEventListener('click', function () {
+                workingTexture = this.getAttribute('data-tex');
+                content.querySelectorAll('.nui-ct-tex').forEach(b => {
+                    const active = b.getAttribute('data-tex') === workingTexture;
+                    b.style.background = active ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
+                    b.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                });
+                updatePreview();
+            });
+        });
+
+        content.querySelector('#nui-ct-save').addEventListener('click', function () {
+            const nameInp = content.querySelector('#nui-ct-name');
+            const emojiInp = content.querySelector('#nui-ct-emoji');
+            const label = (nameInp && nameInp.value.trim()) || 'Custom';
+            const emoji = (emojiInp && emojiInp.value.trim()) || '🎨';
+            const finalTokens = computeWorkingTokens(baseKey, working, workingTexture);
+            const key = 'custom_' + label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 20) + '_' + Date.now().toString(36);
+            const def = { label, emoji, tokens: finalTokens };
+            THEMES[key] = def;
+            saveCustomTheme(key, def);
+            setTheme(key);
+            const st = content.querySelector('#nui-ct-status');
+            if (st) st.textContent = '✓ Saved and applied!';
+            setTimeout(close, 700);
+        });
+
+        footer.querySelector('#nui-ct-cancel').addEventListener('click', close);
+
+        requestAnimationFrame(() => {
+            modal.style.transform = 'scale(1)';
+            modal.style.opacity = '1';
+        });
+    }
+
+    // ---- Drawer entry point: quick list + button that opens the full editor ----
+    function renderCustomThemeSection(container) {
         function buildHtml() {
-            const baseOpts = Object.keys(THEMES).map(k =>
-                '<option value="' + k + '"' + (k === baseKey ? ' selected' : '') + '>' +
-                THEMES[k].emoji + ' ' + THEMES[k].label + '</option>'
-            ).join('');
-
-            const swatches = CUSTOM_EDITOR_COLORS.map(c => {
-                const hex = safeHex(working[c.key]);
-                return '<div style="display:flex; align-items:center; gap:8px;">' +
-                    '<input type="color" data-ckey="' + c.key + '" value="' + hex + '" ' +
-                    'style="width:32px; height:32px; border:none; border-radius:6px; cursor:pointer; padding:0; background:none;">' +
-                    '<span style="font-size:12px; font-weight:700; color:var(--nui-text);">' + c.label + '</span>' +
-                '</div>';
-            }).join('');
-
-            const prevBg  = safeHex(working['--nui-bg']);
-            const prevCard = safeHex(working['--nui-surface']);
-            const prevA   = safeHex(working['--nui-accent']);
-            const prevA2  = safeHex(working['--nui-accent-2']);
-
             const savedRaw = localStorage.getItem(CUSTOM_THEMES_KEY);
             const saved = savedRaw ? JSON.parse(savedRaw) : {};
             const savedKeys = Object.keys(saved);
             const savedList = savedKeys.length === 0 ? '' :
-                '<div style="margin-top:14px;">' +
+                '<div style="margin-top:12px;">' +
                 '<div style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:6px;">Saved</div>' +
                 savedKeys.map(k =>
                     '<div style="display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--nui-border);">' +
@@ -1445,33 +2076,8 @@
                     '🎨 Custom Theme <span style="font-size:10px; opacity:0.5;">▼</span>' +
                 '</summary>' +
                 '<div style="margin-top:12px; display:flex; flex-direction:column; gap:10px;">' +
-                    '<div style="display:flex; align-items:center; gap:8px;">' +
-                        '<span style="font-size:12px; font-weight:700; color:var(--nui-text-muted); flex-shrink:0;">Base</span>' +
-                        '<select id="nui-ct-base" style="flex:1; padding:6px 8px; font-size:12px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' + baseOpts + '</select>' +
-                    '</div>' +
-                    '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">' + swatches + '</div>' +
-                    '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
-                        '<span style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); flex-shrink:0; letter-spacing:0.5px;">Texture</span>' +
-                        TEXTURE_PRESETS.map(tp =>
-                            '<button type="button" class="nui-ct-tex" data-tex="' + tp.value.replace(/"/g, '&quot;') + '" ' +
-                            'style="padding:3px 10px; border-radius:var(--nui-radius-pill); border:1px solid var(--nui-border); font-size:11px; font-weight:700; cursor:pointer; ' +
-                            'background:' + (workingTexture === tp.value ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)') + '; ' +
-                            'color:' + (workingTexture === tp.value ? 'var(--nui-accent)' : 'var(--nui-text-muted)') + ';">' +
-                            tp.label + '</button>'
-                        ).join('') +
-                    '</div>' +
-                    '<div style="height:28px; border-radius:8px; overflow:hidden; border:1px solid var(--nui-border); display:flex;">' +
-                        '<div style="flex:1; background:' + prevBg + '"></div>' +
-                        '<div style="flex:1; background:' + prevCard + '"></div>' +
-                        '<div style="flex:1; background:' + prevA + '"></div>' +
-                        '<div style="flex:1; background:' + prevA2 + '"></div>' +
-                    '</div>' +
-                    '<div style="display:flex; gap:6px;">' +
-                        '<input id="nui-ct-emoji" type="text" maxlength="2" value="🎨" placeholder="🎨" style="width:38px; text-align:center; font-size:16px; padding:6px 4px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' +
-                        '<input id="nui-ct-name" type="text" placeholder="Theme name" style="flex:1; padding:6px 8px; font-size:13px; font-weight:700; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' +
-                    '</div>' +
-                    '<button type="button" id="nui-ct-save" class="nui-btn nui-btn-primary nui-btn-block">Save &amp; Apply</button>' +
-                    '<span id="nui-ct-status" style="font-size:12px; text-align:center; color:var(--nui-text-muted); display:block; min-height:16px;"></span>' +
+                    '<div style="font-size:12px; color:var(--nui-text-muted);">Design a theme with a live preview — colors, texture, and name all in one place.</div>' +
+                    '<button type="button" id="nui-ct-open" class="nui-btn nui-btn-primary nui-btn-block">🎨 Open Theme Editor</button>' +
                     savedList +
                 '</div>' +
             '</details>';
@@ -1480,56 +2086,7 @@
         function render() {
             container.innerHTML = buildHtml();
 
-            container.querySelector('#nui-ct-base').addEventListener('change', function () {
-                baseKey = this.value;
-                seedFromBase();
-                workingTexture = 'none'; // reset texture when base changes
-                render();
-            });
-
-            container.querySelectorAll('[data-ckey]').forEach(inp => {
-                inp.addEventListener('input', function () {
-                    working[this.getAttribute('data-ckey')] = this.value;
-                    const strips = container.querySelectorAll('#nui-ct-preview-strip > div');
-                    const vals = CUSTOM_EDITOR_COLORS.map(c => safeHex(working[c.key]));
-                    strips.forEach((s, i) => { if (vals[i]) s.style.background = vals[i]; });
-                });
-            });
-
-            container.querySelectorAll('.nui-ct-tex').forEach(btn => {
-                btn.addEventListener('click', function () {
-                    workingTexture = this.getAttribute('data-tex');
-                    container.querySelectorAll('.nui-ct-tex').forEach(b => {
-                        const active = b.getAttribute('data-tex') === workingTexture;
-                        b.style.background = active ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
-                        b.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
-                    });
-                });
-            });
-
-            container.querySelector('#nui-ct-save').addEventListener('click', function () {
-                const nameInp = container.querySelector('#nui-ct-name');
-                const emojiInp = container.querySelector('#nui-ct-emoji');
-                const label = (nameInp && nameInp.value.trim()) || 'Custom';
-                const emoji = (emojiInp && emojiInp.value.trim()) || '🎨';
-                const base = THEMES[baseKey] || THEMES[DEFAULT_THEME];
-                const finalTokens = Object.assign({}, base.tokens, working);
-                finalTokens['--nui-accent-soft'] = safeHex(working['--nui-accent']) + '28';
-                finalTokens['--nui-accent-2-soft'] = safeHex(working['--nui-accent-2']) + '28';
-                if (workingTexture && workingTexture !== 'none') {
-                    finalTokens['--nui-texture'] = workingTexture;
-                } else {
-                    delete finalTokens['--nui-texture'];
-                }
-                const key = 'custom_' + label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 20) + '_' + Date.now().toString(36);
-                const def = { label, emoji, tokens: finalTokens };
-                THEMES[key] = def;
-                saveCustomTheme(key, def);
-                setTheme(key);
-                const st = container.querySelector('#nui-ct-status');
-                if (st) { st.style.color = 'var(--nui-success)'; st.textContent = '✓ Saved and applied!'; setTimeout(() => { st.textContent = ''; }, 2500); }
-                render();
-            });
+            container.querySelector('#nui-ct-open').addEventListener('click', openThemeEditorModal);
 
             container.querySelectorAll('[data-ca]').forEach(btn => {
                 btn.addEventListener('click', () => setTheme(btn.getAttribute('data-ca')));
@@ -3902,7 +4459,51 @@
         container.style.cssText = 'width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: var(--nui-space-4);';
         pageWrapper.appendChild(container);
 
-        container.innerHTML += `<div class="nui-text" style="font-family: var(--nui-font-display); font-size: 26px; font-weight: 800; text-align: center;">The Coincidence</div>`;
+        // Banner card
+        const coincidenceBanner = document.createElement('div');
+        coincidenceBanner.className = 'nui-surface';
+        coincidenceBanner.style.cssText = 'border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;box-shadow:0 4px 12px var(--nui-shadow);';
+        coincidenceBanner.innerHTML = `
+            <div style="position:relative;width:100%;height:110px;overflow:hidden;background:linear-gradient(135deg,var(--nui-bg) 0%,var(--nui-surface-2) 100%);">
+                <img src="//images.neopets.com/space/station_bg.gif"
+                     style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.25;"
+                     onerror="this.style.display='none'">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 var(--nui-space-4);">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <img src="//images.neopets.com/space/coincidence_small.gif"
+                             style="width:64px;height:64px;border-radius:var(--nui-radius-md);border:2px solid var(--nui-border);object-fit:cover;flex-shrink:0;filter:drop-shadow(0 2px 6px var(--nui-shadow));"
+                             onerror="this.style.display='none'">
+                        <div>
+                            <div style="font-family:var(--nui-font-display);font-weight:800;font-size:26px;color:var(--nui-accent);text-shadow:0 2px 6px var(--nui-shadow);line-height:1.1;">The Coincidence</div>
+                            <div style="font-size:12px;color:var(--nui-text-muted);font-weight:600;margin-top:2px;">Dr. Landelbrot's Lab</div>
+                        </div>
+                    </div>
+                    <button type="button" id="nui-coincidence-refresh-btn" class="nui-btn nui-btn-secondary nui-btn-sm" style="flex-shrink:0;display:flex;align-items:center;gap:6px;" title="Refresh quest status">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+        `;
+        container.appendChild(coincidenceBanner);
+
+        // Wire the refresh button
+        const refreshBtn = coincidenceBanner.querySelector('#nui-coincidence-refresh-btn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="animation:nui-spin 1s linear infinite"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Refreshing...';
+                if (!document.getElementById('nui-spin-style')) {
+                    const s = document.createElement('style');
+                    s.id = 'nui-spin-style';
+                    s.textContent = '@keyframes nui-spin { to { transform: rotate(360deg); } }';
+                    document.head.appendChild(s);
+                }
+                reloadSPA(null).catch(() => {}).finally(() => {
+                    if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> Refresh'; }
+                });
+            });
+        }
 
         // Render Static REs if caught on load
         if (staticREs.length > 0) {
@@ -6819,18 +7420,27 @@
         wrapper.className = 'nui-reset';
         wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5); max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--nui-space-4);';
 
-        const pageHeader = document.createElement('div');
-        pageHeader.style.cssText = 'display:flex;align-items:center;gap:12px;';
-        pageHeader.innerHTML = `
-            <img src="//images.neopets.com/pirates/fc/bookie.gif"
-                 style="width:52px;height:52px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);object-fit:cover;flex-shrink:0;"
-                 onerror="this.style.display='none'">
-            <div style="flex:1;min-width:0;">
-                <div style="font-family:var(--nui-font-display);font-weight:800;font-size:22px;color:var(--nui-text);">Food Club</div>
-                <div id="nui-fc-next" style="font-size:13px;color:var(--nui-text-muted);font-weight:600;">${nextMatchText}</div>
+        // Banner card
+        const bannerCard = document.createElement('div');
+        bannerCard.className = 'nui-surface';
+        bannerCard.style.cssText = 'border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;box-shadow:0 4px 12px var(--nui-shadow);position:relative;';
+        bannerCard.innerHTML = `
+            <div style="position:relative;width:100%;height:120px;overflow:hidden;background:linear-gradient(135deg,#2B1A0A 0%,#4A2E12 50%,#2B1A0A 100%);">
+                <img src="//images.neopets.com/pirates/fc/foodclub_bg.gif"
+                     style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.45;"
+                     onerror="this.style.display='none'">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;gap:14px;padding:0 var(--nui-space-4);">
+                    <img src="//images.neopets.com/pirates/fc/bookie.gif"
+                         style="width:72px;height:72px;border-radius:var(--nui-radius-md);border:2px solid rgba(255,255,255,0.25);object-fit:cover;flex-shrink:0;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.6));"
+                         onerror="this.style.display='none'">
+                    <div>
+                        <div style="font-family:var(--nui-font-display);font-weight:800;font-size:28px;color:#FFD060;text-shadow:0 2px 8px rgba(0,0,0,0.6);line-height:1.1;">Food Club</div>
+                        <div id="nui-fc-next" style="font-size:13px;color:rgba(255,220,120,0.9);font-weight:600;margin-top:3px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">${nextMatchText}</div>
+                    </div>
+                </div>
             </div>
         `;
-        wrapper.appendChild(pageHeader);
+        wrapper.appendChild(bannerCard);
 
         const tabBar = document.createElement('div');
         tabBar.style.cssText = 'display:flex;gap:6px;border-bottom:2px solid var(--nui-border);padding-bottom:0;overflow-x:auto;scrollbar-width:none;';
@@ -8066,4 +8676,806 @@
     } else {
         document.addEventListener('DOMContentLoaded', () => { try { run(); } catch (err) { showFatalError(err); } });
     }
+})();
+// ==============================================================================
+// MODULE 11: STOCK MARKET (BARGAIN DASHBOARD & QUICK SELL)
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/stockmarket\.phtml/.test(location.pathname)) return;
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI || !NeoUI.__ready) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Stock Market SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    // --- State & Settings ---
+    let activeTabId = 'portfolio';
+    let portfolioData = [];
+    let liveStocksData = [];
+    let securityToken = '';
+    let summaryStats = { holdings: '0', paid: '0', mktValue: '0', pctChange: '0.00%', isPos: false, isNeg: false };
+
+    let sellPoint = parseInt(localStorage.getItem('nui_stock_sell_point'), 10) || 60;
+    let bargainPrice = parseInt(localStorage.getItem('nui_stock_bargain_price'), 10) || 15;
+    let currentSort = localStorage.getItem('nui_stock_sort') || 'ticker';
+
+    // --- Scraping Logic ---
+    function scrapeStocks(doc) {
+        // Only clear portfolio if we actually find a portfolio table, otherwise keep existing data
+        // (Useful if scraping the background 'buy' page which only has the marquee)
+        const isPortfolioPage = doc.querySelector('.stock-table') || doc.querySelector('#postForm table');
+        if (isPortfolioPage) portfolioData = [];
+
+        liveStocksData = [];
+
+        // 1. Scrape Security Token
+        const refInput = doc.querySelector('input[name="_ref_ck"]');
+        if (refInput) securityToken = refInput.value;
+
+        // 2. Scrape Live Prices from Marquee
+        const marqueeLinks = doc.querySelectorAll('marquee a');
+        marqueeLinks.forEach(a => {
+            const text = a.textContent.trim();
+            const parts = text.split(' ');
+            if (parts.length >= 3) {
+                liveStocksData.push({
+                    ticker: parts[0],
+                    price: parseInt(parts[1], 10),
+                    change: parts[2]
+                });
+            }
+        });
+
+        // 3. Scrape Portfolio Holdings (if present)
+        const rows = doc.querySelectorAll('#postForm table tr');
+        let currentStock = null;
+
+        rows.forEach(row => {
+            if (row.hasAttribute('bgcolor') && (row.getAttribute('bgcolor') === '#EEEEFF' || row.getAttribute('bgcolor') === '#FFFFFF')) {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 9) {
+                    const imgEl = cells[0].querySelector('img[src*=".gif"]');
+                    const tickerEl = cells[1].querySelector('a');
+
+                    if (imgEl && tickerEl) {
+                        const pctText = cells[8].textContent.trim();
+                        currentStock = {
+                            ticker: tickerEl.textContent.trim(),
+                            icon: imgEl.src,
+                            open: parseInt(cells[2].textContent.trim(), 10) || 0,
+                            currPrice: parseInt(cells[3].textContent.trim(), 10) || 0,
+                            qty: parseInt(cells[5].textContent.replace(/,/g, '').trim(), 10) || 0,
+                            paid: cells[6].textContent.trim(),
+                            mktValue: cells[7].textContent.trim(),
+                            pctChange: pctText,
+                            rawPct: parseFloat(pctText.replace(/[%+,]/g, '')),
+                            isPos: pctText.includes('+'),
+                            isNeg: pctText.includes('-'),
+                            lots: []
+                        };
+                        portfolioData.push(currentStock);
+                    }
+                }
+            } else if (row.hasAttribute('id') && row.style.display === 'none') {
+                if (currentStock) {
+                    const lotRows = row.querySelectorAll('table tr');
+                    for (let i = 1; i < lotRows.length; i++) {
+                        const input = lotRows[i].querySelector('input[type="text"]');
+                        const cells = lotRows[i].querySelectorAll('td');
+                        if (input && input.name && cells.length > 0) {
+                            const qtyStr = cells[0].textContent.replace(/,/g, '').trim();
+                            currentStock.lots.push({
+                                name: input.name,
+                                qty: parseInt(qtyStr, 10)
+                            });
+                        }
+                    }
+                }
+            } else if (row.getAttribute('bgcolor') === '#BBBBBB') {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 5) {
+                    const pctText = cells[4].textContent.trim();
+                    summaryStats = {
+                        holdings: cells[1].textContent.trim(),
+                        paid: cells[2].textContent.trim(),
+                        mktValue: cells[3].textContent.trim(),
+                        pctChange: pctText,
+                        isPos: pctText.includes('+'),
+                        isNeg: pctText.includes('-')
+                    };
+                }
+            }
+        });
+    }
+
+    // --- API Calls ---
+    async function buyStock(ticker, amount) {
+        if (!securityToken) throw new Error('Missing security token.');
+        const fd = new URLSearchParams();
+        fd.append('_ref_ck', securityToken);
+        fd.append('type', 'buy');
+        fd.append('ticker_symbol', ticker);
+        fd.append('amount_shares', amount);
+
+        const res = await fetch('/process_stockmarket.phtml', { method: 'POST', body: fd });
+        const html = await res.text();
+
+        // Scan the raw HTML for success instead of relying on brittle elements
+        if (html.toLowerCase().includes('success')) {
+            return { ok: true, msg: `Successfully bought ${amount} shares of ${ticker}!` };
+        } else {
+            return { ok: false, msg: 'Transaction failed. You may have hit your daily limit.' };
+        }
+    }
+
+    async function sellStock(stock, amountToSell) {
+        if (!securityToken) throw new Error('Missing security token.');
+        const fd = new URLSearchParams();
+        fd.append('_ref_ck', securityToken);
+        fd.append('type', 'sell');
+
+        let remaining = amountToSell;
+        for (const lot of stock.lots) {
+            if (remaining <= 0) break;
+            const toSell = Math.min(lot.qty, remaining);
+            fd.append(lot.name, toSell);
+            remaining -= toSell;
+        }
+
+        const res = await fetch('/process_stockmarket.phtml', { method: 'POST', body: fd });
+        const html = await res.text();
+
+        // Scan the raw HTML for success
+        if (html.toLowerCase().includes('success')) {
+            return { ok: true, msg: `Successfully sold ${amountToSell} shares of ${stock.ticker}!` };
+        } else {
+            return { ok: false, msg: 'Transaction failed.' };
+        }
+    }
+
+    // Forces a background fetch of the portfolio page specifically, since it holds ALL data (marquee + lots)
+    async function refreshData(container) {
+        if (container) { container.style.opacity = '0.5'; container.style.pointerEvents = 'none'; }
+        try {
+            const res = await fetch('/stockmarket.phtml?type=portfolio');
+            const html = await res.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            scrapeStocks(doc);
+            switchTab(activeTabId, false);
+        } catch (e) {
+            showFatalError(e);
+        } finally {
+            if (container) { container.style.opacity = '1'; container.style.pointerEvents = 'auto'; }
+        }
+    }
+
+    // --- Toast Notification ---
+    function showToast(msg, isError) {
+        const toast = document.createElement('div');
+        toast.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 18px;border-radius:var(--nui-radius-md);font-size:14px;font-weight:700;max-width:90vw;text-align:center;box-shadow:0 4px 16px var(--nui-shadow);background:${isError ? 'var(--nui-danger)' : 'var(--nui-success)'};color:#fff;transition:opacity 0.3s;`;
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3500);
+    }
+
+    // --- UI Builders ---
+    function initAppShell() {
+        const profile = NeoUI.scrapeLegacyProfile();
+
+        Array.from(document.body.children).forEach(child => {
+            if (['script', 'style', 'link'].includes(child.tagName.toLowerCase())) return;
+            child.style.display = 'none';
+        });
+
+        document.body.className = 'nui-reset nui-spa-active';
+
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // --- Settings Drawer Injection ---
+        NeoUI.registerSettingsSection({
+            id: 'stocks',
+            title: 'Stock Market',
+            render: function (container) {
+                container.innerHTML = `
+                    <details class="nui-drawer-section">
+                        <summary class="nui-drawer-section-title" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                            Stock Market <span style="font-size:10px; opacity:0.5;">▼</span>
+                        </summary>
+                        <div style="margin-top:10px; display:flex; flex-direction:column; gap:14px;">
+                            <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:700; color:var(--nui-text);">
+                                Bargain Buy Price
+                                <div style="font-size:11px; font-weight:400; color:var(--nui-text-muted);">The maximum price shown in your daily bargain feed (Default: 15).</div>
+                                <input type="number" id="nui-stk-bargain" class="nui-input" value="${bargainPrice}" style="padding:6px;">
+                            </label>
+                            <label style="display:flex; flex-direction:column; gap:4px; font-size:12px; font-weight:700; color:var(--nui-text);">
+                                Target Sell Point
+                                <div style="font-size:11px; font-weight:400; color:var(--nui-text-muted);">Stocks at or above this price will turn gold in your portfolio grid.</div>
+                                <input type="number" id="nui-stk-sell" class="nui-input" value="${sellPoint}" style="padding:6px;">
+                            </label>
+                            <button type="button" class="nui-btn nui-btn-primary nui-btn-block" id="nui-stk-save">Save Settings</button>
+                            <span id="nui-stk-status" style="font-size:12px; text-align:center; color:var(--nui-success); display:block;"></span>
+                        </div>
+                    </details>
+                `;
+                container.querySelector('#nui-stk-save').addEventListener('click', () => {
+                    const bVal = parseInt(container.querySelector('#nui-stk-bargain').value, 10) || 15;
+                    const sVal = parseInt(container.querySelector('#nui-stk-sell').value, 10) || 60;
+                    localStorage.setItem('nui_stock_bargain_price', bVal);
+                    localStorage.setItem('nui_stock_sell_point', sVal);
+                    bargainPrice = bVal;
+                    sellPoint = sVal;
+                    const st = container.querySelector('#nui-stk-status');
+                    st.textContent = 'Saved! Settings applied immediately.';
+                    setTimeout(() => st.textContent = '', 3500);
+                    switchTab(activeTabId, false); // Re-render current view with new settings
+                });
+            }
+        });
+
+        const appWrapper = document.createElement('div');
+        appWrapper.id = 'nui-stocks-app';
+        appWrapper.style.cssText = 'display: flex; flex-direction: column; height: 100vh; padding-top: var(--nui-topbar-h); box-sizing: border-box;';
+
+        const topRow = document.createElement('div');
+        topRow.style.cssText = 'display: flex; align-items: center; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border); flex-shrink: 0;';
+
+        const tabBar = document.createElement('div');
+        tabBar.id = 'nui-stocks-tabs';
+        tabBar.style.cssText = 'display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px; scrollbar-width: none; flex: 1; min-width: 0; -webkit-overflow-scrolling: touch;';
+
+        const tabs = [
+            { id: 'portfolio', label: '💼 Portfolio' },
+            { id: 'bargains', label: '📈 Buy Bargains' }
+        ];
+
+        tabs.forEach(t => {
+            const btn = document.createElement('button');
+            btn.className = `nui-pill ${activeTabId === t.id ? 'is-active' : ''}`;
+            btn.setAttribute('data-tab', t.id);
+            btn.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 8px 16px; border: none; cursor: pointer; flex-shrink: 0;';
+            btn.innerHTML = t.label;
+            btn.addEventListener('click', () => switchTab(t.id, true));
+            tabBar.appendChild(btn);
+        });
+
+        const refreshBtn = document.createElement('button');
+        refreshBtn.className = 'nui-btn nui-btn-secondary nui-btn-sm';
+        refreshBtn.style.cssText = 'margin-right: 12px; padding: 6px 10px; display: flex; align-items: center; gap: 4px;';
+        refreshBtn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>`;
+        refreshBtn.addEventListener('click', () => refreshData(document.getElementById('nui-stocks-content')));
+
+        topRow.appendChild(tabBar);
+        topRow.appendChild(refreshBtn);
+        appWrapper.appendChild(topRow);
+
+        const contentArea = document.createElement('div');
+        contentArea.id = 'nui-stocks-content';
+        contentArea.style.cssText = 'flex: 1; overflow-y: auto; padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; -webkit-overflow-scrolling: touch;';
+        appWrapper.appendChild(contentArea);
+
+        document.body.appendChild(appWrapper);
+        return appWrapper;
+    }
+
+    function switchTab(id, updateUrl = true) {
+        activeTabId = id;
+
+        const tabBar = document.getElementById('nui-stocks-tabs');
+        if (tabBar) {
+            tabBar.querySelectorAll('.nui-pill').forEach(btn => {
+                if (btn.getAttribute('data-tab') === id) btn.classList.add('is-active');
+                else btn.classList.remove('is-active');
+            });
+        }
+
+        const contentArea = document.getElementById('nui-stocks-content');
+        if (!contentArea) return;
+
+        if (updateUrl) {
+            const path = id === 'portfolio' ? '/stockmarket.phtml?type=portfolio' : '/stockmarket.phtml?type=buy';
+            window.history.replaceState(null, '', path);
+        }
+
+        contentArea.innerHTML = '';
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'width: 100%; max-width: 800px; display: flex; flex-direction: column; gap: var(--nui-space-4); padding-bottom: 40px;';
+        contentArea.appendChild(wrapper);
+
+        // If they navigate directly to 'buy' page, the portfolio data won't exist in memory yet.
+        // We trigger a silent refresh so both tabs function seamlessly.
+        if (id === 'portfolio' && portfolioData.length === 0 && securityToken) {
+            refreshData(contentArea);
+            return;
+        }
+
+        if (id === 'portfolio') {
+            renderPortfolio(wrapper, contentArea);
+        } else if (id === 'bargains') {
+            renderBargains(wrapper, contentArea);
+        }
+    }
+
+    function renderPortfolio(wrapper, container) {
+        const header = document.createElement('div');
+        header.className = 'nui-surface';
+        header.style.cssText = 'border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg); padding: var(--nui-space-4); box-shadow: 0 4px 12px var(--nui-shadow); display: flex; justify-content: space-between; align-items: center;';
+
+        const changeColor = summaryStats.isPos ? 'var(--nui-success)' : summaryStats.isNeg ? 'var(--nui-danger)' : 'var(--nui-text-muted)';
+
+        header.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="font-family: var(--nui-font-display); font-size: 22px; font-weight: 800; color: var(--nui-text);">My Portfolio</div>
+                <div style="font-size: 13px; font-weight: 600; color: var(--nui-text-muted);">${summaryStats.holdings} Total Shares</div>
+            </div>
+            <div style="text-align: right; display: flex; flex-direction: column; gap: 2px;">
+                <div style="font-size: 18px; font-weight: 800; color: var(--nui-text);">${summaryStats.mktValue} NP</div>
+                <div style="font-size: 13px; font-weight: 800; color: ${changeColor};">${summaryStats.pctChange}</div>
+            </div>
+        `;
+        wrapper.appendChild(header);
+
+        if (portfolioData.length === 0) {
+            wrapper.innerHTML += `<div class="nui-empty"><span class="nui-empty-emoji">🕸️</span><br>Your portfolio is currently empty.</div>`;
+            return;
+        }
+
+        // --- Sort Controls ---
+        const controlsRow = document.createElement('div');
+        controlsRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 0 4px;';
+        controlsRow.innerHTML = `
+            <span style="font-size: 13px; font-weight: 700; color: var(--nui-text-muted);">Sort By:</span>
+            <select class="nui-input" style="width: auto; padding: 4px 8px; font-size: 13px; font-weight: 700;" id="stk-sort-select">
+                <option value="ticker" ${currentSort === 'ticker' ? 'selected' : ''}>Ticker (A-Z)</option>
+                <option value="price_desc" ${currentSort === 'price_desc' ? 'selected' : ''}>Current Price (High-Low)</option>
+                <option value="pct_desc" ${currentSort === 'pct_desc' ? 'selected' : ''}>% Change (High-Low)</option>
+                <option value="qty_desc" ${currentSort === 'qty_desc' ? 'selected' : ''}>Total Shares (High-Low)</option>
+            </select>
+        `;
+        wrapper.appendChild(controlsRow);
+
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--nui-space-3); width: 100%;';
+
+        const sortData = (data, type) => {
+            return [...data].sort((a, b) => {
+                if (type === 'price_desc') return b.currPrice - a.currPrice;
+                if (type === 'pct_desc') return (b.isNeg ? -b.rawPct : b.rawPct) - (a.isNeg ? -a.rawPct : a.rawPct);
+                if (type === 'qty_desc') return b.qty - a.qty;
+                return a.ticker.localeCompare(b.ticker);
+            });
+        };
+
+        const renderGrid = () => {
+            grid.innerHTML = '';
+            const sorted = sortData(portfolioData, currentSort);
+
+            sorted.forEach(stock => {
+                const card = document.createElement('div');
+                card.className = 'nui-surface';
+
+                let borderColor = 'var(--nui-border)';
+                let priceColor = 'var(--nui-text)';
+
+                if (stock.currPrice >= sellPoint) {
+                    borderColor = 'var(--nui-accent)';
+                    priceColor = 'var(--nui-accent)';
+                } else if (stock.isPos) {
+                    borderColor = 'var(--nui-success)';
+                    priceColor = 'var(--nui-success)';
+                } else if (stock.isNeg) {
+                    borderColor = 'var(--nui-danger)';
+                    priceColor = 'var(--nui-danger)';
+                }
+
+                card.style.cssText = `
+                    border: 2px solid ${borderColor};
+                    border-radius: var(--nui-radius-lg);
+                    background: var(--nui-surface);
+                    padding: var(--nui-space-3);
+                    cursor: pointer;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    position: relative;
+                    transition: transform 0.1s, box-shadow 0.1s;
+                    box-shadow: 0 2px 4px var(--nui-shadow);
+                `;
+
+                card.innerHTML = `
+                    <div style="font-size: 24px; font-family: var(--nui-font-display); font-weight: 800; color: var(--nui-text);">${stock.ticker}</div>
+                    <div style="font-size: 20px; font-weight: 800; color: ${priceColor};">${stock.currPrice}</div>
+                    <div style="font-size: 12px; font-weight: 700; color: ${stock.isNeg ? 'var(--nui-danger)' : 'var(--nui-success)'}; margin-top: 2px;">${stock.pctChange}</div>
+                    <div style="font-size: 11px; font-weight: 700; color: var(--nui-text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px;">${stock.qty.toLocaleString()} Shares</div>
+
+                    <div class="nui-stk-expand" style="display: none; width: 100%; margin-top: 12px; padding-top: 12px; border-top: 1px solid ${borderColor}; flex-direction: column; gap: 6px;">
+                        <input type="number" class="nui-input" value="${stock.qty}" min="1" max="${stock.qty}" style="width: 100%; text-align: center; padding: 6px; font-size: 13px;">
+                        <button type="button" class="nui-btn nui-btn-primary nui-btn-block btn-sell" style="padding: 6px;">Sell</button>
+                    </div>
+                `;
+
+                // Hover Effects
+                card.addEventListener('mouseenter', () => { card.style.transform = 'translateY(-2px)'; card.style.boxShadow = '0 6px 12px var(--nui-shadow)'; });
+                card.addEventListener('mouseleave', () => { card.style.transform = ''; card.style.boxShadow = '0 2px 4px var(--nui-shadow)'; });
+
+                // Tap-to-Expand Logic
+                const expandArea = card.querySelector('.nui-stk-expand');
+                const sellBtn = card.querySelector('.btn-sell');
+                const inputEl = card.querySelector('input');
+
+                card.addEventListener('click', (e) => {
+                    if (e.target === sellBtn || e.target === inputEl) return;
+
+                    const isExpanded = expandArea.style.display === 'flex';
+                    // Collapse all others first for cleanliness
+                    grid.querySelectorAll('.nui-stk-expand').forEach(el => el.style.display = 'none');
+
+                    if (!isExpanded) expandArea.style.display = 'flex';
+                });
+
+                // Execute Sell
+                sellBtn.addEventListener('click', async () => {
+                    const amount = parseInt(inputEl.value, 10);
+                    if (isNaN(amount) || amount <= 0 || amount > stock.qty) {
+                        showToast('Invalid sell amount.', true);
+                        return;
+                    }
+                    sellBtn.textContent = '...';
+                    sellBtn.disabled = true;
+
+                    try {
+                        const result = await sellStock(stock, amount);
+                        showToast(result.msg, !result.ok);
+                        if (result.ok) await refreshData(container);
+                        else { sellBtn.textContent = 'Sell'; sellBtn.disabled = false; }
+                    } catch (err) {
+                        showToast('Network error.', true);
+                        sellBtn.textContent = 'Sell'; sellBtn.disabled = false;
+                    }
+                });
+
+                grid.appendChild(card);
+            });
+        };
+
+        renderGrid();
+        wrapper.appendChild(grid);
+
+        // Bind Sort Change
+        controlsRow.querySelector('#stk-sort-select').addEventListener('change', (e) => {
+            currentSort = e.target.value;
+            localStorage.setItem('nui_stock_sort', currentSort);
+            renderGrid();
+        });
+    }
+
+    function renderBargains(wrapper, container) {
+        const header = document.createElement('div');
+        header.className = 'nui-text';
+        header.style.cssText = 'font-family: var(--nui-font-display); font-size: 26px; font-weight: 800; text-align: center; margin-bottom: 8px;';
+        header.textContent = 'Daily Bargains';
+        wrapper.appendChild(header);
+
+        // Filter based on the Custom Bargain Settings
+        const bargains = liveStocksData.filter(s => s.price >= 10 && s.price <= bargainPrice).sort((a, b) => a.price - b.price);
+
+        if (bargains.length === 0) {
+            wrapper.innerHTML += `<div class="nui-empty"><span class="nui-empty-emoji">📉</span><br>No stocks currently priced at or below ${bargainPrice} NP.</div>`;
+            return;
+        }
+
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--nui-space-3);';
+
+        bargains.forEach(b => {
+            const card = document.createElement('div');
+            card.className = 'nui-surface';
+            card.style.cssText = 'border: 1px solid var(--nui-border); border-radius: var(--nui-radius-md); padding: var(--nui-space-4); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 2px 6px var(--nui-shadow);';
+
+            const changeColor = b.change.includes('+') ? 'var(--nui-success)' : b.change.includes('-') ? 'var(--nui-danger)' : 'var(--nui-text-muted)';
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-family: var(--nui-font-display); font-size: 24px; font-weight: 800; color: var(--nui-text);">${b.ticker}</div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 18px; font-weight: 800; color: var(--nui-text);">${b.price} NP</div>
+                        <div style="font-size: 12px; font-weight: 800; color: ${changeColor};">${b.change}</div>
+                    </div>
+                </div>
+                <button type="button" class="nui-btn nui-btn-secondary nui-btn-block btn-buy">Buy 1,000 (${(b.price * 1000).toLocaleString()} NP)</button>
+            `;
+
+            const buyBtn = card.querySelector('.btn-buy');
+            buyBtn.addEventListener('click', async () => {
+                buyBtn.textContent = 'Buying...';
+                buyBtn.disabled = true;
+
+                try {
+                    const result = await buyStock(b.ticker, 1000);
+                    showToast(result.msg, !result.ok);
+                    if (result.ok) {
+                        buyBtn.style.background = 'var(--nui-success)';
+                        buyBtn.style.color = '#fff';
+                        buyBtn.textContent = 'Purchased!';
+                    } else {
+                        buyBtn.textContent = `Buy 1,000 (${(b.price * 1000).toLocaleString()} NP)`;
+                        buyBtn.disabled = false;
+                    }
+                } catch (err) {
+                    showToast('Network error.', true);
+                    buyBtn.textContent = `Buy 1,000 (${(b.price * 1000).toLocaleString()} NP)`;
+                    buyBtn.disabled = false;
+                }
+            });
+
+            grid.appendChild(card);
+        });
+
+        wrapper.appendChild(grid);
+    }
+
+    // --- Boot ---
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        try {
+            scrapeStocks(document);
+            const app = initAppShell();
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('type') === 'buy') switchTab('bargains', false);
+            else switchTab('portfolio', false);
+        } catch (err) { showFatalError(err); }
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                scrapeStocks(document);
+                const app = initAppShell();
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('type') === 'buy') switchTab('bargains', false);
+                else switchTab('portfolio', false);
+            } catch (err) { showFatalError(err); }
+        });
+    }
+
+})();
+// ==============================================================================
+// MODULE 12: COCONUT SHY (HEADLESS SPA WRAPPER)
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/halloween\/coconutshy\.phtml/.test(location.pathname)) return;
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI || !NeoUI.__ready) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Coconut Shy SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    let throwCount = 0;
+
+    // Inject custom animation styles for the throw
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes nui-shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .nui-shake { animation: nui-shake 0.3s cubic-bezier(.36,.07,.19,.97) both; animation-iteration-count: infinite; }
+    `;
+    document.head.appendChild(style);
+
+    // --- API Calls ---
+    async function throwCoconut() {
+        const coconutId = Math.floor(Math.random() * 5) + 1;
+        const url = `/halloween/process_cocoshy.phtml?coconut=${coconutId}&_=${Date.now()}`;
+
+        const res = await fetch(url, { method: 'POST' });
+        const text = await res.text();
+        const params = new URLSearchParams(text);
+
+        return {
+            points: parseInt(params.get('points') || '0', 10),
+            totalNp: params.get('totalnp') || null,
+            success: params.get('success') === '1',
+            error: params.get('error') || '',
+            item: params.get('item') || null
+        };
+    }
+
+    function updateLiveNP(newNpStr) {
+        if (!newNpStr) return;
+        const npNum = parseInt(newNpStr, 10);
+        if (isNaN(npNum)) return;
+
+        const npElements = document.querySelectorAll('.nui-topbar-stats span, #npanchor, .nui-badge');
+        npElements.forEach(el => {
+            if (el.textContent.includes('NP') || !isNaN(parseInt(el.textContent.replace(/,/g, '')))) {
+                if (!el.innerHTML.includes('<')) {
+                    el.textContent = npNum.toLocaleString();
+                }
+            }
+        });
+    }
+
+    // --- UI Builders ---
+    function initAppShell() {
+        const profile = NeoUI.scrapeLegacyProfile();
+
+        Array.from(document.body.children).forEach(child => {
+            if (['script', 'style', 'link'].includes(child.tagName.toLowerCase())) return;
+            child.style.display = 'none';
+        });
+
+        document.body.className = 'nui-reset nui-spa-active';
+
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        const appWrapper = document.createElement('div');
+        appWrapper.id = 'nui-cocoshy-app';
+        appWrapper.style.cssText = 'display: flex; flex-direction: column; height: 100vh; padding-top: var(--nui-topbar-h); box-sizing: border-box; align-items: center; background: var(--nui-bg); overflow-y: auto;';
+
+        const contentArea = document.createElement('div');
+        contentArea.style.cssText = 'width: 100%; max-width: 600px; padding: var(--nui-space-4); display: flex; flex-direction: column; gap: var(--nui-space-4);';
+
+        appWrapper.appendChild(contentArea);
+        document.body.appendChild(appWrapper);
+        return contentArea;
+    }
+
+    function renderDashboard(container) {
+        const dashboard = document.createElement('div');
+        dashboard.className = 'nui-surface';
+        dashboard.style.cssText = 'border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg); overflow: hidden; box-shadow: 0 4px 16px var(--nui-shadow); text-align: center; display: flex; flex-direction: column; align-items: center; background: var(--nui-surface);';
+
+        dashboard.innerHTML = `
+            <div style="width: 100%; height: 150px; border-bottom: 2px solid var(--nui-border); background: var(--nui-surface-2);">
+                <img src="https://images.neopets.com/games/clicktoplay/screenshot_fullsize_490_1_v1.png" style="width: 100%; height: 100%; object-fit: cover; object-position: center 20%;">
+            </div>
+
+
+
+                <div style="font-family: var(--nui-font-display); font-size: 32px; font-weight: 800; color: var(--nui-text);">Coconut Shy</div>
+                <div style="font-size: 14px; color: var(--nui-text-muted); font-weight: 600; margin-bottom: 12px;">100 NP per throw. Knock one down to win a prize!</div>
+
+                <div id="coco-result-box" style="width: 80%; min-height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: var(--nui-radius-md); background: var(--nui-surface-2); border: 1px solid var(--nui-border); font-size: 15px; font-weight: 700; color: var(--nui-text-muted); padding: 12px; transition: all 0.2s;">
+                    <span>Ready to throw.</span>
+                </div>
+
+                <button type="button" id="btn-throw" class="nui-btn nui-btn-primary" style="font-size: 18px; padding: 16px 32px; border-radius: 30px; width: 100%; max-width: 300px; margin-top: 16px; box-shadow: 0 4px 12px var(--nui-shadow);">
+                    Throw (100 NP)
+                </button>
+                <div id="throw-counter" style="margin-top: 12px; font-size: 12px; color: var(--nui-text-faint); font-weight: 700;">Throws this session: 0</div>
+            </div>
+        `;
+
+        container.appendChild(dashboard);
+
+        const btnThrow = dashboard.querySelector('#btn-throw');
+        const resultBox = dashboard.querySelector('#coco-result-box');
+        const cocoStage = dashboard.querySelector('#coco-stage');
+        const cocoImage = dashboard.querySelector('#coco-image');
+        const counterEl = dashboard.querySelector('#throw-counter');
+
+        btnThrow.addEventListener('click', async () => {
+            btnThrow.disabled = true;
+            btnThrow.textContent = 'Aiming...';
+
+            cocoImage.src = 'https://images.neopets.com/items/sph_coco_1.gif';
+            cocoImage.classList.add('nui-shake');
+
+            resultBox.style.background = 'var(--nui-surface-2)';
+            resultBox.style.borderColor = 'var(--nui-border)';
+            resultBox.style.color = 'var(--nui-text-muted)';
+            resultBox.innerHTML = `<span>Winding up...</span>`;
+
+            try {
+                const res = await throwCoconut();
+
+                if (res.totalNp) updateLiveNP(res.totalNp);
+
+                cocoImage.classList.remove('nui-shake');
+
+                if (res.error) {
+                    cocoStage.style.borderColor = 'var(--nui-danger)';
+                    cocoImage.src = 'https://images.neopets.com/shopkeepers/w64.gif';
+                    resultBox.style.background = 'rgba(239, 68, 68, 0.05)';
+                    resultBox.style.borderColor = 'var(--nui-danger)';
+                    resultBox.style.color = 'var(--nui-danger)';
+                    resultBox.innerHTML = `<span>${res.error}</span>`;
+
+                    if (res.error.toLowerCase().includes('no more') || res.error.toLowerCase().includes('had yer lot')) {
+                        btnThrow.textContent = 'Out of Throws';
+                        btnThrow.style.background = 'var(--nui-surface-2)';
+                        btnThrow.style.color = 'var(--nui-text-muted)';
+                        return;
+                    }
+                } else if (res.points === 10000) {
+                    cocoStage.style.borderColor = 'var(--nui-success)';
+                    cocoStage.style.background = 'rgba(16, 185, 129, 0.1)';
+                    cocoImage.src = `https://images.neopets.com/items/gen_nplarge.gif`;
+
+                    resultBox.style.background = 'rgba(16, 185, 129, 0.1)';
+                    resultBox.style.borderColor = 'var(--nui-success)';
+                    resultBox.style.color = 'var(--nui-success)';
+
+                    let winText = `JACKPOT! You exploded the coconut!<br>Won 10,000 NP`;
+                    if (res.item) winText += `<br><span style="color: var(--nui-text); font-size: 13px;">Also received: ${res.item}</span>`;
+
+                    resultBox.innerHTML = winText;
+
+                } else if (res.points === 300) {
+                    cocoStage.style.borderColor = 'var(--nui-success)';
+                    cocoImage.src = 'https://images.neopets.com/items/gen_npmed.gif';
+                    resultBox.style.background = 'rgba(16, 185, 129, 0.05)';
+                    resultBox.style.borderColor = 'var(--nui-success)';
+                    resultBox.style.color = 'var(--nui-success)';
+                    resultBox.innerHTML = `<span>You knocked it down! Won 300 NP.</span>`;
+
+                } else if (res.points === 50) {
+                    cocoStage.style.borderColor = 'var(--nui-accent)';
+                    cocoImage.src = 'https://images.neopets.com/items/gen_npsmall.gif';
+                    resultBox.style.color = 'var(--nui-accent)';
+                    resultBox.innerHTML = `<span>You hit it, but it just wobbled. Won 50 NP.</span>`;
+
+                } else {
+                    cocoStage.style.borderColor = 'var(--nui-border)';
+                    cocoImage.src = 'https://images.neopets.com/shopkeepers/w64.gif';
+                    resultBox.style.color = 'var(--nui-text)';
+                    resultBox.innerHTML = `<span>You completely missed!</span>`;
+                }
+
+                throwCount++;
+                counterEl.textContent = `Throws this session: ${throwCount}`;
+                btnThrow.textContent = 'Throw Again (100 NP)';
+                btnThrow.disabled = false;
+
+            } catch (err) {
+                cocoImage.classList.remove('nui-shake');
+                cocoStage.style.borderColor = 'var(--nui-danger)';
+                resultBox.style.borderColor = 'var(--nui-danger)';
+                resultBox.style.color = 'var(--nui-danger)';
+                resultBox.innerHTML = `<span>Network error. Try again.</span>`;
+                btnThrow.textContent = 'Throw (100 NP)';
+                btnThrow.disabled = false;
+            }
+        });
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        try { const container = initAppShell(); renderDashboard(container); } catch (err) { showFatalError(err); }
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            try { const container = initAppShell(); renderDashboard(container); } catch (err) { showFatalError(err); }
+        });
+    }
+
 })();
