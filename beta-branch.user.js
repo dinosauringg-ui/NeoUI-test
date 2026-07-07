@@ -1387,7 +1387,7 @@
         ].join(',\n                ');
     }
 
-    function applyThemeVars(name) {
+   function applyThemeVars(name) {
         const theme = THEMES[name] || THEMES[DEFAULT_THEME];
         const root = document.documentElement;
         root.setAttribute(ROOT_ATTR, name);
@@ -1395,12 +1395,6 @@
             root.style.setProperty(key, theme.tokens[key]);
         });
 
-        // For custom themes (and any future dynamic theme whose key won't have
-        // a hardcoded CSS rule in COMPONENT_CSS), inject a literal
-        // [data-neoui-theme="..."] .nui-header-wrapper rule so the texture
-        // actually lands on the header. This mirrors exactly how the built-in
-        // theme rules are written — each gradient is a separate layer so
-        // Firefox never has to expand a custom property inside background-image.
         const DYNAMIC_STYLE_ID = 'neoui-style-dynamic-theme';
         let dynStyle = document.getElementById(DYNAMIC_STYLE_ID);
         if (!dynStyle) {
@@ -1409,7 +1403,25 @@
             document.head.appendChild(dynStyle);
         }
 
+        // Map the texture explicitly to all targets to bypass WebKit variable limitations
+        const textureTargets = [
+            '.nui-surface::before', '.nui-topbar::before', '.nui-header-wrapper::before',
+            '.nui-drawer::before', '.nui-drawer-profile::before', '.nui-drawer-stat::before',
+            '.nui-theme-option::before', '.nui-bubble::before', '.nui-badge::before',
+            '.nui-icon-btn::before', '.nui-neogo-btn::before', '.nui-item::before',
+            '.nui-btn::before', '.nui-pill::before', '.nui-hnav::before',
+            '.nui-drawer-section::before', '.nui-drawer-section-title::before',
+            '.nui-textured::before', '.nui-spa-active body::after'
+        ].map(sel => `[data-neoui-theme="${name}"] ${sel}`).join(',\n');
+
+        const baseTexture = theme.tokens['--nui-texture'] && theme.tokens['--nui-texture'] !== 'none' 
+            ? theme.tokens['--nui-texture'] 
+            : 'none';
+
         dynStyle.textContent =
+            textureTargets + ' {\n' +
+            '    background-image: ' + baseTexture + ';\n' +
+            '}\n' +
             '[data-neoui-theme="' + name + '"] .nui-header-wrapper {\n' +
             '    background-image:\n        ' + buildHeaderBgImage(theme.tokens) + ';\n' +
             '}';
@@ -2669,7 +2681,7 @@
             });
         });
 
-        content.querySelector('#nui-ct-save').addEventListener('click', function () {
+        footer.querySelector('#nui-ct-save').addEventListener('click', function () {
             const nameInp = content.querySelector('#nui-ct-name');
             const emojiInp = content.querySelector('#nui-ct-emoji');
             const label = (nameInp && nameInp.value.trim()) || 'Custom';
