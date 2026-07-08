@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.13
+// @version      1.1.14
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -17,6 +17,15 @@
  * A single install for a mobile-forward Neopets experience: a shared design
  * system, a polished theme picker, a custom theme builder, a global search
  * overlay, and a daily-timer hub for timed dailies.
+ *
+ * v1.1.14
+ *   - Texture overhaul (6 themes): replaced all CSS-gradient textures with SVG
+ *     data URI patterns for Maractite (rune glyphs w/ gold accents), Haunted
+ *     Woods (sparse floating motes), Faerieland (sparkle glints), Maraqua
+ *     (compressed wave swells), Tyrannia (rotated pebble shore), and Krawk
+ *     Island (skull & crossbones at very low opacity). SVG patterns are
+ *     rendered via background-image url() and flow through the existing
+ *     --nui-texture token + applyThemeVars pipeline unchanged.
  *
  * v1.1.13
  *   - New module: Buried Treasure. Rebuilds all four legacy server states
@@ -265,8 +274,8 @@
                 // rings (pressure wave) radiating from a single anchor, plus a
                 // slow drift of bioluminescent motes. The ring cluster is
                 // unique to this theme; Maraqua uses a different water motif.
-                '--nui-texture':       'repeating-radial-gradient(circle at 15% 75%, rgba(59,130,246,0.22) 0, rgba(59,130,246,0.22) 1px, transparent 1px, transparent 10px), repeating-radial-gradient(circle at 15% 75%, rgba(6,182,212,0.12) 5px, rgba(6,182,212,0.12) 6px, transparent 6px, transparent 10px), radial-gradient(circle at 72% 18%, rgba(6,182,212,0.5) 1px, transparent 1.8px), radial-gradient(circle at 40% 60%, rgba(59,130,246,0.45) 0.8px, transparent 1.4px), radial-gradient(circle at 88% 52%, rgba(147,197,253,0.4) 0.8px, transparent 1.3px), radial-gradient(circle at 25% 30%, rgba(6,182,212,0.35) 0.7px, transparent 1.2px)',
-                '--nui-texture-opacity': '0.5',
+                '--nui-texture':       'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'72\' height=\'72\'%3E%3Cline x1=\'14\' y1=\'10\' x2=\'14\' y2=\'26\' stroke=\'rgba(180,210,255,0.16)\' stroke-width=\'1.1\' stroke-linecap=\'round\'/%3E%3Cline x1=\'14\' y1=\'13\' x2=\'20\' y2=\'13\' stroke=\'rgba(180,210,255,0.13)\' stroke-width=\'1\' stroke-linecap=\'round\'/%3E%3Cline x1=\'14\' y1=\'19\' x2=\'18\' y2=\'19\' stroke=\'rgba(180,210,255,0.11)\' stroke-width=\'0.9\' stroke-linecap=\'round\'/%3E%3Ccircle cx=\'14\' cy=\'10\' r=\'1.3\' fill=\'rgba(212,175,80,0.38)\'/%3E%3Cline x1=\'50\' y1=\'18\' x2=\'50\' y2=\'34\' stroke=\'rgba(180,210,255,0.13)\' stroke-width=\'1\' stroke-linecap=\'round\'/%3E%3Cline x1=\'44\' y1=\'26\' x2=\'56\' y2=\'26\' stroke=\'rgba(180,210,255,0.13)\' stroke-width=\'1\' stroke-linecap=\'round\'/%3E%3Cline x1=\'44\' y1=\'18\' x2=\'50\' y2=\'26\' stroke=\'rgba(212,175,80,0.2)\' stroke-width=\'0.8\' stroke-linecap=\'round\'/%3E%3Cline x1=\'10\' y1=\'50\' x2=\'16\' y2=\'44\' stroke=\'rgba(180,210,255,0.12)\' stroke-width=\'1\' stroke-linecap=\'round\'/%3E%3Cline x1=\'16\' y1=\'44\' x2=\'22\' y2=\'50\' stroke=\'rgba(180,210,255,0.12)\' stroke-width=\'1\' stroke-linecap=\'round\'/%3E%3Cline x1=\'10\' y1=\'57\' x2=\'16\' y2=\'51\' stroke=\'rgba(212,175,80,0.16)\' stroke-width=\'0.8\' stroke-linecap=\'round\'/%3E%3Cline x1=\'16\' y1=\'51\' x2=\'22\' y2=\'57\' stroke=\'rgba(212,175,80,0.16)\' stroke-width=\'0.8\' stroke-linecap=\'round\'/%3E%3Cline x1=\'56\' y1=\'50\' x2=\'56\' y2=\'66\' stroke=\'rgba(180,210,255,0.11)\' stroke-width=\'1\' stroke-linecap=\'round\'/%3E%3Cline x1=\'52\' y1=\'54\' x2=\'56\' y2=\'54\' stroke=\'rgba(180,210,255,0.1)\' stroke-width=\'0.9\' stroke-linecap=\'round\'/%3E%3Cline x1=\'52\' y1=\'60\' x2=\'60\' y2=\'60\' stroke=\'rgba(212,175,80,0.18)\' stroke-width=\'0.9\' stroke-linecap=\'round\'/%3E%3Ccircle cx=\'56\' cy=\'66\' r=\'1.1\' fill=\'rgba(212,175,80,0.32)\'/%3E%3C/svg%3E")',
+                '--nui-texture-opacity': '1',
                 '--nui-texture-blend':  'screen',
                 '--nui-texture-rotate': '0deg',
             },
@@ -298,7 +307,7 @@
                 // Scrapbook dot-scatter — reads as flecked paper/corkboard,
                 // not a printed grid. Distinct in kind (dots, not lines)
                 // from every other warm theme below.
-                '--nui-texture':       'radial-gradient(circle at 8% 18%, rgba(255,138,0,0.4) 1.6px, transparent 2.2px), radial-gradient(circle at 28% 52%, rgba(46,36,16,0.16) 1.4px, transparent 2px), radial-gradient(circle at 52% 22%, rgba(255,138,0,0.36) 1.6px, transparent 2.2px), radial-gradient(circle at 74% 60%, rgba(46,36,16,0.14) 1.4px, transparent 2px), radial-gradient(circle at 90% 30%, rgba(255,138,0,0.34) 1.6px, transparent 2.2px), radial-gradient(circle at 20% 86%, rgba(255,138,0,0.3) 1.4px, transparent 2px), radial-gradient(circle at 64% 90%, rgba(46,36,16,0.12) 1.4px, transparent 2px), radial-gradient(circle at 15% 20%, rgba(255,138,0,0.08) 0, transparent 42%)',
+                '--nui-texture':       'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'56\' height=\'56\'%3E%3Cpath d=\'M14 6 L16.4 13.4 L24.2 13.4 L18 18.2 L20.4 25.6 L14 21 L7.6 25.6 L10 18.2 L3.8 13.4 L11.6 13.4 Z\' fill=\'rgba(255,138,0,0.22)\' transform=\'rotate(-10,14,16)\'/%3E%3Cpath d=\'M42 22 L43.8 27.6 L49.8 27.6 L45 31 L46.8 36.6 L42 33.2 L37.2 36.6 L39 31 L34.2 27.6 L40.2 27.6 Z\' fill=\'none\' stroke=\'rgba(255,138,0,0.32)\' stroke-width=\'0.9\' transform=\'rotate(18,42,29)\'/%3E%3Cpath d=\'M20 40 L21 43 L24.2 43 L21.8 44.8 L22.8 47.8 L20 46 L17.2 47.8 L18.2 44.8 L15.8 43 L19 43 Z\' fill=\'rgba(15,111,255,0.2)\' transform=\'rotate(6,20,44)\'/%3E%3Cpath d=\'M46 8 L46.7 10.2 L49 10.2 L47.2 11.4 L47.9 13.6 L46 12.4 L44.1 13.6 L44.8 11.4 L43 10.2 L45.3 10.2 Z\' fill=\'none\' stroke=\'rgba(255,138,0,0.25)\' stroke-width=\'0.7\' transform=\'rotate(-22,46,11)\'/%3E%3Ccircle cx=\'6\' cy=\'46\' r=\'1.3\' fill=\'rgba(255,138,0,0.28)\'/%3E%3Ccircle cx=\'32\' cy=\'32\' r=\'0.9\' fill=\'rgba(15,111,255,0.2)\'/%3E%3C/svg%3E")',
                 '--nui-texture-opacity': '0.55',
                 '--nui-texture-blend':  'multiply',
                 '--nui-texture-rotate': '0deg',
@@ -333,10 +342,10 @@
                 // (angled feathered blobs) drift across the lower half.
                 // No straight repeating lines at all, so it can't be read
                 // as crosshatch or plank grain.
-                '--nui-texture':       'repeating-radial-gradient(circle at 5% 5%, rgba(199,124,255,0.0) 0, rgba(199,124,255,0.0) 14px, rgba(199,124,255,0.14) 15px, rgba(199,124,255,0.14) 16px, transparent 16px, transparent 32px, rgba(199,124,255,0.1) 33px, rgba(199,124,255,0.1) 34px, transparent 34px, transparent 52px, rgba(199,124,255,0.08) 53px, rgba(199,124,255,0.08) 54px, transparent 54px, transparent 80px), radial-gradient(ellipse 60% 8% at 30% 72%, rgba(241,235,255,0.18) 0, transparent 100%), radial-gradient(ellipse 40% 6% at 70% 55%, rgba(61,220,114,0.12) 0, transparent 100%), radial-gradient(circle at 62% 28%, rgba(241,235,255,0.45) 0.9px, transparent 1.5px), radial-gradient(circle at 18% 62%, rgba(199,124,255,0.4) 0.8px, transparent 1.3px), radial-gradient(circle at 84% 80%, rgba(241,235,255,0.35) 0.7px, transparent 1.2px)',
-                '--nui-texture-opacity': '0.6',
+                '--nui-texture':       'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'80\'%3E%3Ccircle cx=\'20\' cy=\'18\' r=\'1.2\' fill=\'rgba(199,124,255,0.5)\'/%3E%3Ccircle cx=\'60\' cy=\'50\' r=\'0.9\' fill=\'rgba(61,220,114,0.45)\'/%3E%3Ccircle cx=\'44\' cy=\'30\' r=\'0.7\' fill=\'rgba(199,124,255,0.35)\'/%3E%3Ccircle cx=\'10\' cy=\'62\' r=\'0.8\' fill=\'rgba(61,220,114,0.3)\'/%3E%3Ccircle cx=\'70\' cy=\'14\' r=\'0.6\' fill=\'rgba(199,124,255,0.28)\'/%3E%3Ccircle cx=\'36\' cy=\'68\' r=\'1\' fill=\'rgba(61,220,114,0.38)\'/%3E%3Ccircle cx=\'66\' cy=\'72\' r=\'0.7\' fill=\'rgba(199,124,255,0.3)\'/%3E%3C/svg%3E")',
+                '--nui-texture-opacity': '1',
                 '--nui-texture-blend':  'screen',
-                '--nui-texture-rotate': '6deg',
+                '--nui-texture-rotate': '0deg',
             },
         },
         moltara: {
@@ -439,8 +448,8 @@
                 // patches you see on a sandy seabed. Tall narrow ellipses
                 // (kelp/caustic shafts) plus a couple of shell-scatter dots.
                 // Totally distinct from Maractite's sonar-ring motif.
-                '--nui-texture':       'radial-gradient(ellipse 6% 40% at 18% 60%, rgba(0,168,188,0.28) 0, transparent 100%), radial-gradient(ellipse 5% 35% at 38% 30%, rgba(0,168,188,0.22) 0, transparent 100%), radial-gradient(ellipse 7% 50% at 62% 70%, rgba(0,168,188,0.26) 0, transparent 100%), radial-gradient(ellipse 5% 30% at 82% 20%, rgba(0,168,188,0.2) 0, transparent 100%), radial-gradient(ellipse 4% 28% at 92% 55%, rgba(0,168,188,0.18) 0, transparent 100%), radial-gradient(circle at 28% 82%, rgba(255,122,51,0.45) 1.2px, transparent 1.8px), radial-gradient(circle at 74% 88%, rgba(0,168,188,0.4) 1px, transparent 1.6px)',
-                '--nui-texture-opacity': '0.5',
+                '--nui-texture':       'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'56\'%3E%3Cpath d=\'M0 14 C8 7 16 7 24 14 C32 21 40 21 48 14\' fill=\'none\' stroke=\'rgba(0,168,188,0.42)\' stroke-width=\'1.4\' stroke-linecap=\'round\'/%3E%3Cpath d=\'M0 30 C8 23 16 23 24 30 C32 37 40 37 48 30\' fill=\'none\' stroke=\'rgba(0,168,188,0.24)\' stroke-width=\'1\' stroke-linecap=\'round\'/%3E%3Cpath d=\'M0 46 C8 39 16 39 24 46 C32 53 40 53 48 46\' fill=\'none\' stroke=\'rgba(0,168,188,0.14)\' stroke-width=\'0.8\' stroke-linecap=\'round\'/%3E%3C/svg%3E")',
+                '--nui-texture-opacity': '1',
                 '--nui-texture-blend':  'multiply',
                 '--nui-texture-rotate': '0deg',
             },
@@ -475,7 +484,7 @@
                 // varying size in pink/lavender/white iridescence. Rings not
                 // dots, so it reads as bubble membranes, not sparkle scatter.
                 // The only theme using ringed radials without repeating.
-                '--nui-texture':       'radial-gradient(circle at 22% 35%, rgba(166,108,209,0.0) 10%, rgba(166,108,209,0.2) 11%, rgba(166,108,209,0.0) 12%), radial-gradient(circle at 22% 35%, rgba(166,108,209,0.0) 17%, rgba(255,255,255,0.15) 18%, rgba(166,108,209,0.0) 19%), radial-gradient(circle at 58% 22%, rgba(230,143,174,0.0) 8%, rgba(230,143,174,0.22) 9%, rgba(230,143,174,0.0) 10%), radial-gradient(circle at 58% 22%, rgba(230,143,174,0.0) 13%, rgba(255,255,255,0.14) 14%, rgba(230,143,174,0.0) 15%), radial-gradient(circle at 76% 65%, rgba(166,108,209,0.0) 14%, rgba(166,108,209,0.18) 15%, rgba(166,108,209,0.0) 16%), radial-gradient(circle at 40% 75%, rgba(230,143,174,0.0) 6%, rgba(230,143,174,0.2) 7%, rgba(230,143,174,0.0) 8%), radial-gradient(circle at 88% 30%, rgba(255,255,255,0.0) 9%, rgba(255,255,255,0.18) 10%, rgba(255,255,255,0.0) 11%), radial-gradient(circle at 12% 80%, rgba(166,108,209,0.0) 11%, rgba(166,108,209,0.15) 12%, rgba(166,108,209,0.0) 13%)',
+                '--nui-texture':       'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'56\' height=\'56\'%3E%3Cpath d=\'M14 6 L15.4 10.6 L20 12 L15.4 13.4 L14 18 L12.6 13.4 L8 12 L12.6 10.6 Z\' fill=\'rgba(166,108,209,0.45)\'/%3E%3Cpath d=\'M40 32 L41 35 L44 36 L41 37 L40 40 L39 37 L36 36 L39 35 Z\' fill=\'rgba(230,143,174,0.4)\'/%3E%3Cpath d=\'M8 40 L8.8 42.6 L11.4 43.4 L8.8 44.2 L8 46.8 L7.2 44.2 L4.6 43.4 L7.2 42.6 Z\' fill=\'rgba(166,108,209,0.28)\'/%3E%3Ccircle cx=\'44\' cy=\'10\' r=\'1.4\' fill=\'rgba(230,143,174,0.45)\'/%3E%3Ccircle cx=\'28\' cy=\'28\' r=\'0.9\' fill=\'rgba(166,108,209,0.35)\'/%3E%3Ccircle cx=\'20\' cy=\'46\' r=\'1.1\' fill=\'rgba(230,143,174,0.32)\'/%3E%3Ccircle cx=\'50\' cy=\'46\' r=\'0.8\' fill=\'rgba(166,108,209,0.28)\'/%3E%3C/svg%3E")',
                 '--nui-texture-opacity': '0.55',
                 '--nui-texture-blend':  'screen',
                 '--nui-texture-rotate': '0deg',
@@ -547,7 +556,7 @@
                 // Cracked, dried mud — three uneven-angle lines (not a neat
                 // two-line crosshatch) so the network reads as irregular
                 // crackle, plus a few pebble dots for grit.
-                '--nui-texture':       'repeating-linear-gradient(12deg, rgba(192,98,42,0.16) 0, rgba(192,98,42,0.16) 1px, transparent 1px, transparent 30px), repeating-linear-gradient(100deg, rgba(90,138,60,0.12) 0, rgba(90,138,60,0.12) 1px, transparent 1px, transparent 38px), repeating-linear-gradient(64deg, rgba(90,138,60,0.08) 0, rgba(90,138,60,0.08) 1px, transparent 1px, transparent 46px), radial-gradient(circle at 22% 70%, rgba(192,98,42,0.3) 1.4px, transparent 2px), radial-gradient(circle at 78% 35%, rgba(90,138,60,0.24) 1.2px, transparent 1.8px)',
+                '--nui-texture':       'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'52\' height=\'48\'%3E%3Cellipse cx=\'12\' cy=\'10\' rx=\'7\' ry=\'5\' transform=\'rotate(-15,12,10)\' fill=\'rgba(192,98,42,0.14)\' stroke=\'rgba(192,98,42,0.32)\' stroke-width=\'1\'/%3E%3Cellipse cx=\'32\' cy=\'8\' rx=\'4\' ry=\'3\' transform=\'rotate(10,32,8)\' fill=\'rgba(90,138,60,0.1)\' stroke=\'rgba(90,138,60,0.28)\' stroke-width=\'0.9\'/%3E%3Cellipse cx=\'44\' cy=\'16\' rx=\'6\' ry=\'4\' transform=\'rotate(-8,44,16)\' fill=\'rgba(192,98,42,0.08)\' stroke=\'rgba(192,98,42,0.22)\' stroke-width=\'0.8\'/%3E%3Cellipse cx=\'18\' cy=\'28\' rx=\'10\' ry=\'6\' transform=\'rotate(5,18,28)\' fill=\'rgba(90,138,60,0.08)\' stroke=\'rgba(90,138,60,0.22)\' stroke-width=\'1\'/%3E%3Cellipse cx=\'40\' cy=\'30\' rx=\'5\' ry=\'7\' transform=\'rotate(-20,40,30)\' fill=\'rgba(192,98,42,0.07)\' stroke=\'rgba(192,98,42,0.2)\' stroke-width=\'0.8\'/%3E%3Cellipse cx=\'8\' cy=\'42\' rx=\'5\' ry=\'3\' transform=\'rotate(12,8,42)\' fill=\'rgba(90,138,60,0.06)\' stroke=\'rgba(90,138,60,0.18)\' stroke-width=\'0.8\'/%3E%3Cellipse cx=\'30\' cy=\'44\' rx=\'3\' ry=\'2\' fill=\'rgba(192,98,42,0.1)\' stroke=\'rgba(192,98,42,0.24)\' stroke-width=\'0.7\'/%3E%3Cellipse cx=\'48\' cy=\'44\' rx=\'4\' ry=\'3\' transform=\'rotate(-10,48,44)\' fill=\'rgba(90,138,60,0.07)\' stroke=\'rgba(90,138,60,0.2)\' stroke-width=\'0.8\'/%3E%3C/svg%3E")',
                 '--nui-texture-opacity': '0.5',
                 '--nui-texture-blend':  'multiply',
                 '--nui-texture-rotate': '3deg',
@@ -663,7 +672,7 @@
                 // uneven weight, plus a few rivet dots. Previously used the
                 // same 45°/135° diagonal hatch as Neopia Central; this is
                 // now the only theme with plank-grain horizontal lines.
-                '--nui-texture':       'repeating-linear-gradient(0deg, rgba(182,184,194,0.14) 0, rgba(182,184,194,0.14) 1px, transparent 1px, transparent 8px, transparent 9px, rgba(182,184,194,0.06) 9px, transparent 10px, transparent 26px), radial-gradient(circle at 15% 40%, rgba(200,20,42,0.4) 1.3px, transparent 1.9px), radial-gradient(circle at 60% 75%, rgba(182,184,194,0.3) 1.2px, transparent 1.8px), radial-gradient(circle at 85% 20%, rgba(200,20,42,0.35) 1.3px, transparent 1.9px)',
+                '--nui-texture':       'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\'%3E%3Cellipse cx=\'30\' cy=\'20\' rx=\'9\' ry=\'10\' fill=\'rgba(200,20,42,0.07)\' stroke=\'rgba(200,20,42,0.18)\' stroke-width=\'1.1\'/%3E%3Cellipse cx=\'25.5\' cy=\'17\' rx=\'3\' ry=\'3.5\' fill=\'rgba(200,20,42,0.1)\'/%3E%3Cellipse cx=\'34.5\' cy=\'17\' rx=\'3\' ry=\'3.5\' fill=\'rgba(200,20,42,0.1)\'/%3E%3Crect x=\'25\' y=\'27\' width=\'3.5\' height=\'3\' rx=\'1\' fill=\'none\' stroke=\'rgba(200,20,42,0.14)\' stroke-width=\'0.8\'/%3E%3Crect x=\'31.5\' y=\'27\' width=\'3.5\' height=\'3\' rx=\'1\' fill=\'none\' stroke=\'rgba(200,20,42,0.14)\' stroke-width=\'0.8\'/%3E%3Cline x1=\'14\' y1=\'42\' x2=\'46\' y2=\'54\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'1.4\' stroke-linecap=\'round\'/%3E%3Cline x1=\'46\' y1=\'42\' x2=\'14\' y2=\'54\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'1.4\' stroke-linecap=\'round\'/%3E%3Ccircle cx=\'14\' cy=\'42\' r=\'3\' fill=\'rgba(182,184,194,0.1)\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'0.8\'/%3E%3Ccircle cx=\'46\' cy=\'42\' r=\'3\' fill=\'rgba(182,184,194,0.1)\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'0.8\'/%3E%3Ccircle cx=\'14\' cy=\'54\' r=\'3\' fill=\'rgba(182,184,194,0.1)\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'0.8\'/%3E%3Ccircle cx=\'46\' cy=\'54\' r=\'3\' fill=\'rgba(182,184,194,0.1)\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'0.8\'/%3E%3C/svg%3E")',
                 '--nui-texture-opacity': '0.55',
                 '--nui-texture-blend':  'screen',
                 '--nui-texture-rotate': '0deg',
