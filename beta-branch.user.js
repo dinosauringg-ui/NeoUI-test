@@ -9539,18 +9539,36 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 contentInner.appendChild(card);
             });
 
-            const collectForm = document.createElement('form');
-            collectForm.method = 'post';
-            collectForm.action = 'process_foodclub.phtml';
-            collectForm.innerHTML = '<input type="hidden" name="type" value="collect_all">';
             const collectBtn = document.createElement('button');
-            collectBtn.type = 'submit';
-            collectBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
-            collectBtn.style.marginTop = 'var(--nui-space-3)';
-            collectBtn.textContent = 'Collect All Winnings';
-            collectForm.appendChild(collectBtn);
-            contentInner.appendChild(collectForm);
-        }
+collectBtn.type = 'button';
+collectBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
+collectBtn.style.marginTop = 'var(--nui-space-3)';
+collectBtn.textContent = 'Collect All Winnings';
+collectBtn.addEventListener('click', async () => {
+    collectBtn.disabled = true;
+    collectBtn.textContent = 'Collecting…';
+    const fd = new FormData();
+    fd.append('type', 'collect_all');
+    try {
+        const res = await fetch('/pirates/process_foodclub.phtml', {
+            method: 'POST',
+            credentials: 'include',
+            body: fd,
+        });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const content = doc.querySelector('td.content');
+        const text = content ? content.textContent.replace(/\s+/g, ' ').trim() : '';
+        const isError = /error|invalid|cannot|failed/i.test(text);
+        collectBtn.textContent = isError ? '⚠ ' + text.slice(0, 80) : '✓ Collected!';
+        collectBtn.className = isError ? 'nui-btn nui-btn-danger nui-btn-block' : 'nui-btn nui-btn-success nui-btn-block';
+        if (!isError) setTimeout(() => renderCollect(), 1500);
+    } catch (e) {
+        collectBtn.textContent = '⚠ Network error';
+        collectBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+    }
+});
+contentInner.appendChild(collectBtn);
 
         // ─────────────────────────────────────────────────────────────────────
         // RENDER: HISTORY TAB
