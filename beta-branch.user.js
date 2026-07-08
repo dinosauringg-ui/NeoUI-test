@@ -569,13 +569,11 @@
                 '--nui-danger-soft':   '#3A1418',
                 '--nui-shadow':        'rgba(0, 0, 0, 0.6)',
                 '--nui-overlay':       'rgba(0, 0, 0, 0.75)',
-                // Weathered hull planking — horizontal grain lines of
-                // uneven weight, plus a few rivet dots. Previously used the
-                // same 45°/135° diagonal hatch as Neopia Central; this is
-                // now the only theme with plank-grain horizontal lines.
-                '--nui-texture':       'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\'%3E%3Cellipse cx=\'30\' cy=\'20\' rx=\'9\' ry=\'10\' fill=\'rgba(200,20,42,0.07)\' stroke=\'rgba(200,20,42,0.18)\' stroke-width=\'1.1\'/%3E%3Cellipse cx=\'25.5\' cy=\'17\' rx=\'3\' ry=\'3.5\' fill=\'rgba(200,20,42,0.1)\'/%3E%3Cellipse cx=\'34.5\' cy=\'17\' rx=\'3\' ry=\'3.5\' fill=\'rgba(200,20,42,0.1)\'/%3E%3Crect x=\'25\' y=\'27\' width=\'3.5\' height=\'3\' rx=\'1\' fill=\'none\' stroke=\'rgba(200,20,42,0.14)\' stroke-width=\'0.8\'/%3E%3Crect x=\'31.5\' y=\'27\' width=\'3.5\' height=\'3\' rx=\'1\' fill=\'none\' stroke=\'rgba(200,20,42,0.14)\' stroke-width=\'0.8\'/%3E%3Cline x1=\'14\' y1=\'42\' x2=\'46\' y2=\'54\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'1.4\' stroke-linecap=\'round\'/%3E%3Cline x1=\'46\' y1=\'42\' x2=\'14\' y2=\'54\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'1.4\' stroke-linecap=\'round\'/%3E%3Ccircle cx=\'14\' cy=\'42\' r=\'3\' fill=\'rgba(182,184,194,0.1)\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'0.8\'/%3E%3Ccircle cx=\'46\' cy=\'42\' r=\'3\' fill=\'rgba(182,184,194,0.1)\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'0.8\'/%3E%3Ccircle cx=\'14\' cy=\'54\' r=\'3\' fill=\'rgba(182,184,194,0.1)\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'0.8\'/%3E%3Ccircle cx=\'46\' cy=\'54\' r=\'3\' fill=\'rgba(182,184,194,0.1)\' stroke=\'rgba(182,184,194,0.14)\' stroke-width=\'0.8\'/%3E%3C/svg%3E")',
-                '--nui-texture-opacity': '0.55',
-                '--nui-texture-blend':  'screen',
+                // Simple diagonal stripe pattern in dark slate gray — clean
+                // and understated instead of the previous ornate motif.
+                '--nui-texture':       'repeating-linear-gradient(45deg, rgba(100,116,139,0.14) 0px, rgba(100,116,139,0.14) 2px, transparent 2px, transparent 14px)',
+                '--nui-texture-opacity': '0.5',
+                '--nui-texture-blend':  'overlay',
                 '--nui-texture-rotate': '0deg',
             },
         },
@@ -695,7 +693,6 @@
             background-size: var(--nui-texture-size, cover);
             opacity: var(--nui-texture-opacity, 0.42);
             mix-blend-mode: var(--nui-texture-blend, multiply);
-            transform: rotate(var(--nui-texture-rotate, -1deg));
         }
         /* Texture is now scoped to only the outer app chrome — the top bar,
            header, and the drawer's own shell — plus the theme-swatch preview
@@ -3403,96 +3400,49 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         }
 
                         function injectTopbar() {
-            // Check for both classic and modern notification badges
-            const _notifIcon = document.querySelector('.eventIcon.sf');
-            const _notifImg = _notifIcon && _notifIcon.querySelector('img[src]');
-            const hasClassicNotif = !!(_notifImg && _notifImg.getAttribute('src') && !_notifImg.getAttribute('src').includes('blank'));
-
-            const modernBadge = document.querySelector('.nav-bell .nav-bell-icon__badge, .nav-bell .bell-badge, [class*="nav-bell"] [class*="badge"], [class*="nav-bell"] [class*="alert"]');
-            const hasModernNotif = !!modernBadge;
-
-            const hasNotif = hasClassicNotif || hasModernNotif;
-
-            const headerWrapper = document.createElement('div');
-            headerWrapper.className = 'nui-header-wrapper nui-reset';
-
-            const dotHtml = hasNotif ? '<div style="position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: var(--nui-danger); border: 2px solid var(--nui-bg); border-radius: 50%;"></div>' : '';
-
-            const bellHtml =
-                '<button type="button" class="nui-reset" id="neomail-notif-btn" style="width: 38px; height: 38px; position: relative; display: flex; align-items: center; justify-content: center; background: var(--nui-surface-2); border: 1px solid var(--nui-border); border-radius: 50%; color: var(--nui-text); cursor: pointer; flex-shrink: 0; transition: transform var(--nui-dur-fast) var(--nui-ease-snap);">' +
-                    '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>' +
-                    dotHtml +
-                '</button>';
-
-            headerWrapper.innerHTML = `
-                <div class="nui-topbar" style="position: relative;">
-                    <div style="display:flex; align-items:center; gap:10px; z-index:2;" id="neomail-neogo-slot"></div>
-
-                    <div class="nui-topbar-title" style="position: absolute; left: 50%; transform: translateX(-50%); z-index: 1;">
-                        <a href="/home/index.phtml" style="
-                            display: block;
-                            width: 140px; height: 38px;
-                            background-color: var(--nui-accent);
-                            -webkit-mask: url('https://images.neopets.com/brandhub/5ccf2080/images/Header_25Logo_new.svg') no-repeat center / contain;
-                            mask: url('https://images.neopets.com/brandhub/5ccf2080/images/Header_25Logo_new.svg') no-repeat center / contain;
-                            filter: drop-shadow(0 2px 4px var(--nui-shadow));
-                        "></a>
-                    </div>
-
-                    <div class="nui-topbar-stats" id="neomail-stats" style="z-index:2;">NP: <b>0</b> &nbsp; NC: <b>0</b></div>
-                </div>
-                <div class="nui-hnav">
-                    <a class="nui-pill is-active" data-tab="inbox">Inbox</a>
-                    <a class="nui-pill" data-tab="sent">Sent</a>
-                    <a class="nui-pill" data-tab="archive">Archive</a>
-
-                    <div style="flex: 1;"></div>
-
-                    <a class="nui-pill" style="cursor: pointer;" id="neomail-select-btn">Select</a>
-                    <a class="nui-pill" style="background: var(--nui-accent); color: var(--nui-accent-ink); border: none; cursor: pointer;" id="neomail-compose-btn">
-                        <span style="font-size: 16px; font-weight: 800; line-height: 1; vertical-align: middle; margin-right: 4px;">+</span>Compose
-                    </a>
-                </div>
-            `;
-
-            document.body.insertBefore(headerWrapper, document.body.firstChild);
-
-            // Inject the NeoGo Drawer button
-            const leftSlot = headerWrapper.querySelector('#neomail-neogo-slot');
-            leftSlot.appendChild(NeoUI.neoGoButton());
-
-            // Always inject the Bell
-            leftSlot.insertAdjacentHTML('beforeend', bellHtml);
-            const bellBtn = headerWrapper.querySelector('#neomail-notif-btn');
-
-            bellBtn.addEventListener('mousedown', () => bellBtn.style.transform = 'scale(0.92)');
-            bellBtn.addEventListener('mouseup', () => bellBtn.style.transform = 'scale(1)');
-            bellBtn.addEventListener('click', () => {
-                if (NeoUI.openNotificationDrawer) {
-                    NeoUI.openNotificationDrawer();
-                } else {
-                    // Fallback just in case the method wasn't exposed to the global object
-                    window.location.href = '/allevents.phtml';
-                }
+            // Use the shared app-wide topbar builder instead of rolling a
+            // second one — this was duplicating .nui-header-wrapper/.nui-topbar
+            // (and its background texture layer) on top of the real one.
+            const profile = NeoUI.scrapeLegacyProfile();
+            const topbarWrapper = NeoUI.buildTopbar({
+                stats: { np: profile.np, nc: profile.nc },
+                hasNotification: profile.hasNotification
             });
 
-            const stats = getStats();
-            headerWrapper.querySelector('#neomail-stats').innerHTML = `NP: <b>${stats.np}</b> &nbsp; NC: <b>${stats.nc}</b>`;
+            // NeoMail's Inbox/Sent/Archive tab strip is unique to this module,
+            // so it still gets built here — just appended after the shared
+            // topbar rather than baked into a second copy of it.
+            const hnav = document.createElement('div');
+            hnav.className = 'nui-hnav nui-reset';
+            hnav.style.cssText = 'position: fixed; top: var(--nui-topbar-h); left: 0; right: 0; z-index: 9998; background: var(--nui-surface); border-bottom: 1px solid var(--nui-border); box-shadow: 0 2px 6px var(--nui-shadow);';
+            hnav.innerHTML = `
+                <a class="nui-pill is-active" data-tab="inbox">Inbox</a>
+                <a class="nui-pill" data-tab="sent">Sent</a>
+                <a class="nui-pill" data-tab="archive">Archive</a>
 
-            headerWrapper.querySelectorAll('.nui-hnav .nui-pill').forEach(function (pill) {
+                <div style="flex: 1;"></div>
+
+                <a class="nui-pill" style="cursor: pointer;" id="neomail-select-btn">Select</a>
+                <a class="nui-pill" style="background: var(--nui-accent); color: var(--nui-accent-ink); border: none; cursor: pointer;" id="neomail-compose-btn">
+                    <span style="font-size: 16px; font-weight: 800; line-height: 1; vertical-align: middle; margin-right: 4px;">+</span>Compose
+                </a>
+            `;
+            topbarWrapper.insertAdjacentElement('afterend', hnav);
+
+            hnav.querySelectorAll('.nui-pill').forEach(function (pill) {
                 pill.addEventListener('click', function () {
                     if (pill.id === 'neomail-compose-btn') return;
-                    headerWrapper.querySelectorAll('.nui-hnav .nui-pill').forEach(function (p) { p.classList.remove('is-active'); });
+                    hnav.querySelectorAll('.nui-pill').forEach(function (p) { p.classList.remove('is-active'); });
                     pill.classList.add('is-active'); renderSidebarList(pill.getAttribute('data-tab'));
                 });
             });
 
-            const composeBtn = headerWrapper.querySelector('#neomail-compose-btn');
+            const composeBtn = hnav.querySelector('#neomail-compose-btn');
             if (composeBtn) {
                 composeBtn.addEventListener('click', renderComposeView);
             }
 
-            const selectBtn = headerWrapper.querySelector('#neomail-select-btn');
+            const selectBtn = hnav.querySelector('#neomail-select-btn');
             if (selectBtn) {
                 selectBtn.addEventListener('click', () => {
                     bulkSelectMode = !bulkSelectMode;
@@ -3501,7 +3451,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     selectBtn.style.background = bulkSelectMode ? 'var(--nui-accent-soft)' : '';
                     selectBtn.style.color = bulkSelectMode ? 'var(--nui-accent)' : '';
                     // Re-render the list in the new mode
-                    const activeTab = headerWrapper.querySelector('.nui-hnav .nui-pill.is-active[data-tab]');
+                    const activeTab = hnav.querySelector('.nui-pill.is-active[data-tab]');
                     renderSidebarList(activeTab ? activeTab.getAttribute('data-tab') : 'inbox');
                 });
             }
@@ -7240,16 +7190,17 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         const allBoards = categories.flatMap(c => c.boards);
         const favBoardTile = (board) => `
             <a href="${board.url}" class="nui-item nui-reset nui-board-link nui-fav-board-tile" data-id="${board.id}"
-                style="text-decoration: none; margin: 0; padding: 14px 10px 10px; flex-direction: column; align-items: center; text-align: center; gap: 8px; border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg); position: relative; background: var(--nui-surface);">
+                style="text-decoration: none; margin: 0; padding: 16px 12px 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg); position: relative; background: var(--nui-surface);">
                 <button type="button" class="nui-board-fav-toggle" data-id="${board.id}" data-title="${(board.title || '').replace(/"/g, '&quot;')}" data-url="${board.url}" data-icon="${board.iconUrl}"
-                    style="position: absolute; top: 6px; right: 6px; background: none; border: none; padding: 2px; cursor: pointer; line-height: 0; color: var(--nui-accent);">
+                    style="position: absolute; top: 8px; right: 8px; background: none; border: none; padding: 2px; cursor: pointer; line-height: 0; color: var(--nui-accent);">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
                 </button>
-                <div style="width: 44px; height: 44px; border-radius: var(--nui-radius-md); overflow: hidden; flex-shrink: 0; background: var(--nui-surface-2); border: 1px solid var(--nui-border); display: flex; align-items: center; justify-content: center;">
-                    <img src="${board.iconUrl}" style="max-width: 34px; max-height: 34px; object-fit: contain;">
+                <div style="width: 52px; height: 52px; border-radius: var(--nui-radius-md); overflow: hidden; flex-shrink: 0; background: var(--nui-surface-2); border: 1px solid var(--nui-border); display: flex; align-items: center; justify-content: center;">
+                    <img src="${board.iconUrl}" style="max-width: 40px; max-height: 40px; object-fit: contain;">
                 </div>
-                <div style="font-weight: 800; font-size: 13px; color: var(--nui-accent); line-height: 1.25; width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${board.title}</div>
+                <div style="font-weight: 800; font-size: 13px; color: var(--nui-accent); line-height: 1.3; width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${board.title}</div>
             </a>`;
+
 
         if (favBoards.length > 0) {
             // Resolve each saved favorite against what's on the page right now
@@ -9569,6 +9520,7 @@ collectBtn.addEventListener('click', async () => {
     }
 });
 contentInner.appendChild(collectBtn);
+        }
 
         // ─────────────────────────────────────────────────────────────────────
         // RENDER: HISTORY TAB
