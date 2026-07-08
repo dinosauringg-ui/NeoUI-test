@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.14
+// @version      1.1.15
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -17,6 +17,18 @@
  * A single install for a mobile-forward Neopets experience: a shared design
  * system, a polished theme picker, a custom theme builder, a global search
  * overlay, and a daily-timer hub for timed dailies.
+ *
+ * v1.1.15
+ *   - Neoboards My Boards: tiles now use minmax(130px, 1fr) grid columns (was
+ *     88px) giving board names room to breathe; title clamped to 2 lines with
+ *     -webkit-line-clamp so long names truncate cleanly.
+ *   - VibeRater pop (Neoboards + Neomail): switched from position:absolute
+ *     anchored to vibeBtn to position:fixed anchored via getBoundingClientRect.
+ *     Pop now auto-flips above/below based on available viewport space, so it
+ *     is never clipped by short messages or messages near the top of the page.
+ *   - Neopian Times: removed overflow:hidden from the appWrapper. The wrapper's
+ *     contentArea already handles scroll via overflow-y:auto; the hidden on the
+ *     outer container was trapping touch scroll on mobile.
  *
  * v1.1.14
  *   - Texture overhaul (6 themes): replaced all CSS-gradient textures with SVG
@@ -4167,8 +4179,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                     const pop = document.createElement('div');
                     pop.className = 'nui-vibe-pop';
-                    // Open downwards instead of upwards since Neomail bubbles can sit near the top
-                    pop.style.cssText = 'position:absolute; top:calc(100% + 6px); right:0; z-index:9999; background:var(--nui-surface); border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:8px; display:flex; flex-direction:column; gap:4px; box-shadow:0 4px 16px var(--nui-shadow); min-width:120px;';
+                    pop.style.cssText = 'position:fixed; z-index:999999; background:var(--nui-surface); border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:8px; display:flex; flex-direction:column; gap:4px; box-shadow:0 4px 16px var(--nui-shadow); min-width:120px;';
 
                     window.VibeRater.PRESETS.forEach(preset => {
                         const opt = document.createElement('button');
@@ -4190,7 +4201,19 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     clearOpt.addEventListener('click', () => { window.VibeRater.clearVibe(p); pop.remove(); });
                     pop.appendChild(clearOpt);
 
-                    vibeBtn.appendChild(pop);
+                    document.body.appendChild(pop);
+                    const btnRect = vibeBtn.getBoundingClientRect();
+                    const popH = pop.offsetHeight || 200;
+                    const spaceAbove = btnRect.top;
+                    const spaceBelow = window.innerHeight - btnRect.bottom;
+                    if (spaceAbove >= popH + 6 || spaceAbove > spaceBelow) {
+                        pop.style.bottom = (window.innerHeight - btnRect.top + 6) + 'px';
+                        pop.style.top = 'auto';
+                    } else {
+                        pop.style.top = (btnRect.bottom + 6) + 'px';
+                        pop.style.bottom = 'auto';
+                    }
+                    pop.style.left = Math.min(btnRect.left, window.innerWidth - 136) + 'px';
                     const close = (ev) => { if (!pop.contains(ev.target) && ev.target !== vibeBtn) { pop.remove(); document.removeEventListener('click', close); } };
                     setTimeout(() => document.addEventListener('click', close), 0);
                 });
@@ -6940,7 +6963,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                 const pop = document.createElement('div');
                 pop.className = 'nui-vibe-pop';
-                pop.style.cssText = 'position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 999999; background: var(--nui-surface); border: 1px solid var(--nui-border); border-radius: var(--nui-radius-md); padding: 8px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 4px 16px var(--nui-shadow); min-width: 120px;';
+                pop.style.cssText = 'position: fixed; z-index: 999999; background: var(--nui-surface); border: 1px solid var(--nui-border); border-radius: var(--nui-radius-md); padding: 8px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 4px 16px var(--nui-shadow); min-width: 120px;';
 
                 window.VibeRater.PRESETS.forEach(preset => {
                     const opt = document.createElement('button');
@@ -6962,7 +6985,19 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 clearOpt.addEventListener('click', () => { window.VibeRater.clearVibe(p); pop.remove(); });
                 pop.appendChild(clearOpt);
 
-                vibeBtn.appendChild(pop);
+                document.body.appendChild(pop);
+                const btnRect = vibeBtn.getBoundingClientRect();
+                const popH = pop.offsetHeight || 200;
+                const spaceAbove = btnRect.top;
+                const spaceBelow = window.innerHeight - btnRect.bottom;
+                if (spaceAbove >= popH + 6 || spaceAbove > spaceBelow) {
+                    pop.style.bottom = (window.innerHeight - btnRect.top + 6) + 'px';
+                    pop.style.top = 'auto';
+                } else {
+                    pop.style.top = (btnRect.bottom + 6) + 'px';
+                    pop.style.bottom = 'auto';
+                }
+                pop.style.left = Math.min(btnRect.left, window.innerWidth - 136) + 'px';
                 const close = (ev) => { if (!pop.contains(ev.target) && ev.target !== vibeBtn) { pop.remove(); document.removeEventListener('click', close); } };
                 setTimeout(() => document.addEventListener('click', close), 0);
             });
@@ -7324,7 +7359,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 <div style="width: 44px; height: 44px; border-radius: var(--nui-radius-md); overflow: hidden; flex-shrink: 0; background: var(--nui-surface-2); border: 1px solid var(--nui-border); display: flex; align-items: center; justify-content: center;">
                     <img src="${board.iconUrl}" style="max-width: 34px; max-height: 34px; object-fit: contain;">
                 </div>
-                <div style="font-weight: 800; font-size: 13px; color: var(--nui-accent); line-height: 1.25;">${board.title}</div>
+                <div style="font-weight: 800; font-size: 13px; color: var(--nui-accent); line-height: 1.25; width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${board.title}</div>
             </a>`;
 
         if (favBoards.length > 0) {
@@ -7338,7 +7373,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             favCard.style.cssText = 'display: flex; flex-direction: column; gap: 10px; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-accent); background: var(--nui-accent-soft); padding: var(--nui-space-3);';
             favCard.innerHTML = `
                 <div style="font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--nui-accent); display: flex; align-items: center; gap: 6px;">⭐ Your Boards</div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 10px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;">
                     ${resolved.map(favBoardTile).join('')}
                 </div>
             `;
@@ -9754,7 +9789,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         // 5. Build App View layout
         const appWrapper = document.createElement('div');
         appWrapper.id = 'nui-nt-app';
-        appWrapper.style.cssText = 'display: flex; overflow: hidden; flex-direction: column; height: 100vh; padding-top: var(--nui-topbar-h); box-sizing: border-box;';
+        appWrapper.style.cssText = 'display: flex; flex-direction: column; height: 100vh; padding-top: var(--nui-topbar-h); box-sizing: border-box;';
 
         const topRow = document.createElement('div');
         topRow.style.cssText = 'display: flex; align-items: center; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border); flex-shrink: 0;';
