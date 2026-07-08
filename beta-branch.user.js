@@ -100,118 +100,7 @@
  *     flat list. Each category is now a collapsible <details> section with a
  *     board count, and boards within a category lay out in a responsive tile
  *     grid instead of one long vertical stack.
- * v1.1.7
- *   - Neoboards: added a star toggle directly on each topic row in a board's
- *     thread list, so favoriting a thread no longer requires opening it first.
- *   - Neoboards index: Starred Threads and Recently Read rows now each have a
- *     per-item × remove button (not just a bulk Clear), since hover-reveal
- *     patterns don't work on mobile and there was previously no way to drop
- *     a single starred/recent entry without clearing the whole list. Added a
- *     Clear-all for Starred to match Recently Read.
- * v1.1.6
- *   - Neoboards: fixed "New Topic" rendering broken/blank. isTopic's route check
- *     (path.includes('topic.phtml')) was also matching create_topic.phtml, which
- *     misrouted it into the thread viewer — that scrapes #boardTopic, but
- *     create_topic.phtml uses #boardCreateTopic, so it always rendered "Thread
- *     not found or deleted." Gave create_topic.phtml its own isCreateTopic route
- *     with a proper NeoUI form (board picker, title, message, pens, smilies)
- *     submitted via fetch(), same pattern as Quick Reply; on success the new
- *     thread opens in-place as a tab instead of a full page reload.
- *   - Neopian Times: fixed content clipping instead of scrolling. The v1.1.3 fix
- *     added overflow:hidden to the app wrapper but never gave contentArea (a
- *     flex:1 child with overflow-y:auto) min-height:0, so it grew to fit all
- *     the article content instead of shrinking — the wrapper's overflow:hidden
- *     then just clipped the excess instead of it being reachable by scrolling.
- *     Applied the same min-height:0 fix to Neoboards and Stock Market, which
- *     had the identical latent bug (masked there because their wrappers don't
- *     set overflow:hidden).
- *   - Texture: the shared texture ::before was painted onto nearly every UI
- *     atom — buttons, pills, badges, icon buttons, hnav, drawer section
- *     headers, and the Dailies rows (.nui-textured) — not just cards. Turning
- *     its opacity down on dense elements (v1.1.3) was a half-measure; texture
- *     is now scoped to actual surface panels only (topbar, header, drawer,
- *     the theme-swatch preview, plus dimmed cards/list rows/chat bubbles).
- *     Buttons/pills/badges/icon-buttons/hnav/drawer-section chrome and the
- *     Dailies rows no longer render texture at all. Fixes Neomail bubbles and
- *     the neoboard app both looking "muddy" from texture applied too broadly.
- * v1.1.5
- *   - Neoboards: reply submit now uses fetch() instead of realSubmitBtn.click(),
- *     so posting a reply no longer triggers a full page reload or SPA reset.
- *     The fresh thread DOM from the POST response is rendered in-place.
- *     Thread tab title now scraped from #boardTopic .topicTitle h1 at init time
- *     instead of hardcoded "Current Thread"; also promoted on-the-fly if the
- *     thread was opened from a direct URL before the title was known.
- *   - Coincidence: profile data (NP, NC, avatar) is now cached on first render.
- *     Subsequent reloadSPA() calls re-use the cache instead of re-scraping the
- *     live DOM (which was already nuked), preventing a blank screen on refresh.
- *   - Neomail: per-message delete button (x) added to every bubble in the thread
- *     viewer — removes the message from local archive and fades it out of the DOM.
- *   - Neomail: "Select" toggle in the header switches the inbox list to
- *     bulk-select mode. Each thread item shows a checkbox; selected threads can
- *     be deleted in one shot via the sticky "Delete" bar (server + local archive).
- *     "All" button selects every visible thread; "Done" exits select mode.
- * v1.1.4
- *   - Texture overhaul: rewrote 6 of 12 themes with distinct motifs.
- *     Maractite → sonar-ping rings from a single deep anchor + bioluminescent
- *     motes (was: two vague overlapping ripple fields).
- *     Haunted Woods → true spiderweb geometry using repeating-radial ring
- *     stops from corner + ghost-wisp ellipses (was: two diagonal line stripes).
- *     Maraqua → caustic-light shafts (tall ellipses) + shell dots — completely
- *     different water motif from Maractite (was: near-identical concentric rings).
- *     Faerieland → soap-bubble membrane rings in pink/lavender iridescence, screen
- *     blend @ 0.55 (was: generic soft-glow ellipse blobs, multiply @ 0.4).
- *     Grey Neopia → offset halftone dot grid in stone/pink (was: plain crosshatch).
- *     Meridell → dense heraldic chevron field + corner bosses (was: bare two-line lattice).
- *   - Token validator fixed: previously nuked all non-color tokens (texture,
- *     opacity, blend, rotate) by testing them against a color regex. Now skips
- *     any token whose name doesn't match --nui-(color) pattern.
- * v1.1.3
- *   - Neopian Times: fixed scroll — appWrapper had a typo `oveflow-y` instead
- *     of `overflow`, so the flex container never clipped and contentArea's
- *     overflow-y: auto had nothing to work against. Changed to overflow: hidden
- *     on the wrapper so contentArea is the sole scroll surface.
- *   - Texture: nui-surface and nui-item cards now render texture at 28% of the
- *     theme opacity instead of full opacity. Full texture on small dense cards
- *     reads as visual noise; chrome elements (topbar, buttons, pills, drawer)
- *     still receive the full recipe.
- * v1.1.2
- *   - Dailies Hub rewritten for density: each timer is now a single compact
- *     row (icon, label, one short note, countdown, open/done) instead of a
- *     tall bordered card, and every note was trimmed to a short, concrete
- *     phrase (no more padded filler like "which is pleasantly efficient").
- *     Sections are collapsible <details> (Daily/Timed/Seasonal/Special),
- *     each showing its ready count, and items now sort soonest-first within
- *     their section so what to check next is always on top.
- *   - Texture system overhaul: each theme's --nui-texture recipe was redrawn
- *     with a distinct pattern grammar (dot-scatter, spiderweb, embers,
- *     starfield, ripples, clouds, newsprint stipple, crackle, circuit nodes,
- *     chainmail, wood-grain) instead of most themes sharing the same
- *     "two diagonal crosshatch lines + one radial glow" formula at
- *     different angles. Added per-theme --nui-texture-opacity/-blend/-rotate
- *     tokens; dark themes now use `screen` blending instead of `multiply` so
- *     their light-colored texture actually shows against dark surfaces
- *     (multiply was muting it to near-invisibility). Added a reusable
- *     `.nui-textured` utility class and applied it to the new Dailies rows
- *     so real content — not just chrome like the topbar and buttons — picks
- *     up the per-theme texture.
- * v1.1.1
- *   - Fixed Neomail inbox not loading: always fetch fresh from the server
- *     instead of scraping the hidden Neopets DOM form (which nui-spa-active
- *     hides, causing scrapeInboxData to return 0 rows).
- *   - Fixed theme builder modal invisible on Firefox for Android: switched
- *     from single rAF to double-rAF so the element is in a visible layer
- *     before the opacity/scale animation fires.
- *   - Removed redundant Dailies button from topbar (hub is in the drawer).
- *   - Removed Theme Builder shortcut from drawer nav quick-actions
- *     (it lives in Settings → Custom Theme; now reached from one place).
- *   - Dailies hub: removed "Jellyneo-inspired" badge; replaced all generic
- *     placeholder descriptions with accurate, informative notes.
- *   - Texture system: expanded ::before texture overlay to nui-btn, nui-pill,
- *     nui-item, nui-hnav, nui-drawer-section, and nui-drawer-section-title.
- *     Added position/isolation/overflow to all new targets so the pseudo is
- *     clipped correctly. Added a low-opacity full-page texture wash on SPA
- *     pages via body::after.
- * ============================================================================
+  * ============================================================================
  */
 
 // MODULE 1: NEOUI CORE FRAMEWORK
@@ -11389,4 +11278,194 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         document.addEventListener('DOMContentLoaded', boot);
     }
 
+})();
+// ==============================================================================
+// MODULE 13: FAERIE QUEST WATCHER (SITEWIDE)
+// ==============================================================================
+// Neopets shows a "new_quest_pushdown" banner at the top of ANY page right
+// after a faerie quest gets accepted (random event or a Fortune-Cookie
+// guaranteed accept) — it's not tied to /quests.phtml. This watches for it
+// wherever it appears and remembers what's being asked for, so the info is
+// available even if you're nowhere near the Faerie Quests page when it fires.
+(function () {
+    'use strict';
+
+    const STATE_KEY = 'neoui_faerie_quest_state';
+
+    function saveState(state) {
+        try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (e) {}
+    }
+
+    function showToast(msg) {
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:999999;padding:10px 18px;border-radius:10px;font-size:14px;font-weight:700;max-width:90vw;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.3);background:#7a4fd6;color:#fff;transition:opacity 0.3s;';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(function () { toast.style.opacity = '0'; setTimeout(function () { toast.remove(); }, 300); }, 5000);
+    }
+
+    function parsePushdown(root) {
+        if (!root) return null;
+        const p = (root.classList && root.classList.contains('new_quest_pushdown')) ? root : (root.querySelector ? root.querySelector('.new_quest_pushdown') : null);
+        if (!p) return null;
+        // Strip the trading post / auction / SDB quick-search links before
+        // reading the text, so they don't get mixed into the dialogue.
+        const clone = p.cloneNode(true);
+        const helper = clone.querySelector('.search-helper');
+        if (helper) helper.remove();
+        const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+        const itemEl = p.querySelector('b');
+        const item = itemEl ? itemEl.textContent.trim() : '';
+        if (!item) return null;
+        // Dialogue reads like: "Hello." Iridesia says with a big, radiant
+        // smile. "If you have a moment...` — pull the name out of `X says`.
+        const nameMatch = text.match(/"\s*([A-Z][a-zA-Z' -]{1,30}?)\s+says\b/);
+        const faerie = nameMatch ? nameMatch[1].trim() : 'A faerie';
+        return { faerie: faerie, item: item };
+    }
+
+    function handleDetected(info) {
+        try {
+            const prevRaw = localStorage.getItem(STATE_KEY);
+            const prev = prevRaw ? JSON.parse(prevRaw) : null;
+            // The banner can re-render more than once for the same event;
+            // don't re-toast for an identical detection moments apart.
+            if (prev && prev.item === info.item && prev.faerie === info.faerie && (Date.now() - (prev.capturedAt || 0)) < 10000) return;
+        } catch (e) {}
+        saveState({ faerie: info.faerie, item: info.item, capturedAt: Date.now() });
+        showToast('🧚 ' + info.faerie + ' wants: ' + info.item);
+    }
+
+    function start() {
+        const observer = new MutationObserver(function (mutations) {
+            for (let i = 0; i < mutations.length; i++) {
+                const added = mutations[i].addedNodes;
+                for (let j = 0; j < added.length; j++) {
+                    const node = added[j];
+                    if (node.nodeType !== 1) continue;
+                    const info = parsePushdown(node);
+                    if (info) { handleDetected(info); return; }
+                }
+            }
+        });
+        try { observer.observe(document.body, { childList: true, subtree: true }); } catch (e) {}
+        // Covers the case where it's already present the moment this runs.
+        try {
+            const info = parsePushdown(document.body);
+            if (info) handleDetected(info);
+        } catch (e) {}
+    }
+
+    if (document.body) start();
+    else document.addEventListener('DOMContentLoaded', start);
+})();
+// ==============================================================================
+// MODULE 14: FAERIE QUESTS (HEADLESS ENHANCEMENT ON /quests.phtml)
+// ==============================================================================
+// Leaves the native quest panel and its Abandon/Complete buttons completely
+// untouched (they already work fine and submit through the site's own
+// #fq2_form) — this only adds a compact card above it with the item
+// image(s), a link straight to a Safety Deposit Box search for the item, a
+// Trading Post / Auction lookup, and a "copy name" button for pasting into a
+// Neoboard post to ask around. Faerie quest items are NOT Shop Wizard or
+// Super Shop Wizard searchable — Neopets blocks that lookup for quest items
+// specifically — so no SW/SSW link is offered here; don't add one back in.
+(function () {
+    'use strict';
+
+    if (!/^\/quests\.phtml/.test(location.pathname)) return;
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI || !NeoUI.__ready) return;
+
+    const STATE_KEY = 'neoui_faerie_quest_state';
+
+    function saveState(state) {
+        try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (e) {}
+    }
+    function clearState() {
+        try { localStorage.removeItem(STATE_KEY); } catch (e) {}
+    }
+
+    function buildSearchLinks(itemName) {
+        const enc = encodeURIComponent(itemName);
+        return [
+            { label: 'My SDB', href: 'https://www.neopets.com/safetydeposit.phtml?obj_name=' + enc + '&category=0' },
+            { label: 'Trading Post', href: 'https://www.neopets.com/island/tradingpost.phtml?type=browse&criteria=item_exact&search_string=' + enc },
+            { label: 'Auction', href: 'https://www.neopets.com/genie.phtml?type=process_genie&criteria=exact&auctiongenie=' + enc }
+        ];
+    }
+
+    function copyItemName(itemName, btn) {
+        function done(ok) {
+            const original = '📋 Copy name';
+            btn.textContent = ok ? '✓ Copied' : '✗ Copy failed';
+            setTimeout(function () { btn.textContent = original; }, 1500);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(itemName).then(function () { done(true); }, function () { done(false); });
+            return;
+        }
+        // Fallback for contexts without the async Clipboard API.
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = itemName;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            ta.remove();
+            done(ok);
+        } catch (e) { done(false); }
+    }
+
+    function run() {
+        const fq2 = document.getElementById('fq2');
+        if (!fq2 || document.getElementById('nui-faerie-quick')) return;
+
+        const descTop = fq2.querySelector('.description_top');
+        const itemCells = fq2.querySelectorAll('.images .item');
+        const completeBtn = fq2.querySelector('#complete_faerie_quest');
+        const isActive = !!(descTop && itemCells.length);
+
+        if (!isActive) { clearState(); return; }
+
+        const descText = (descTop.textContent || '').replace(/\s+/g, ' ').trim();
+        const faerieMatch = descText.match(/quest for the ([^.]+?)\.?\s*(Return|You've|$)/);
+        const faerie = faerieMatch ? faerieMatch[1].trim() : 'a faerie';
+        const items = Array.prototype.map.call(itemCells, function (cell) {
+            const b = cell.querySelector('b');
+            const img = cell.querySelector('img');
+            return { name: b ? b.textContent.trim() : 'Unknown item', icon: img ? img.src : '' };
+        });
+
+        saveState({ faerie: faerie, item: items.map(function (i) { return i.name; }).join(', '), readyToComplete: !!completeBtn, capturedAt: Date.now() });
+
+        const card = document.createElement('div');
+        card.id = 'nui-faerie-quick';
+        card.style.cssText = 'max-width:600px; margin:12px auto; padding:14px 16px; border-radius:var(--nui-radius-lg); border:1px solid var(--nui-border); background:var(--nui-surface); box-shadow:0 2px 10px var(--nui-shadow);';
+        let html = '<div style="font-weight:800; font-size:14px; margin-bottom:8px; color:var(--nui-text);">🧚 Quest for ' + faerie +
+            (completeBtn ? ' <span style="color:var(--nui-success); font-weight:700; font-size:12px;">· ready to turn in</span>' : '') + '</div>';
+        items.forEach(function (item) {
+            const links = buildSearchLinks(item.name);
+            html += '<div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--nui-border); flex-wrap:wrap;">' +
+                (item.icon ? '<img src="' + item.icon + '" style="width:32px; height:32px; border-radius:6px; flex-shrink:0;">' : '') +
+                '<div style="flex:1; min-width:80px; font-weight:700; font-size:13px; color:var(--nui-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + item.name + '</div>' +
+                links.map(function (l) { return '<a href="' + l.href + '" target="_blank" rel="noopener" style="font-size:11px; font-weight:700; padding:4px 8px; border-radius:var(--nui-radius-pill); border:1px solid var(--nui-border); text-decoration:none; color:var(--nui-accent); white-space:nowrap;">' + l.label + '</a>'; }).join('') +
+                '<button type="button" class="nui-faerie-copy-btn" data-copy-item="' + item.name.replace(/"/g, '&quot;') + '" style="font-size:11px; font-weight:700; padding:4px 8px; border-radius:var(--nui-radius-pill); border:1px solid var(--nui-border); background:var(--nui-accent-soft); color:var(--nui-accent); cursor:pointer; white-space:nowrap;">📋 Copy name</button>' +
+                '</div>';
+        });
+        card.innerHTML = html;
+        fq2.parentNode.insertBefore(card, fq2);
+        card.querySelectorAll('[data-copy-item]').forEach(function (btn) {
+            btn.addEventListener('click', function () { copyItemName(this.getAttribute('data-copy-item'), this); });
+        });
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        try { run(); } catch (e) {}
+    } else {
+        document.addEventListener('DOMContentLoaded', function () { try { run(); } catch (e) {} });
+    }
 })();
