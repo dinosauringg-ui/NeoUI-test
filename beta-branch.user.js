@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.2
+// @version      1.1.13
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -18,6 +18,141 @@
  * system, a polished theme picker, a custom theme builder, a global search
  * overlay, and a daily-timer hub for timed dailies.
  *
+ * v1.1.13
+ *   - New module: Buried Treasure. Rebuilds all four legacy server states
+ *     (the intro/story screen, the pick-a-spot map, the post-dig cooldown,
+ *     and whatever the win/lose result screen turns out to contain) into
+ *     one mobile-forward card, matching the rest of the suite. The map
+ *     click now scales to the rendered image size instead of the fixed
+ *     540x550 the legacy ISMAP assumed, so it's tappable at any width. The
+ *     server's reported cooldown minutes are also synced into the shared
+ *     Daily Timer Hub entry, so that countdown stays accurate without
+ *     needing a manual "done" tap there too.
+ * v1.1.12
+ *   - Texture: cut scope further — down from "cards/items/bubbles at 28%
+ *     opacity, everything else off" to "off everywhere except the outer app
+ *     chrome." Only the top bar, header, the drawer's own shell background,
+ *     and the theme-swatch preview still render the pattern. Cards, list
+ *     rows, chat bubbles, and the drawer's profile box/stat rows — the
+ *     elements that repeat many times on any given screen — are now flat.
+ *     Dimming their opacity previously wasn't enough; with that many
+ *     instances on screen at once it still read as constant texture.
+ * v1.1.11
+ *   - Neoboards: fixed the Board tab failing to load after replying or
+ *     creating a topic. currentBoardUrl (what the Board tab fetches) is only
+ *     ever set by loadBoardList() — if the SPA's *first* page load was a
+ *     thread or the create-topic page (i.e. you arrived via a direct link
+ *     rather than browsing in from the board list, the normal way to land on
+ *     a topic you're about to reply to or the board you're about to post
+ *     in), currentBoardUrl was left pointing at that thread/create-topic URL
+ *     for the rest of the session. Clicking Board after posting then fetched
+ *     that same non-board page and tried to render it as one. Now resolved
+ *     from the page's breadcrumb (or its ?board= param) at load time.
+ * v1.1.10
+ *   - Neoboards: fixed Reply and Create Topic both posting to the wrong URL,
+ *     independent of whether the other feature had ever been opened (the
+ *     v1.1.9 fix addressed a real but separate bug). The real Neopets form's
+ *     action is a bare relative path ("process_topic.phtml"), which browsers
+ *     resolve against the current page's directory (/neoboards/). Both
+ *     submit handlers instead naively prepended '/' when there was no
+ *     leading slash, sending every post to /process_topic.phtml at the site
+ *     root — which doesn't exist — instead of /neoboards/process_topic.phtml.
+ *     Now resolved with new URL(action, pageUrl) against the thread's/form's
+ *     actual URL.
+ * v1.1.9
+ *   - Neoboards: fixed "Error: form missing" when posting a reply after New
+ *     Topic had been opened. Both features scrape a form literally named
+ *     message_form (Neopets reuses the name for both reply and create-topic
+ *     forms) and mount it as a hidden form on document.body for FormData to
+ *     read on submit — but they shared the same class, and each one's mount
+ *     step started by deleting every element with that class. Opening New
+ *     Topic while a thread's reply form was mounted deleted the reply form
+ *     out from under it. Create Topic now uses its own class
+ *     (nui-hidden-ct-form) instead of Reply's (nui-hidden-native-form), so
+ *     the two no longer clobber each other.
+ * v1.1.8
+ *   - Neoboards index: added favoriting for whole boards (Avatar Chat, Site
+ *     Games, etc), separate from starred threads. A star toggle sits on every
+ *     board card; favorited boards pin to a "⭐ Your Boards" grid at the very
+ *     top of the index.
+ *   - Neoboards index: redesigned so it doesn't just read as Neopets' stock
+ *     flat list. Each category is now a collapsible <details> section with a
+ *     board count, and boards within a category lay out in a responsive tile
+ *     grid instead of one long vertical stack.
+ * v1.1.7
+ *   - Neoboards: added a star toggle directly on each topic row in a board's
+ *     thread list, so favoriting a thread no longer requires opening it first.
+ *   - Neoboards index: Starred Threads and Recently Read rows now each have a
+ *     per-item × remove button (not just a bulk Clear), since hover-reveal
+ *     patterns don't work on mobile and there was previously no way to drop
+ *     a single starred/recent entry without clearing the whole list. Added a
+ *     Clear-all for Starred to match Recently Read.
+ * v1.1.6
+ *   - Neoboards: fixed "New Topic" rendering broken/blank. isTopic's route check
+ *     (path.includes('topic.phtml')) was also matching create_topic.phtml, which
+ *     misrouted it into the thread viewer — that scrapes #boardTopic, but
+ *     create_topic.phtml uses #boardCreateTopic, so it always rendered "Thread
+ *     not found or deleted." Gave create_topic.phtml its own isCreateTopic route
+ *     with a proper NeoUI form (board picker, title, message, pens, smilies)
+ *     submitted via fetch(), same pattern as Quick Reply; on success the new
+ *     thread opens in-place as a tab instead of a full page reload.
+ *   - Neopian Times: fixed content clipping instead of scrolling. The v1.1.3 fix
+ *     added overflow:hidden to the app wrapper but never gave contentArea (a
+ *     flex:1 child with overflow-y:auto) min-height:0, so it grew to fit all
+ *     the article content instead of shrinking — the wrapper's overflow:hidden
+ *     then just clipped the excess instead of it being reachable by scrolling.
+ *     Applied the same min-height:0 fix to Neoboards and Stock Market, which
+ *     had the identical latent bug (masked there because their wrappers don't
+ *     set overflow:hidden).
+ *   - Texture: the shared texture ::before was painted onto nearly every UI
+ *     atom — buttons, pills, badges, icon buttons, hnav, drawer section
+ *     headers, and the Dailies rows (.nui-textured) — not just cards. Turning
+ *     its opacity down on dense elements (v1.1.3) was a half-measure; texture
+ *     is now scoped to actual surface panels only (topbar, header, drawer,
+ *     the theme-swatch preview, plus dimmed cards/list rows/chat bubbles).
+ *     Buttons/pills/badges/icon-buttons/hnav/drawer-section chrome and the
+ *     Dailies rows no longer render texture at all. Fixes Neomail bubbles and
+ *     the neoboard app both looking "muddy" from texture applied too broadly.
+ * v1.1.5
+ *   - Neoboards: reply submit now uses fetch() instead of realSubmitBtn.click(),
+ *     so posting a reply no longer triggers a full page reload or SPA reset.
+ *     The fresh thread DOM from the POST response is rendered in-place.
+ *     Thread tab title now scraped from #boardTopic .topicTitle h1 at init time
+ *     instead of hardcoded "Current Thread"; also promoted on-the-fly if the
+ *     thread was opened from a direct URL before the title was known.
+ *   - Coincidence: profile data (NP, NC, avatar) is now cached on first render.
+ *     Subsequent reloadSPA() calls re-use the cache instead of re-scraping the
+ *     live DOM (which was already nuked), preventing a blank screen on refresh.
+ *   - Neomail: per-message delete button (x) added to every bubble in the thread
+ *     viewer — removes the message from local archive and fades it out of the DOM.
+ *   - Neomail: "Select" toggle in the header switches the inbox list to
+ *     bulk-select mode. Each thread item shows a checkbox; selected threads can
+ *     be deleted in one shot via the sticky "Delete" bar (server + local archive).
+ *     "All" button selects every visible thread; "Done" exits select mode.
+ * v1.1.4
+ *   - Texture overhaul: rewrote 6 of 12 themes with distinct motifs.
+ *     Maractite → sonar-ping rings from a single deep anchor + bioluminescent
+ *     motes (was: two vague overlapping ripple fields).
+ *     Haunted Woods → true spiderweb geometry using repeating-radial ring
+ *     stops from corner + ghost-wisp ellipses (was: two diagonal line stripes).
+ *     Maraqua → caustic-light shafts (tall ellipses) + shell dots — completely
+ *     different water motif from Maractite (was: near-identical concentric rings).
+ *     Faerieland → soap-bubble membrane rings in pink/lavender iridescence, screen
+ *     blend @ 0.55 (was: generic soft-glow ellipse blobs, multiply @ 0.4).
+ *     Grey Neopia → offset halftone dot grid in stone/pink (was: plain crosshatch).
+ *     Meridell → dense heraldic chevron field + corner bosses (was: bare two-line lattice).
+ *   - Token validator fixed: previously nuked all non-color tokens (texture,
+ *     opacity, blend, rotate) by testing them against a color regex. Now skips
+ *     any token whose name doesn't match --nui-(color) pattern.
+ * v1.1.3
+ *   - Neopian Times: fixed scroll — appWrapper had a typo `oveflow-y` instead
+ *     of `overflow`, so the flex container never clipped and contentArea's
+ *     overflow-y: auto had nothing to work against. Changed to overflow: hidden
+ *     on the wrapper so contentArea is the sole scroll surface.
+ *   - Texture: nui-surface and nui-item cards now render texture at 28% of the
+ *     theme opacity instead of full opacity. Full texture on small dense cards
+ *     reads as visual noise; chrome elements (topbar, buttons, pills, drawer)
+ *     still receive the full recipe.
  * v1.1.2
  *   - Dailies Hub rewritten for density: each timer is now a single compact
  *     row (icon, label, one short note, countdown, open/done) instead of a
@@ -126,8 +261,11 @@
                 '--nui-danger-soft':   '#4A1212',
                 '--nui-shadow':        'rgba(0, 0, 0, 0.7)',
                 '--nui-overlay':       'rgba(0, 0, 0, 0.8)',
-                // Deep underwater overlapping ripples
-                '--nui-texture':       'repeating-radial-gradient(circle at 20% 120%, rgba(59,130,246,0.12) 0, rgba(59,130,246,0.12) 1px, transparent 1px, transparent 24px), repeating-radial-gradient(circle at 80% -20%, rgba(6,182,212,0.1) 0, rgba(6,182,212,0.1) 1px, transparent 1px, transparent 18px)',
+                // Sonar ping from the deep — one tight burst of concentric
+                // rings (pressure wave) radiating from a single anchor, plus a
+                // slow drift of bioluminescent motes. The ring cluster is
+                // unique to this theme; Maraqua uses a different water motif.
+                '--nui-texture':       'repeating-radial-gradient(circle at 15% 75%, rgba(59,130,246,0.22) 0, rgba(59,130,246,0.22) 1px, transparent 1px, transparent 10px), repeating-radial-gradient(circle at 15% 75%, rgba(6,182,212,0.12) 5px, rgba(6,182,212,0.12) 6px, transparent 6px, transparent 10px), radial-gradient(circle at 72% 18%, rgba(6,182,212,0.5) 1px, transparent 1.8px), radial-gradient(circle at 40% 60%, rgba(59,130,246,0.45) 0.8px, transparent 1.4px), radial-gradient(circle at 88% 52%, rgba(147,197,253,0.4) 0.8px, transparent 1.3px), radial-gradient(circle at 25% 30%, rgba(6,182,212,0.35) 0.7px, transparent 1.2px)',
                 '--nui-texture-opacity': '0.5',
                 '--nui-texture-blend':  'screen',
                 '--nui-texture-rotate': '0deg',
@@ -190,11 +328,12 @@
                 '--nui-danger-soft':   '#452228',
                 '--nui-shadow':        'rgba(0, 0, 0, 0.5)',
                 '--nui-overlay':       'rgba(0, 0, 0, 0.65)',
-                // Spiderweb strands (wide diagonal cross) plus a scatter of
-                // drifting dust motes — a linear/dot combo unique to this
-                // theme. Screen blend so faint light strands actually show
-                // up against the near-black surface instead of vanishing.
-                '--nui-texture':       'repeating-linear-gradient(32deg, rgba(199,124,255,0.16) 0, rgba(199,124,255,0.16) 1px, transparent 1px, transparent 34px), repeating-linear-gradient(-58deg, rgba(61,220,114,0.12) 0, rgba(61,220,114,0.12) 1px, transparent 1px, transparent 40px), radial-gradient(circle at 25% 30%, rgba(241,235,255,0.5) 1px, transparent 1.6px), radial-gradient(circle at 68% 60%, rgba(241,235,255,0.4) 1px, transparent 1.6px), radial-gradient(circle at 45% 82%, rgba(241,235,255,0.35) 1px, transparent 1.6px)',
+                // Spiderweb — radial strands from one corner plus three
+                // concentric ring stops to suggest the spiral. Ghost wisps
+                // (angled feathered blobs) drift across the lower half.
+                // No straight repeating lines at all, so it can't be read
+                // as crosshatch or plank grain.
+                '--nui-texture':       'repeating-radial-gradient(circle at 5% 5%, rgba(199,124,255,0.0) 0, rgba(199,124,255,0.0) 14px, rgba(199,124,255,0.14) 15px, rgba(199,124,255,0.14) 16px, transparent 16px, transparent 32px, rgba(199,124,255,0.1) 33px, rgba(199,124,255,0.1) 34px, transparent 34px, transparent 52px, rgba(199,124,255,0.08) 53px, rgba(199,124,255,0.08) 54px, transparent 54px, transparent 80px), radial-gradient(ellipse 60% 8% at 30% 72%, rgba(241,235,255,0.18) 0, transparent 100%), radial-gradient(ellipse 40% 6% at 70% 55%, rgba(61,220,114,0.12) 0, transparent 100%), radial-gradient(circle at 62% 28%, rgba(241,235,255,0.45) 0.9px, transparent 1.5px), radial-gradient(circle at 18% 62%, rgba(199,124,255,0.4) 0.8px, transparent 1.3px), radial-gradient(circle at 84% 80%, rgba(241,235,255,0.35) 0.7px, transparent 1.2px)',
                 '--nui-texture-opacity': '0.6',
                 '--nui-texture-blend':  'screen',
                 '--nui-texture-rotate': '6deg',
@@ -296,9 +435,11 @@
                 '--nui-danger-soft':   '#F8CFC9',
                 '--nui-shadow':        'rgba(11, 46, 51, 0.16)',
                 '--nui-overlay':       'rgba(7, 35, 39, 0.5)',
-                // Concentric water ripples — the only theme using rings, so
-                // it can't be confused with anyone else's grid or scatter.
-                '--nui-texture':       'repeating-radial-gradient(circle at 30% 20%, rgba(0,168,188,0.22) 0, rgba(0,168,188,0.22) 1px, transparent 1px, transparent 12px), repeating-radial-gradient(circle at 78% 68%, rgba(0,168,188,0.16) 0, rgba(0,168,188,0.16) 1px, transparent 1px, transparent 16px)',
+                // Caustic light through shallow water — the rippling bright
+                // patches you see on a sandy seabed. Tall narrow ellipses
+                // (kelp/caustic shafts) plus a couple of shell-scatter dots.
+                // Totally distinct from Maractite's sonar-ring motif.
+                '--nui-texture':       'radial-gradient(ellipse 6% 40% at 18% 60%, rgba(0,168,188,0.28) 0, transparent 100%), radial-gradient(ellipse 5% 35% at 38% 30%, rgba(0,168,188,0.22) 0, transparent 100%), radial-gradient(ellipse 7% 50% at 62% 70%, rgba(0,168,188,0.26) 0, transparent 100%), radial-gradient(ellipse 5% 30% at 82% 20%, rgba(0,168,188,0.2) 0, transparent 100%), radial-gradient(ellipse 4% 28% at 92% 55%, rgba(0,168,188,0.18) 0, transparent 100%), radial-gradient(circle at 28% 82%, rgba(255,122,51,0.45) 1.2px, transparent 1.8px), radial-gradient(circle at 74% 88%, rgba(0,168,188,0.4) 1px, transparent 1.6px)',
                 '--nui-texture-opacity': '0.5',
                 '--nui-texture-blend':  'multiply',
                 '--nui-texture-rotate': '0deg',
@@ -330,13 +471,13 @@
                 '--nui-danger-soft':   '#FAE1E6',
                 '--nui-shadow':        'rgba(59, 46, 74, 0.12)',
                 '--nui-overlay':       'rgba(40, 30, 55, 0.5)',
-                // Soft cloud puffs (kept, its signature look) plus a light
-                // sparkle scatter so more than just one big blur is visible
-                // up close — still the gentlest texture in the suite by
-                // design, per the note above.
-                '--nui-texture':       'radial-gradient(ellipse 70% 60% at 20% 30%, rgba(255,255,255,0.28) 0, transparent 70%), radial-gradient(ellipse 55% 45% at 78% 70%, rgba(166,108,209,0.18) 0, transparent 78%), radial-gradient(ellipse 48% 38% at 46% 8%, rgba(255,255,255,0.22) 0, transparent 72%), radial-gradient(circle at 35% 45%, rgba(255,255,255,0.6) 1.2px, transparent 1.8px), radial-gradient(circle at 62% 65%, rgba(230,143,174,0.5) 1px, transparent 1.6px), radial-gradient(circle at 82% 25%, rgba(255,255,255,0.5) 1px, transparent 1.6px)',
-                '--nui-texture-opacity': '0.4',
-                '--nui-texture-blend':  'multiply',
+                // Soap-bubble clusters — overlapping translucent rings of
+                // varying size in pink/lavender/white iridescence. Rings not
+                // dots, so it reads as bubble membranes, not sparkle scatter.
+                // The only theme using ringed radials without repeating.
+                '--nui-texture':       'radial-gradient(circle at 22% 35%, rgba(166,108,209,0.0) 10%, rgba(166,108,209,0.2) 11%, rgba(166,108,209,0.0) 12%), radial-gradient(circle at 22% 35%, rgba(166,108,209,0.0) 17%, rgba(255,255,255,0.15) 18%, rgba(166,108,209,0.0) 19%), radial-gradient(circle at 58% 22%, rgba(230,143,174,0.0) 8%, rgba(230,143,174,0.22) 9%, rgba(230,143,174,0.0) 10%), radial-gradient(circle at 58% 22%, rgba(230,143,174,0.0) 13%, rgba(255,255,255,0.14) 14%, rgba(230,143,174,0.0) 15%), radial-gradient(circle at 76% 65%, rgba(166,108,209,0.0) 14%, rgba(166,108,209,0.18) 15%, rgba(166,108,209,0.0) 16%), radial-gradient(circle at 40% 75%, rgba(230,143,174,0.0) 6%, rgba(230,143,174,0.2) 7%, rgba(230,143,174,0.0) 8%), radial-gradient(circle at 88% 30%, rgba(255,255,255,0.0) 9%, rgba(255,255,255,0.18) 10%, rgba(255,255,255,0.0) 11%), radial-gradient(circle at 12% 80%, rgba(166,108,209,0.0) 11%, rgba(166,108,209,0.15) 12%, rgba(166,108,209,0.0) 13%)',
+                '--nui-texture-opacity': '0.55',
+                '--nui-texture-blend':  'screen',
                 '--nui-texture-rotate': '0deg',
             },
         },
@@ -367,10 +508,10 @@
                 '--nui-danger-soft':   '#EBD2D0',
                 '--nui-shadow':        'rgba(50, 46, 40, 0.12)',
                 '--nui-overlay':       'rgba(50, 46, 40, 0.45)',
-                // Fine newsprint/static stipple — tight perpendicular tick
-                // marks instead of the wide diagonal crosshatch used
-                // elsewhere, so it reads as "grainy paper," not "fabric."
-                '--nui-texture':       'repeating-linear-gradient(0deg, rgba(80,80,80,0.16) 0, rgba(80,80,80,0.16) 1px, transparent 1px, transparent 5px), repeating-linear-gradient(90deg, rgba(80,80,80,0.1) 0, rgba(80,80,80,0.1) 1px, transparent 1px, transparent 5px), radial-gradient(circle at 20% 20%, rgba(201,125,140,0.1) 0, transparent 40%)',
+                // Halftone — offset rows of dots like a printed newspaper
+                // photograph, using the pink-grey palette. Completely distinct
+                // from the line-based textures on every other theme.
+                '--nui-texture':       'radial-gradient(circle at 10% 10%, rgba(80,70,65,0.22) 1.5px, transparent 2.5px), radial-gradient(circle at 30% 10%, rgba(201,125,140,0.18) 1.5px, transparent 2.5px), radial-gradient(circle at 50% 10%, rgba(80,70,65,0.2) 1.5px, transparent 2.5px), radial-gradient(circle at 70% 10%, rgba(201,125,140,0.16) 1.5px, transparent 2.5px), radial-gradient(circle at 90% 10%, rgba(80,70,65,0.18) 1.5px, transparent 2.5px), radial-gradient(circle at 20% 30%, rgba(80,70,65,0.2) 1.5px, transparent 2.5px), radial-gradient(circle at 40% 30%, rgba(201,125,140,0.16) 1.5px, transparent 2.5px), radial-gradient(circle at 60% 30%, rgba(80,70,65,0.18) 1.5px, transparent 2.5px), radial-gradient(circle at 80% 30%, rgba(201,125,140,0.14) 1.5px, transparent 2.5px), radial-gradient(circle at 10% 50%, rgba(201,125,140,0.18) 1.5px, transparent 2.5px), radial-gradient(circle at 30% 50%, rgba(80,70,65,0.16) 1.5px, transparent 2.5px), radial-gradient(circle at 50% 50%, rgba(201,125,140,0.2) 1.5px, transparent 2.5px), radial-gradient(circle at 70% 50%, rgba(80,70,65,0.14) 1.5px, transparent 2.5px), radial-gradient(circle at 90% 50%, rgba(201,125,140,0.16) 1.5px, transparent 2.5px), radial-gradient(circle at 20% 70%, rgba(80,70,65,0.18) 1.5px, transparent 2.5px), radial-gradient(circle at 40% 70%, rgba(201,125,140,0.14) 1.5px, transparent 2.5px), radial-gradient(circle at 60% 70%, rgba(80,70,65,0.16) 1.5px, transparent 2.5px), radial-gradient(circle at 80% 70%, rgba(201,125,140,0.12) 1.5px, transparent 2.5px), radial-gradient(circle at 10% 90%, rgba(201,125,140,0.16) 1.5px, transparent 2.5px), radial-gradient(circle at 30% 90%, rgba(80,70,65,0.14) 1.5px, transparent 2.5px), radial-gradient(circle at 50% 90%, rgba(201,125,140,0.18) 1.5px, transparent 2.5px), radial-gradient(circle at 70% 90%, rgba(80,70,65,0.12) 1.5px, transparent 2.5px), radial-gradient(circle at 90% 90%, rgba(201,125,140,0.14) 1.5px, transparent 2.5px)',
                 '--nui-texture-opacity': '0.35',
                 '--nui-texture-blend':  'multiply',
                 '--nui-texture-rotate': '0deg',
@@ -481,10 +622,11 @@
                 '--nui-danger-soft':   '#EFC0C4',
                 '--nui-shadow':        'rgba(20, 26, 50, 0.16)',
                 '--nui-overlay':       'rgba(20, 26, 50, 0.5)',
-                // Chainmail — tight true 45°/-45° diamond lattice (not a
-                // loose 60°/120° hatch), so it reads as woven metal rings
-                // rather than a generic diagonal grid.
-                '--nui-texture':       'repeating-linear-gradient(45deg, rgba(30,79,160,0.16) 0, rgba(30,79,160,0.16) 1px, transparent 1px, transparent 9px), repeating-linear-gradient(-45deg, rgba(176,30,40,0.1) 0, rgba(176,30,40,0.1) 1px, transparent 1px, transparent 9px)',
+                // Heraldic field — alternating chevron rows like a stamped
+                // coat-of-arms ground, in banner blue and crimson. Much
+                // denser and more intentional than the old bare lattice;
+                // reads as "illuminated manuscript" not "graph paper."
+                '--nui-texture':       'repeating-linear-gradient(45deg, rgba(30,79,160,0.18) 0, rgba(30,79,160,0.18) 1px, transparent 1px, transparent 12px), repeating-linear-gradient(-45deg, rgba(176,30,40,0.14) 0, rgba(176,30,40,0.14) 1px, transparent 1px, transparent 12px), repeating-linear-gradient(45deg, transparent 0, transparent 5px, rgba(30,79,160,0.08) 5px, rgba(30,79,160,0.08) 6px, transparent 6px, transparent 12px), radial-gradient(circle at 50% 50%, rgba(30,79,160,0.22) 1.8px, transparent 2.6px), radial-gradient(circle at 0% 0%, rgba(176,30,40,0.18) 1.4px, transparent 2.2px), radial-gradient(circle at 100% 100%, rgba(176,30,40,0.18) 1.4px, transparent 2.2px), radial-gradient(circle at 0% 100%, rgba(30,79,160,0.16) 1.4px, transparent 2.2px), radial-gradient(circle at 100% 0%, rgba(30,79,160,0.16) 1.4px, transparent 2.2px)',
                 '--nui-texture-opacity': '0.5',
                 '--nui-texture-blend':  'multiply',
                 '--nui-texture-rotate': '0deg',
@@ -529,10 +671,14 @@
         },
     };
 
-    // Fix a stray typo-safe fallback in case of any malformed hex above.
+    // Sanity-check: only validate color tokens (those that should be hex or
+    // rgba). Texture, opacity, blend-mode, rotate, shadow strings are not
+    // color values and must be left alone.
+    const COLOR_TOKEN_RE = /^--nui-(?!texture|shadow|overlay)/;
     Object.keys(THEMES).forEach(function (key) {
         const t = THEMES[key].tokens;
         Object.keys(t).forEach(function (tk) {
+            if (!COLOR_TOKEN_RE.test(tk)) return; // skip non-color tokens
             if (typeof t[tk] !== 'string' || !/^(#|rgba?\()/.test(t[tk])) {
                 t[tk] = '#888888';
             }
@@ -624,24 +770,10 @@
             isolation: isolate;
             overflow: hidden;
         }
-        .nui-surface::before,
         .nui-topbar::before,
         .nui-header-wrapper::before,
         .nui-drawer::before,
-        .nui-drawer-profile::before,
-        .nui-drawer-stat::before,
-        .nui-theme-option::before,
-        .nui-bubble::before,
-        .nui-badge::before,
-        .nui-icon-btn::before,
-        .nui-neogo-btn::before,
-        .nui-item::before,
-        .nui-btn::before,
-        .nui-pill::before,
-        .nui-hnav::before,
-        .nui-drawer-section::before,
-        .nui-drawer-section-title::before,
-        .nui-textured::before {
+        .nui-theme-option::before {
             content: '';
             position: absolute;
             inset: -10%;
@@ -655,31 +787,19 @@
             mix-blend-mode: var(--nui-texture-blend, multiply);
             transform: rotate(var(--nui-texture-rotate, -1deg));
         }
-        .nui-surface > *,
+        /* Texture is now scoped to only the outer app chrome — the top bar,
+           header, and the drawer's own shell — plus the theme-swatch preview
+           that's meant to show the pattern off. Everything that repeats on
+           screen (cards, list rows, chat bubbles, the drawer's profile box
+           and stat rows, buttons/pills/badges) is flat. Those repeating
+           elements were what made texture feel constant rather than
+           occasional, even after their opacity was dimmed. */
         .nui-topbar > *,
         .nui-header-wrapper > *,
         .nui-drawer > *,
-        .nui-drawer-profile > *,
-        .nui-drawer-stat > *,
-        .nui-theme-option > *,
-        .nui-bubble > *,
-        .nui-badge > *,
-        .nui-icon-btn > *,
-        .nui-neogo-btn > *,
-        .nui-item > *,
-        .nui-btn > *,
-        .nui-pill > *,
-        .nui-hnav > *,
-        .nui-drawer-section > *,
-        .nui-drawer-section-title > *,
-        .nui-textured > * {
+        .nui-theme-option > * {
             position: relative;
             z-index: 1;
-        }
-        .nui-textured {
-            position: relative;
-            isolation: isolate;
-            overflow: hidden;
         }
         .nui-text { color: var(--nui-text); }
         .nui-text-muted { color: var(--nui-text-muted); }
@@ -1436,17 +1556,13 @@
 
         // Map the texture explicitly to all targets to bypass WebKit variable limitations
         const textureTargets = [
-            '.nui-surface::before', '.nui-topbar::before', '.nui-header-wrapper::before',
-            '.nui-drawer::before', '.nui-drawer-profile::before', '.nui-drawer-stat::before',
-            '.nui-theme-option::before', '.nui-bubble::before', '.nui-badge::before',
-            '.nui-icon-btn::before', '.nui-neogo-btn::before', '.nui-item::before',
-            '.nui-btn::before', '.nui-pill::before', '.nui-hnav::before',
-            '.nui-drawer-section::before', '.nui-drawer-section-title::before',
-            '.nui-textured::before', '.nui-spa-active body::after'
+            '.nui-topbar::before', '.nui-header-wrapper::before',
+            '.nui-drawer::before', '.nui-theme-option::before',
+            '.nui-spa-active body::after'
         ].map(sel => `[data-neoui-theme="${name}"] ${sel}`).join(',\n');
 
-        const baseTexture = theme.tokens['--nui-texture'] && theme.tokens['--nui-texture'] !== 'none' 
-            ? theme.tokens['--nui-texture'] 
+        const baseTexture = theme.tokens['--nui-texture'] && theme.tokens['--nui-texture'] !== 'none'
+            ? theme.tokens['--nui-texture']
             : 'none';
 
         dynStyle.textContent =
@@ -1484,12 +1600,14 @@
     }
 
     function injectViewport() {
-        if (document.querySelector('meta[name="viewport"]')) return;
-        const meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
-        document.head.appendChild(meta);
-    }
+    if (document.querySelector('meta[name="viewport"]')) return;
+    const meta = document.createElement('meta');
+    meta.name = 'viewport';
+    // Remove maximum-scale and user-scalable constraints
+    meta.content = 'width=device-width, initial-scale=1.0';
+    document.head.appendChild(meta);
+}
+
 
     // Tiny element-builder helper so consuming scripts don't hand-roll
     // innerHTML strings for every component.
@@ -1998,7 +2116,6 @@
                 sorted.forEach(function (item) {
                     const isReady = (item.nextAt || 0) <= Date.now();
                     const row = document.createElement('div');
-                    row.className = 'nui-textured';
                     row.style.cssText = 'display:flex; align-items:center; gap:6px; padding:7px 4px; border-bottom:1px solid var(--nui-border);' + (item.hidden ? ' opacity:0.5;' : '');
                     row.innerHTML = [
                         '<span style="font-size:17px; width:20px; text-align:center; flex-shrink:0;">' + item.icon + '</span>',
@@ -2380,7 +2497,8 @@
         const pop = document.createElement('div');
         pop.id = 'nui-color-popover';
         pop.className = 'nui-surface nui-reset';
-        pop.style.cssText = 'position:fixed; z-index:100010; width:212px; padding:12px; border-radius:var(--nui-radius-md); border:1px solid var(--nui-border); box-shadow:0 10px 32px rgba(0,0,0,0.4); display:flex; flex-direction:column; gap:10px;';
+        // Change z-index from 100010 to 2147483647
+pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12px; border-radius:var(--nui-radius-md); border:1px solid var(--nui-border); box-shadow:0 10px 32px rgba(0,0,0,0.4); display:flex; flex-direction:column; gap:10px;';
 
         const canvas = document.createElement('canvas');
         canvas.width = 188; canvas.height = 110;
@@ -2504,8 +2622,8 @@
         hexInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') hexInput.blur(); });
 
         function outsideClick(e) {
-            if (!pop.contains(e.target) && e.target !== anchor) close();
-        }
+    if (!pop.contains(e.target) && !anchor.contains(e.target)) close();
+}
         function onEsc(e) { if (e.key === 'Escape') close(); }
         function close() {
             document.removeEventListener('pointerdown', outsideClick, true);
@@ -3420,6 +3538,7 @@
 
                     <div style="flex: 1;"></div>
 
+                    <a class="nui-pill" style="cursor: pointer;" id="neomail-select-btn">Select</a>
                     <a class="nui-pill" style="background: var(--nui-accent); color: var(--nui-accent-ink); border: none; cursor: pointer;" id="neomail-compose-btn">
                         <span style="font-size: 16px; font-weight: 800; line-height: 1; vertical-align: middle; margin-right: 4px;">+</span>Compose
                     </a>
@@ -3462,11 +3581,27 @@
             if (composeBtn) {
                 composeBtn.addEventListener('click', renderComposeView);
             }
+
+            const selectBtn = headerWrapper.querySelector('#neomail-select-btn');
+            if (selectBtn) {
+                selectBtn.addEventListener('click', () => {
+                    bulkSelectMode = !bulkSelectMode;
+                    selectedThreadKeys.clear();
+                    selectBtn.textContent = bulkSelectMode ? 'Done' : 'Select';
+                    selectBtn.style.background = bulkSelectMode ? 'var(--nui-accent-soft)' : '';
+                    selectBtn.style.color = bulkSelectMode ? 'var(--nui-accent)' : '';
+                    // Re-render the list in the new mode
+                    const activeTab = headerWrapper.querySelector('.nui-hnav .nui-pill.is-active[data-tab]');
+                    renderSidebarList(activeTab ? activeTab.getAttribute('data-tab') : 'inbox');
+                });
+            }
         }
 
 
 
         let allThreads = [];
+        let bulkSelectMode = false;
+        const selectedThreadKeys = new Set();
         const urlParams = new URLSearchParams(window.location.search);
 
         injectTopbar();
@@ -3792,11 +3927,11 @@
         function renderSidebarList(tab) {
             const listContainer = document.getElementById('neomail-message-list'); listContainer.innerHTML = '';
             const filteredThreads = filterThreadsForTab(tab);
-            if (filteredThreads.length === 0) { listContainer.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">📭</span>No conversations found.</div>`; return; }
+            if (filteredThreads.length === 0) { listContainer.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">\u{1F4ED}</span>No conversations found.</div>`; return; }
 
             filteredThreads.forEach(thread => {
                 const item = document.createElement('div'); item.className = `nui-item nui-reset ${thread.isRead ? '' : 'is-unread'}`;
-              if (!thread.isSent) applyVibeTint(item, thread.sender);
+                if (!thread.isSent) applyVibeTint(item, thread.sender);
 
                 let badges = '';
                 if (thread.isFullyLocal) badges += `<span class="nui-badge nui-badge-warning">Local Archive</span> `;
@@ -3805,23 +3940,131 @@
                 const avatarUrl = getAvatar(thread.sender);
                 const avatarHTML = avatarUrl ? `<img class="nui-avatar" data-sender="${escapeHTML(thread.sender)}" src="${avatarUrl}" alt="" loading="lazy">` : `<div class="nui-avatar-fallback" data-sender="${escapeHTML(thread.sender)}">${escapeHTML(thread.sender.charAt(0).toUpperCase())}</div>`;
 
-                item.innerHTML = `
-                    <div class="nui-avatar-wrapper">${avatarHTML}<div class="nui-dot"></div></div>
-                    <div class="nui-item-main">
-                        <div class="nui-item-top"><span class="nui-item-title">${userLink(thread.sender)}</span><span class="nui-item-meta">${thread.latestDateStr}</span></div>
-                        <div class="nui-item-bottom"><span class="nui-item-subtitle">${thread.baseSubject}</span><div>${badges}</div></div>
-                    </div>
-                `;
-                item.addEventListener('click', () => {
-                    document.querySelectorAll('.nui-item').forEach(i => i.classList.remove('is-active'));
-                    item.classList.add('is-active'); item.classList.remove('is-unread'); thread.isRead = true;
-                    document.getElementById('neomail-viewer-empty').style.display = 'none';
-                    const viewerContent = document.getElementById('neomail-viewer-content'); viewerContent.style.display = 'flex';
-                    const app = document.getElementById('neomail-app'); if (app) app.classList.add('thread-open');
-                    loadThreadIntoViewer(thread, viewerContent);
-                });
+                if (bulkSelectMode) {
+                    const isChecked = selectedThreadKeys.has(thread.key);
+                    item.style.cssText = 'position: relative; cursor: pointer;';
+                    if (isChecked) item.classList.add('is-active');
+                    const checkSvg = isChecked
+                        ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--nui-accent-ink)" stroke-width="3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>'
+                        : '';
+                    const checkBorder = isChecked ? 'var(--nui-accent)' : 'var(--nui-border)';
+                    const checkBg = isChecked ? 'var(--nui-accent)' : 'transparent';
+                    item.innerHTML = `
+                        <div class="nui-avatar-wrapper">${avatarHTML}<div class="nui-dot"></div></div>
+                        <div class="nui-item-main">
+                            <div class="nui-item-top"><span class="nui-item-title">${escapeHTML(thread.sender)}</span><span class="nui-item-meta">${thread.latestDateStr}</span></div>
+                            <div class="nui-item-bottom"><span class="nui-item-subtitle">${thread.baseSubject}</span><div>${badges}</div></div>
+                        </div>
+                        <div style="display:flex; align-items:center; justify-content:center; padding: 0 4px; flex-shrink:0;">
+                            <div style="width:22px; height:22px; border-radius:6px; border:2px solid ${checkBorder}; background:${checkBg}; display:flex; align-items:center; justify-content:center; transition:all 0.1s;">${checkSvg}</div>
+                        </div>
+                    `;
+                    item.addEventListener('click', () => {
+                        if (selectedThreadKeys.has(thread.key)) {
+                            selectedThreadKeys.delete(thread.key);
+                        } else {
+                            selectedThreadKeys.add(thread.key);
+                        }
+                        renderSidebarList(tab);
+                        updateBulkActionBar(tab);
+                    });
+                } else {
+                    item.innerHTML = `
+                        <div class="nui-avatar-wrapper">${avatarHTML}<div class="nui-dot"></div></div>
+                        <div class="nui-item-main">
+                            <div class="nui-item-top"><span class="nui-item-title">${userLink(thread.sender)}</span><span class="nui-item-meta">${thread.latestDateStr}</span></div>
+                            <div class="nui-item-bottom"><span class="nui-item-subtitle">${thread.baseSubject}</span><div>${badges}</div></div>
+                        </div>
+                    `;
+                    item.addEventListener('click', () => {
+                        document.querySelectorAll('.nui-item').forEach(i => i.classList.remove('is-active'));
+                        item.classList.add('is-active'); item.classList.remove('is-unread'); thread.isRead = true;
+                        document.getElementById('neomail-viewer-empty').style.display = 'none';
+                        const viewerContent = document.getElementById('neomail-viewer-content'); viewerContent.style.display = 'flex';
+                        const app = document.getElementById('neomail-app'); if (app) app.classList.add('thread-open');
+                        loadThreadIntoViewer(thread, viewerContent);
+                    });
+                }
                 listContainer.appendChild(item);
             });
+
+            updateBulkActionBar(tab);
+        }
+
+        function updateBulkActionBar(tab) {
+            const existing = document.getElementById('neomail-bulk-bar');
+            if (!bulkSelectMode || selectedThreadKeys.size === 0) {
+                if (existing) existing.remove();
+                return;
+            }
+            if (existing) existing.remove();
+
+            const bar = document.createElement('div');
+            bar.id = 'neomail-bulk-bar';
+            bar.style.cssText = 'position: sticky; bottom: 0; z-index: 9999; background: var(--nui-surface); border-top: 1px solid var(--nui-border); padding: var(--nui-space-3) var(--nui-space-4); display: flex; align-items: center; gap: var(--nui-space-3); box-shadow: 0 -4px 16px var(--nui-shadow);';
+            const selCount = selectedThreadKeys.size;
+            bar.innerHTML = `
+                <span style="flex:1; font-size:13px; font-weight:700; color:var(--nui-text-muted);">${selCount} thread${selCount !== 1 ? 's' : ''} selected</span>
+                <button type="button" class="nui-btn nui-btn-secondary nui-btn-sm" id="neomail-bulk-select-all">All</button>
+                <button type="button" class="nui-btn nui-btn-danger nui-btn-sm" id="neomail-bulk-delete">Delete</button>
+            `;
+
+            bar.querySelector('#neomail-bulk-select-all').addEventListener('click', () => {
+                filterThreadsForTab(tab).forEach(t => selectedThreadKeys.add(t.key));
+                renderSidebarList(tab);
+            });
+
+            bar.querySelector('#neomail-bulk-delete').addEventListener('click', async () => {
+                const filteredThreads = filterThreadsForTab(tab);
+                const toDelete = filteredThreads.filter(t => selectedThreadKeys.has(t.key));
+                const btn = bar.querySelector('#neomail-bulk-delete');
+                btn.disabled = true; btn.textContent = 'Deleting...';
+
+                for (const thread of toDelete) {
+                    const serverMessages = thread.messages.filter(m => m.isOnServer);
+                    if (serverMessages.length > 0) {
+                        const payload = new URLSearchParams({ folder: 'Inbox', action: 'Delete Messages' });
+                        serverMessages.forEach(m => payload.append('checkbox_arr[]', m.id));
+                        await fetch('/modify_neomessages.phtml', { method: 'POST', body: payload, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }).catch(() => {});
+                    }
+                }
+
+                const deleteKeys = new Set(toDelete.map(t => t.key));
+                let archive = getLocalArchive();
+                archive = archive.filter(a => {
+                    const k = a.isSent
+                        ? `${a.recipient}::${a.baseSubject}`
+                        : `${a.sender}::${a.baseSubject}`;
+                    return !deleteKeys.has(k);
+                });
+                saveLocalArchive(archive);
+                allThreads = allThreads.filter(t => !deleteKeys.has(t.key));
+
+                selectedThreadKeys.clear();
+                bulkSelectMode = false;
+                const selectBtn = document.getElementById('neomail-select-btn');
+                if (selectBtn) { selectBtn.textContent = 'Select'; selectBtn.style.background = ''; selectBtn.style.color = ''; }
+
+                const activeItem = document.querySelector('.nui-item.is-active');
+                if (activeItem) {
+                    const wasActive = toDelete.some(t => {
+                        const titleEl = activeItem.querySelector('.nui-item-title');
+                        return titleEl && t.sender === titleEl.textContent.trim();
+                    });
+                    if (wasActive) {
+                        document.getElementById('neomail-viewer-content').style.display = 'none';
+                        const emptyViewer = document.getElementById('neomail-viewer-empty');
+                        emptyViewer.style.display = 'block'; emptyViewer.innerHTML = '<span class="nui-empty-emoji">\uD83D\uDDD1\uFE0F</span>Threads deleted.';
+                        const app = document.getElementById('neomail-app');
+                        if (app) app.classList.remove('thread-open');
+                    }
+                }
+
+                renderSidebarList(tab);
+            });
+
+            const listContainer = document.getElementById('neomail-message-list');
+            if (listContainer) listContainer.appendChild(bar);
         }
 
                 function createMessageNode(msg) {
@@ -3856,6 +4099,32 @@
                 <div class="nui-bubble-body">${(msg.isSent || msg.body) ? bodyHTML : '<span class="nui-text-muted" style="font-style:italic;">Loading...</span>'}</div>
             `;
 
+
+            // Per-message delete button (all messages)
+            {
+                const headerRight = msgNode.querySelector('.nui-bubble-header > span:last-child');
+                const delBtn = document.createElement('button');
+                delBtn.type = 'button';
+                delBtn.title = 'Delete this message';
+                delBtn.style.cssText = 'cursor:pointer; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; background:none; border:none; border-radius:50%; color:var(--nui-text-faint); font-size:14px; line-height:1; padding:0; transition:color 0.12s, background 0.12s;';
+                delBtn.innerHTML = '×'; // ×
+                delBtn.addEventListener('mouseenter', () => { delBtn.style.color = 'var(--nui-danger)'; delBtn.style.background = 'var(--nui-danger-soft)'; });
+                delBtn.addEventListener('mouseleave', () => { delBtn.style.color = 'var(--nui-text-faint)'; delBtn.style.background = 'none'; });
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // Remove from local archive
+                    if (msg.id) {
+                        let archive = getLocalArchive();
+                        archive = archive.filter(a => a.id !== msg.id);
+                        saveLocalArchive(archive);
+                    }
+                    // Remove from DOM with a quick fade
+                    msgNode.style.transition = 'opacity 0.18s';
+                    msgNode.style.opacity = '0';
+                    setTimeout(() => msgNode.remove(), 180);
+                });
+                headerRight.appendChild(delBtn);
+            }
 
             // Only add the vibe button to messages you received, not ones you sent
             if (!msg.isSent) {
@@ -4713,6 +4982,7 @@
         document.body.style.overflow = 'hidden'; // Prevent double scrollbars
 
         // 3. Initialize NeoUI
+
         NeoUI.init({ showNeoGoButton: false });
 
         // 4. Build the App Wrapper
@@ -4856,6 +5126,11 @@
     }
 
     const NeoUI = window.NeoUI;
+
+    // Profile is scraped once from the live DOM on first render (when the
+    // Neopets chrome is still visible). On subsequent re-renders triggered by
+    // reloadSPA() the live DOM has been nuked, so we fall back to this cache.
+    let _cachedProfile = null;
 
     // --- Custom SSW Modal ---
     function openCustomSSW(itemName) {
@@ -5038,7 +5313,11 @@
     }
 
     function renderCoincidence(doc) {
-        const profile = NeoUI.scrapeLegacyProfile();
+        // Use the live DOM profile on first call; fall back to cache on refreshes
+        // (the Neopets chrome is hidden after the first render so scraping would return empty data)
+        const freshProfile = NeoUI.scrapeLegacyProfile();
+        const profile = (freshProfile && freshProfile.np) ? freshProfile : (_cachedProfile || freshProfile);
+        if (freshProfile && freshProfile.np) _cachedProfile = freshProfile;
 
         // 1. Scrape Quest Items
         const items = [];
@@ -5892,9 +6171,14 @@
     // index via fetch, and render a blank neoboard thread over the actual page.
     const isIndex = path === '/neoboards/' || path === '/neoboards/index.phtml';
     const isBoardList = path.startsWith('/neoboards/') && path.includes('boardlist.phtml');
-    const isTopic = path.startsWith('/neoboards/') && path.includes('topic.phtml');
+    const isCreateTopic = path.startsWith('/neoboards/') && path.includes('create_topic.phtml');
+    // NOTE: 'topic.phtml' is a substring of 'create_topic.phtml', so isCreateTopic
+    // must be excluded here or this page gets misrouted into the thread viewer
+    // (which looks for #boardTopic — create_topic.phtml uses #boardCreateTopic —
+    // and renders "Thread not found or deleted.").
+    const isTopic = path.startsWith('/neoboards/') && path.includes('topic.phtml') && !isCreateTopic;
 
-    if (!isIndex && !isBoardList && !isTopic) return;
+    if (!isIndex && !isBoardList && !isTopic && !isCreateTopic) return;
 
     function showFatalError(err) {
         try {
@@ -5909,11 +6193,13 @@
 
     // --- State Management ---
     let openThreads = []; // Array of { id, title, url, htmlCache }
-    let activeTabId = 'board'; // 'board' or a thread ID
+    let activeTabId = 'board'; // 'board', 'create', or a thread ID
     let currentBoardUrl = window.location.href;
+    let newTopicUrl = null; // scraped from the board list's "createTopicButton" link
 
     let favThreads = JSON.parse(localStorage.getItem('nui_fav_threads') || '[]');
     let recentThreads = JSON.parse(localStorage.getItem('nui_recent_threads') || '[]');
+    let favBoards = JSON.parse(localStorage.getItem('nui_fav_boards') || '[]'); // [{id, title, url, iconUrl}] — whole boards (Avatar Chat, Site Games...), not individual topics
 
     // --- Per-board pen state (NES parity) ---
     // perBoardPen: when true, pen preference and mode are stored separately per
@@ -5924,6 +6210,22 @@
     function getBoardNumFromUrl(url) {
         const m = (url || '').match(/[?&]board=(\d+)/);
         return m ? m[1] : null;
+    }
+    function resolveBoardListUrl(doc, pageUrl) {
+        // Direct-load thread/create-topic pages never run loadBoardList(), so
+        // currentBoardUrl is left pointing at the thread/create-topic URL
+        // itself unless we resolve the real parent board here — clicking the
+        // Board tab afterward would otherwise fetch that same non-board page
+        // and try (and fail) to render it as a board list.
+        const links = doc.querySelectorAll('.topicNavTop .breadcrumbs a, .breadcrumbs a');
+        for (const a of links) {
+            if (a.href && a.href.includes('boardlist.phtml')) return a.href;
+        }
+        const boardNum = getBoardNumFromUrl(pageUrl);
+        if (boardNum) {
+            try { return new URL('boardlist.phtml?board=' + boardNum, pageUrl).href; } catch (e) { }
+        }
+        return null;
     }
     function getCurrentBoardNum() {
         // Try the live breadcrumb first, then fall back to currentBoardUrl
@@ -6002,6 +6304,7 @@
     function saveState() {
         localStorage.setItem('nui_fav_threads', JSON.stringify(favThreads));
         localStorage.setItem('nui_recent_threads', JSON.stringify(recentThreads));
+        localStorage.setItem('nui_fav_boards', JSON.stringify(favBoards));
         localStorage.setItem(penKey('nui_pen_mode'), penMode);
         localStorage.setItem(penKey('nui_pen_val'), savedPenVal);
     }
@@ -6211,7 +6514,7 @@
 
         const contentArea = document.createElement('div');
         contentArea.id = 'nui-content-area';
-        contentArea.style.cssText = 'flex: 1; overflow-y: auto; padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; -webkit-overflow-scrolling: touch;';
+        contentArea.style.cssText = 'flex: 1; min-height: 0; overflow-y: auto; padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; -webkit-overflow-scrolling: touch;';
         appWrapper.appendChild(contentArea);
 
         document.body.appendChild(appWrapper);
@@ -6229,6 +6532,19 @@
         boardTab.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg> Board`;
         boardTab.addEventListener('click', () => switchTab('board'));
         tabBar.appendChild(boardTab);
+
+        if (activeTabId === 'create') {
+            const createTab = document.createElement('div');
+            createTab.className = 'nui-pill is-active';
+            createTab.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border: none; cursor: pointer; flex-shrink: 0;';
+            createTab.innerHTML = `<span style="font-size:12px;">✏️ New Topic</span>`;
+            const closeBtn = document.createElement('div');
+            closeBtn.style.cssText = 'width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(0,0,0,0.1); color: inherit; font-size: 14px; line-height: 1;';
+            closeBtn.innerHTML = '&times;';
+            closeBtn.addEventListener('click', (e) => { e.stopPropagation(); switchTab('board'); });
+            createTab.appendChild(closeBtn);
+            tabBar.appendChild(createTab);
+        }
 
         openThreads.forEach(thread => {
             const tTab = document.createElement('div');
@@ -6269,6 +6585,9 @@
             if (currentBoardUrl) window.history.replaceState(null, '', currentBoardUrl);
 
             loadBoardList(currentBoardUrl, contentArea);
+        } else if (id === 'create') {
+            const url = newTopicUrl || currentBoardUrl;
+            loadCreateTopicView(url, contentArea);
         } else {
             const thread = openThreads.find(t => t.id === id);
             if (thread) {
@@ -6839,12 +7158,14 @@
 
             const form = replyWrap.querySelector('form');
 
-            form.addEventListener('submit', (e) => {
-                // Prevent our custom NeoUI form from natively submitting
+            form.addEventListener('submit', async (e) => {
+                // Prevent any native navigation — POST via fetch and re-render in-place
                 e.preventDefault();
 
                 const submitBtn = form.querySelector('button[type="submit"]');
-                setTimeout(() => { submitBtn.disabled = true; }, 0);
+                const statusEl = form.querySelector('#nui-reply-status');
+                submitBtn.disabled = true;
+                if (statusEl) { statusEl.style.color = 'var(--nui-text-muted)'; statusEl.textContent = 'Posting…'; }
 
                 const realPens = replyFormData.pens.map(p => p.val);
                 let finalPenVal = savedPenVal;
@@ -6856,38 +7177,56 @@
                     finalPenVal = penMode;
                 }
 
-                // 1. Locate the actual Neopets form we secretly appended earlier
+                // Build FormData from the hidden native form (captures _ref_ck + all Neopets fields)
                 const nativeForm = document.querySelector('form.nui-hidden-native-form');
-
                 if (!nativeForm) {
-                    alert("Fatal Error: Could not find the native Neopets reply form.");
+                    if (statusEl) { statusEl.style.color = 'var(--nui-danger)'; statusEl.textContent = 'Error: form missing.'; }
                     submitBtn.disabled = false;
                     return;
                 }
 
-                // 2. Inject the message text into the native form
-                const nativeTextarea = nativeForm.querySelector('textarea[name="message"]');
-                if (nativeTextarea) {
-                    nativeTextarea.value = form.querySelector('textarea[name="message"]').value;
-                }
+                const fd = new FormData(nativeForm);
+                fd.set('message', form.querySelector('textarea[name="message"]').value);
+                fd.set('select_pen', finalPenVal);
+                // Neopets expects the submit button name in the payload
+                fd.set('message_reply', '1');
 
-                // 3. Set the pen value on the native form
-                let penInput = nativeForm.querySelector('input[name="select_pen"]');
-                if (!penInput) {
-                    penInput = document.createElement('input');
-                    penInput.type = 'hidden';
-                    penInput.name = 'select_pen';
-                    nativeForm.appendChild(penInput);
-                }
-                penInput.value = finalPenVal;
+                const action = nativeForm.getAttribute('action') || 'process_topic.phtml';
+                // Resolve properly against the thread's own URL — action is a bare
+                // relative path ("process_topic.phtml"), which HTML resolves against
+                // the page's directory (/neoboards/), not the site root. Naively
+                // prepending '/' sent every reply to /process_topic.phtml (wrong,
+                // root-level, doesn't exist) instead of /neoboards/process_topic.phtml.
+                const postUrl = new URL(action, currentUrl).href;
 
-                // 4. Force the native submit button to be clicked.
-                // This ensures the browser bundles the button's name/value in the POST payload!
-                const realSubmitBtn = nativeForm.querySelector('input[type="submit"], button[type="submit"], input[name="message_reply"]');
-                if (realSubmitBtn) {
-                    realSubmitBtn.click();
-                } else {
-                    nativeForm.submit(); // Ultimate fallback
+                try {
+                    const res = await fetch(postUrl, { method: 'POST', body: fd });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+                    const html = await res.text();
+                    const newDoc = new DOMParser().parseFromString(html, 'text/html');
+
+                    // Update the cached doc so the tab title survives the re-render
+                    const thread = openThreads.find(t => t.id === threadId);
+                    if (thread) {
+                        thread.htmlCache = newDoc;
+                        // Promote "Current Thread" placeholder to the real title now that we have the fresh DOM
+                        if (thread.title === 'Current Thread') {
+                            const titleEl = newDoc.querySelector('#boardTopic .topicTitle h1');
+                            if (titleEl) {
+                                thread.title = titleEl.textContent.replace(/^Topic:\s*/i, '').trim();
+                                renderTabs();
+                            }
+                        }
+                    }
+
+                    // Re-render in-place — no page navigation, no SPA reset
+                    const contentArea = document.getElementById('nui-content-area');
+                    renderThreadUI(newDoc, contentArea, currentUrl, threadId);
+
+                } catch (err) {
+                    if (statusEl) { statusEl.style.color = 'var(--nui-danger)'; statusEl.textContent = 'Failed to post.'; }
+                    submitBtn.disabled = false;
                 }
             });
 
@@ -6921,46 +7260,11 @@
         wrapper.style.cssText = 'width: 100%; max-width: 800px; display: flex; flex-direction: column; gap: var(--nui-space-4);';
         container.appendChild(wrapper);
 
-        // HUB - Favorites & History
-        if (favThreads.length > 0 || recentThreads.length > 0) {
-            const historyCard = document.createElement('div');
-            historyCard.className = 'nui-surface';
-            historyCard.style.cssText = 'border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 2px 4px var(--nui-shadow); overflow: hidden; margin-bottom: var(--nui-space-3);';
+        wrapper.innerHTML += `<div class="nui-text" style="font-family: var(--nui-font-display); font-size: 26px; font-weight: 800; text-align: center; margin-bottom: -6px;">Neoboard Directory</div>`;
 
-            let html = '';
-            if (favThreads.length > 0) {
-                html += `<div style="padding: 10px 14px; background: var(--nui-surface-2); font-weight: 800; font-size: 13px; text-transform: uppercase; color: var(--nui-text); border-bottom: 1px solid var(--nui-border);">⭐ Starred Threads</div><div style="display: flex; flex-direction: column;">`;
-                favThreads.forEach(t => {
-                    html += `<a href="${t.url}" class="nui-thread-link" data-id="${t.id}" data-title="${t.title}" style="padding: 12px 14px; border-bottom: 1px solid var(--nui-border); text-decoration: none; color: var(--nui-accent); font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${t.title}</a>`;
-                });
-                html += `</div>`;
-            }
-            if (recentThreads.length > 0) {
-                html += `<div style="padding: 10px 14px; background: var(--nui-surface-2); font-weight: 800; font-size: 13px; text-transform: uppercase; color: var(--nui-text); border-bottom: 1px solid var(--nui-border); display: flex; align-items: center; justify-content: space-between;">
-                    <span>🕒 Recently Read</span>
-                    <button type="button" id="nui-clear-recent" style="font-size: 13px; font-weight: 700; padding: 8px 16px; border-radius: var(--nui-radius-pill); border: 1px solid var(--nui-border); background: var(--nui-surface); color: var(--nui-text-muted); cursor: pointer; min-height: 36px; display: flex; align-items: center; justify-content: center;">Clear</button>
-                </div><div style="display: flex; flex-direction: column;">`;
-                recentThreads.slice(0, 5).forEach(t => {
-                    html += `<a href="${t.url}" class="nui-thread-link" data-id="${t.id}" data-title="${t.title}" style="padding: 12px 14px; border-bottom: 1px solid var(--nui-border); text-decoration: none; color: var(--nui-text); font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${t.title}</a>`;
-                });
-                html += `</div>`;
-            }
-            historyCard.innerHTML = html;
-
-            const clearRecentBtn = historyCard.querySelector('#nui-clear-recent');
-            if (clearRecentBtn) {
-                clearRecentBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    recentThreads = [];
-                    saveState();
-                    historyCard.remove();
-                });
-            }
-
-            wrapper.appendChild(historyCard);
-        }
-
+        // Scrape categories/boards up front — the favorites grid needs to
+        // resolve full board info (icon, live topic/post counts) by matching
+        // favBoards ids against what's actually on the page right now.
         const categories = [];
         let currentCategory = null;
         const boardIndex = doc.getElementById('boardIndex');
@@ -6992,39 +7296,185 @@
                         const comments = child.querySelector('.comments') ? child.querySelector('.comments').textContent.trim() : '0';
                         const recent = child.querySelector('.recent') ? child.querySelector('.recent').textContent.trim() : 'Never';
 
-                        currentCategory.boards.push({ title, url, desc, iconUrl, topics, comments, recent });
+                        const id = getBoardNumFromUrl(url);
+                        currentCategory.boards.push({ id, title, url, desc, iconUrl, topics, comments, recent });
                     }
                 });
             }
         }
 
-        wrapper.innerHTML += `<div class="nui-text" style="font-family: var(--nui-font-display); font-size: 26px; font-weight: 800; text-align: center; margin-bottom: var(--nui-space-3);">Neoboard Directory</div>`;
+        // ---- Favorite Boards (pinned, always first) ----
+        const allBoards = categories.flatMap(c => c.boards);
+        const favBoardTile = (board) => `
+            <a href="${board.url}" class="nui-item nui-reset nui-board-link nui-fav-board-tile" data-id="${board.id}"
+                style="text-decoration: none; margin: 0; padding: 14px 10px 10px; flex-direction: column; align-items: center; text-align: center; gap: 8px; border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg); position: relative; background: var(--nui-surface);">
+                <button type="button" class="nui-board-fav-toggle" data-id="${board.id}" data-title="${(board.title || '').replace(/"/g, '&quot;')}" data-url="${board.url}" data-icon="${board.iconUrl}"
+                    style="position: absolute; top: 6px; right: 6px; background: none; border: none; padding: 2px; cursor: pointer; line-height: 0; color: var(--nui-accent);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
+                </button>
+                <div style="width: 44px; height: 44px; border-radius: var(--nui-radius-md); overflow: hidden; flex-shrink: 0; background: var(--nui-surface-2); border: 1px solid var(--nui-border); display: flex; align-items: center; justify-content: center;">
+                    <img src="${board.iconUrl}" style="max-width: 34px; max-height: 34px; object-fit: contain;">
+                </div>
+                <div style="font-weight: 800; font-size: 13px; color: var(--nui-accent); line-height: 1.25;">${board.title}</div>
+            </a>`;
 
+        if (favBoards.length > 0) {
+            // Resolve each saved favorite against what's on the page right now
+            // (fresh icon/title), falling back to the saved snapshot if a board
+            // ever disappears from the index for some reason.
+            const resolved = favBoards.map(fb => allBoards.find(b => b.id === fb.id) || fb);
+
+            const favCard = document.createElement('div');
+            favCard.id = 'nui-fav-boards-card';
+            favCard.style.cssText = 'display: flex; flex-direction: column; gap: 10px; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-accent); background: var(--nui-accent-soft); padding: var(--nui-space-3);';
+            favCard.innerHTML = `
+                <div style="font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--nui-accent); display: flex; align-items: center; gap: 6px;">⭐ Your Boards</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 10px;">
+                    ${resolved.map(favBoardTile).join('')}
+                </div>
+            `;
+            wrapper.appendChild(favCard);
+        }
+
+        // ---- Saved & Recent threads hub ----
+        if (favThreads.length > 0 || recentThreads.length > 0) {
+            const historyCard = document.createElement('div');
+            historyCard.className = 'nui-surface';
+            historyCard.style.cssText = 'border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 2px 4px var(--nui-shadow); overflow: hidden;';
+
+            let html = '';
+            if (favThreads.length > 0) {
+                html += `<div style="padding: 10px 14px; background: var(--nui-surface-2); font-weight: 800; font-size: 13px; text-transform: uppercase; color: var(--nui-text); border-bottom: 1px solid var(--nui-border); display: flex; align-items: center; justify-content: space-between;">
+                    <span>🧵 Starred Threads</span>
+                    <button type="button" id="nui-clear-fav" style="font-size: 13px; font-weight: 700; padding: 8px 16px; border-radius: var(--nui-radius-pill); border: 1px solid var(--nui-border); background: var(--nui-surface); color: var(--nui-text-muted); cursor: pointer; min-height: 36px; display: flex; align-items: center; justify-content: center;">Clear</button>
+                </div><div style="display: flex; flex-direction: column;">`;
+                favThreads.forEach(t => {
+                    html += `<div style="display: flex; align-items: center; border-bottom: 1px solid var(--nui-border);">
+                        <a href="${t.url}" class="nui-thread-link" data-id="${t.id}" data-title="${t.title}" style="flex: 1; min-width: 0; padding: 12px 14px; text-decoration: none; color: var(--nui-accent); font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${t.title}</a>
+                        <button type="button" class="nui-hub-remove-fav" data-id="${t.id}" style="flex-shrink: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--nui-text-faint); font-size: 18px; cursor: pointer;">&times;</button>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+            if (recentThreads.length > 0) {
+                html += `<div style="padding: 10px 14px; background: var(--nui-surface-2); font-weight: 800; font-size: 13px; text-transform: uppercase; color: var(--nui-text); border-bottom: 1px solid var(--nui-border); display: flex; align-items: center; justify-content: space-between;">
+                    <span>🕒 Recently Read</span>
+                    <button type="button" id="nui-clear-recent" style="font-size: 13px; font-weight: 700; padding: 8px 16px; border-radius: var(--nui-radius-pill); border: 1px solid var(--nui-border); background: var(--nui-surface); color: var(--nui-text-muted); cursor: pointer; min-height: 36px; display: flex; align-items: center; justify-content: center;">Clear</button>
+                </div><div style="display: flex; flex-direction: column;">`;
+                recentThreads.slice(0, 5).forEach(t => {
+                    html += `<div style="display: flex; align-items: center; border-bottom: 1px solid var(--nui-border);">
+                        <a href="${t.url}" class="nui-thread-link" data-id="${t.id}" data-title="${t.title}" style="flex: 1; min-width: 0; padding: 12px 14px; text-decoration: none; color: var(--nui-text); font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">${t.title}</a>
+                        <button type="button" class="nui-hub-remove-recent" data-id="${t.id}" style="flex-shrink: 0; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--nui-text-faint); font-size: 18px; cursor: pointer;">&times;</button>
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+            historyCard.innerHTML = html;
+
+            function rerenderHub() {
+                historyCard.remove();
+                renderIndexUI(doc, container);
+            }
+
+            const clearFavBtn = historyCard.querySelector('#nui-clear-fav');
+            if (clearFavBtn) {
+                clearFavBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    favThreads = [];
+                    saveState();
+                    rerenderHub();
+                });
+            }
+
+            historyCard.querySelectorAll('.nui-hub-remove-fav').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    favThreads = favThreads.filter(t => t.id !== btn.getAttribute('data-id'));
+                    saveState();
+                    rerenderHub();
+                });
+            });
+
+            historyCard.querySelectorAll('.nui-hub-remove-recent').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    recentThreads = recentThreads.filter(t => t.id !== btn.getAttribute('data-id'));
+                    saveState();
+                    rerenderHub();
+                });
+            });
+
+            const clearRecentBtn = historyCard.querySelector('#nui-clear-recent');
+            if (clearRecentBtn) {
+                clearRecentBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    recentThreads = [];
+                    saveState();
+                    rerenderHub();
+                });
+            }
+
+            wrapper.appendChild(historyCard);
+        }
+
+        // ---- Categories: collapsible, boards in a responsive tile grid ----
         if (categories.length > 0) {
-            categories.forEach(category => {
+            categories.forEach((category, ci) => {
                 if (category.boards.length === 0) return;
 
-                const catBlock = document.createElement('div');
-                catBlock.style.cssText = 'display: flex; flex-direction: column; gap: var(--nui-space-2); margin-bottom: var(--nui-space-3);';
+                const details = document.createElement('details');
+                details.className = 'nui-index-category';
+                details.open = true;
+                details.style.cssText = 'border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); background: var(--nui-surface); overflow: hidden;';
 
-                const catHeader = document.createElement('div');
-                catHeader.className = 'nui-text';
-                catHeader.style.cssText = 'font-weight: 800; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-left: 12px; margin-bottom: 4px; color: var(--nui-text-muted);';
-                catHeader.textContent = category.title;
-                catBlock.appendChild(catHeader);
+                const summary = document.createElement('summary');
+                summary.style.cssText = 'list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--nui-surface-2); font-weight: 800; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--nui-text);';
+                summary.innerHTML = `
+                    <span>${category.title}</span>
+                    <span style="display:flex; align-items:center; gap:8px;">
+                        <span class="nui-badge" style="background: var(--nui-surface); color: var(--nui-text-muted);">${category.boards.length}</span>
+                        <svg class="nui-index-chevron" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24" style="transition: transform 0.15s;"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"></path></svg>
+                    </span>
+                `;
+                summary.addEventListener('click', () => {
+                    // Let the native <details> toggle happen, then sync the chevron next frame
+                    requestAnimationFrame(() => {
+                        const chev = summary.querySelector('.nui-index-chevron');
+                        if (chev) chev.style.transform = details.open ? 'rotate(180deg)' : 'rotate(0deg)';
+                    });
+                });
+                details.appendChild(summary);
+                const chevInit = summary.querySelector('.nui-index-chevron');
+                if (chevInit) chevInit.style.transform = 'rotate(180deg)';
+
+                const grid = document.createElement('div');
+                grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; padding: var(--nui-space-3);';
 
                 category.boards.forEach(board => {
                     const boardCard = document.createElement('a');
                     boardCard.href = board.url;
                     boardCard.className = 'nui-item nui-reset nui-board-link';
-                    boardCard.style.cssText = 'text-decoration: none; margin: 0; margin-bottom: 8px; align-items: stretch; border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg);';
+                    boardCard.setAttribute('data-id', board.id);
+                    boardCard.style.cssText = 'text-decoration: none; margin: 0; align-items: stretch; border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg); position: relative;';
+
+                    const isFav = board.id && favBoards.some(b => b.id === board.id);
 
                     boardCard.innerHTML = `
                         <div style="width: 50px; height: 50px; border-radius: var(--nui-radius-md); overflow: hidden; flex-shrink: 0; background: var(--nui-surface-2); border: 1px solid var(--nui-border); display: flex; align-items: center; justify-content: center;">
                             <img src="${board.iconUrl}" style="max-width: 40px; max-height: 40px; object-fit: contain;">
                         </div>
                         <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-top: 2px;">
-                            <div style="font-weight: 800; font-size: 15.5px; color: var(--nui-accent); line-height: 1.2;">${board.title}</div>
+                            <div style="display: flex; align-items: flex-start; gap: 6px;">
+                                <div style="flex: 1; min-width: 0; font-weight: 800; font-size: 15.5px; color: var(--nui-accent); line-height: 1.2;">${board.title}</div>
+                                <button type="button" class="nui-board-fav-toggle" data-id="${board.id}" data-title="${(board.title || '').replace(/"/g, '&quot;')}" data-url="${board.url}" data-icon="${board.iconUrl}"
+                                    style="flex-shrink: 0; background: none; border: none; padding: 2px; cursor: pointer; line-height: 0; margin-top: -2px; color: ${isFav ? 'var(--nui-accent)' : 'var(--nui-text-faint)'};">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
+                                </button>
+                            </div>
                             <div class="nui-text-muted" style="font-size: 12.5px; line-height: 1.35; white-space: normal;">${board.desc}</div>
                             <div style="display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap;">
                                 <span class="nui-badge">${board.topics} Topics</span>
@@ -7033,14 +7483,36 @@
                             </div>
                         </div>
                     `;
-                    catBlock.appendChild(boardCard);
+                    grid.appendChild(boardCard);
                 });
-                wrapper.appendChild(catBlock);
+
+                details.appendChild(grid);
+                wrapper.appendChild(details);
+            });
+
+            wrapper.querySelectorAll('.nui-board-fav-toggle').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const id = btn.getAttribute('data-id');
+                    if (!id) return;
+                    const exists = favBoards.some(b => b.id === id);
+                    if (exists) {
+                        favBoards = favBoards.filter(b => b.id !== id);
+                    } else {
+                        favBoards.push({ id, title: btn.getAttribute('data-title'), url: btn.getAttribute('data-url'), iconUrl: btn.getAttribute('data-icon') });
+                    }
+                    saveState();
+                    const favCardEl = document.getElementById('nui-fav-boards-card');
+                    if (favCardEl) favCardEl.remove();
+                    renderIndexUI(doc, container);
+                });
             });
         } else {
             wrapper.innerHTML += `<div class="nui-empty"><span class="nui-empty-emoji">📝</span><br>Could not load Neoboards index.</div>`;
         }
     }
+
 
     function renderBoardListUI(doc, container) {
         container.innerHTML = '';
@@ -7059,7 +7531,7 @@
             if (h1) boardTitle = h1.textContent.trim();
 
             const createLink = boardList.querySelector('.createTopicButton a');
-            if (createLink) createTopicUrl = createLink.href;
+            if (createLink) { createTopicUrl = createLink.href; newTopicUrl = createLink.href; }
 
             const pageNav = boardList.querySelector('.boardNavBottom .pageNav');
             if (pageNav) {
@@ -7142,10 +7614,18 @@
                 let safeTitleHtml = topic.titleHtml.replace(/<img/g, '<img style="vertical-align: middle; max-height: 18px; width: auto;"');
                 let safeLastHtml = topic.lastHtml.replace(/<a/g, '<a style="color: inherit; text-decoration: none;"');
 
+                const isFav = tId && favThreads.some(t => t.id === tId);
+
                 card.innerHTML = `
                     <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                        <div style="font-weight: 800; font-size: 15px; color: var(--nui-text); line-height: 1.3; overflow-wrap: anywhere;">
-                            ${safeTitleHtml}
+                        <div style="display: flex; align-items: flex-start; gap: 8px; width: 100%;">
+                            <div style="flex: 1; min-width: 0; font-weight: 800; font-size: 15px; color: var(--nui-text); line-height: 1.3; overflow-wrap: anywhere;">
+                                ${safeTitleHtml}
+                            </div>
+                            <button type="button" class="nui-board-fav-btn" data-id="${tId}" data-title="${safeTitleStr.replace(/"/g, '&quot;')}" data-url="${topic.url}"
+                                style="flex-shrink: 0; background: none; border: none; padding: 2px; cursor: pointer; line-height: 0; color: ${isFav ? 'var(--nui-accent)' : 'var(--nui-text-faint)'};">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
+                            </button>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: flex-end; width: 100%; font-size: 12px; font-weight: 600; color: var(--nui-text-muted);">
                             <div style="display: flex; flex-direction: column; gap: 2px;">
@@ -7161,6 +7641,26 @@
                 listWrap.appendChild(card);
             });
             wrapper.appendChild(listWrap);
+
+            wrapper.querySelectorAll('.nui-board-fav-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const id = btn.getAttribute('data-id');
+                    if (!id) return;
+                    const exists = favThreads.some(t => t.id === id);
+                    if (exists) {
+                        favThreads = favThreads.filter(t => t.id !== id);
+                    } else {
+                        favThreads.push({ id, title: btn.getAttribute('data-title'), url: btn.getAttribute('data-url') });
+                    }
+                    saveState();
+                    const nowFav = !exists;
+                    btn.style.color = nowFav ? 'var(--nui-accent)' : 'var(--nui-text-faint)';
+                    const svg = btn.querySelector('svg');
+                    svg.setAttribute('fill', nowFav ? 'currentColor' : 'none');
+                });
+            });
 
             wrapper.querySelectorAll('.nui-board-pager').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -7191,13 +7691,228 @@
             const fabWrap = document.createElement('div');
             fabWrap.style.cssText = 'position: fixed; bottom: calc(var(--nui-space-4) + 25px); right: var(--nui-space-4); z-index: 99;';
             fabWrap.innerHTML = `
-                <a href="${createTopicUrl}" class="nui-btn nui-btn-primary" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; border-radius: 30px; box-shadow: 0 4px 16px var(--nui-shadow); text-decoration: none;">
+                <a href="${createTopicUrl}" class="nui-btn nui-btn-primary nui-new-topic-link" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; border-radius: 30px; box-shadow: 0 4px 16px var(--nui-shadow); text-decoration: none;">
                     <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
                     New Topic
                 </a>
             `;
             wrapper.appendChild(fabWrap);
         }
+    }
+
+    // --------------------------------------------------------------------------
+    // CREATE TOPIC VIEW
+    // --------------------------------------------------------------------------
+    // Fetches the legacy create_topic.phtml form and re-renders it as a NeoUI
+    // form (board picker, title, message, pens, smilies), submitting via
+    // fetch() the same way Quick Reply does — no full page navigation, and the
+    // resulting thread opens in-place as a new tab.
+    function loadCreateTopicView(url, container) {
+        activeTabId = 'create';
+        renderTabs();
+        const actionBar = document.getElementById('nui-thread-actionbar');
+        if (actionBar) actionBar.style.display = 'none';
+
+        window.history.replaceState(null, '', url);
+        container.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">📡</span><br>Loading form...</div>`;
+
+        fetch(url).then(res => res.text()).then(html => {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            renderCreateTopicUI(doc, container, url);
+            container.scrollTop = 0;
+        }).catch(err => {
+            container.innerHTML = `<div class="nui-empty" style="color: var(--nui-danger);">Failed to load the New Topic form.</div>`;
+        });
+    }
+
+    function renderCreateTopicUI(doc, container, formUrl) {
+        container.innerHTML = '';
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: var(--nui-space-3); padding-bottom: 40px;';
+        container.appendChild(wrapper);
+
+        const nativeForm = doc.querySelector('form[name="message_form"]');
+        if (!nativeForm) {
+            wrapper.innerHTML = `<div class="nui-empty">Could not load the New Topic form.</div>`;
+            return;
+        }
+
+        const boardSelect = nativeForm.querySelector('select[name="board_id"]');
+        const boardOptions = boardSelect
+            ? Array.from(boardSelect.querySelectorAll('option')).map(o => ({ value: o.value, label: o.textContent.trim(), selected: o.selected }))
+            : [];
+
+        const pens = Array.from(nativeForm.querySelectorAll('.neoboardPen')).map(pen => {
+            const labelEl = pen.querySelector('label');
+            const inputEl = pen.querySelector('input');
+            if (!labelEl || !inputEl) return null;
+            return { label: labelEl.textContent.trim(), val: inputEl.value, checked: inputEl.checked };
+        }).filter(Boolean);
+
+        // Stash the real native form (with its hidden fields, e.g. board_id
+        // when preselected via ?board=) in the live document so FormData can
+        // pick up everything Neopets expects on submit.
+        // NOTE: uses its own class (nui-hidden-ct-form), separate from Quick
+        // Reply's nui-hidden-native-form — both scrape a form literally named
+        // "message_form", so sharing a class meant opening one tab would
+        // delete the other tab's mounted form out from under it.
+        document.querySelectorAll('form.nui-hidden-ct-form').forEach(f => f.remove());
+        nativeForm.classList.add('nui-hidden-ct-form');
+        nativeForm.style.display = 'none';
+        document.body.appendChild(nativeForm);
+
+        const smiliesHtml = (() => {
+            const panelsHtml = SMILEY_CATEGORIES.map((cat, ci) => {
+                const slice = NEOBOARD_SMILIES.slice(cat.start, cat.start + cat.count);
+                const imgs = slice.map(s =>
+                    `<img src="${s.src}" data-code="${s.code.replace(/"/g, '&quot;')}" class="nui-smiley-btn" title="${s.code.replace(/"/g, '&quot;')}" style="cursor:pointer; width:20px; height:20px; transition:transform 0.1s;">`
+                ).join('');
+                return `<div class="nui-smiley-panel" data-cat="${ci}" style="display:${ci === 0 ? 'flex' : 'none'}; flex-wrap:wrap; gap:5px; padding:8px;">${imgs}</div>`;
+            }).join('');
+            const tabsHtml = SMILEY_CATEGORIES.map((cat, ci) =>
+                `<button type="button" class="nui-smiley-tab" data-tab="${ci}" style="flex-shrink:0; padding:5px 9px; font-size:12px; font-weight:700; border-radius:var(--nui-radius-pill); border:1px solid var(--nui-border); cursor:pointer; background:${ci === 0 ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)'}; color:${ci === 0 ? 'var(--nui-accent)' : 'var(--nui-text-muted)'};">${cat.label}</button>`
+            ).join('');
+            return `
+                <div style="margin-bottom:12px;">
+                    <button type="button" id="nui-ct-smiley-toggle" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:4px 10px; font-size:12px; margin-bottom:8px;">😊 Emoticons</button>
+                    <div id="nui-ct-smiley-drawer" style="display:none; flex-direction:column; border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); background:var(--nui-surface-2); overflow:hidden;">
+                        <div style="display:flex; gap:4px; overflow-x:auto; padding:8px 8px 0; scrollbar-width:none; -webkit-overflow-scrolling:touch;">${tabsHtml}</div>
+                        <div id="nui-ct-smiley-panels" style="max-height:140px; overflow-y:auto;">${panelsHtml}</div>
+                    </div>
+                </div>
+            `;
+        })();
+
+        wrapper.innerHTML = `
+            <a href="/neoboards/index.phtml" class="nui-index-link" style="color: var(--nui-text-muted); text-decoration: none; font-weight: 700; font-size: 13.5px; display: inline-flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                Back to Boards
+            </a>
+            <div class="nui-text" style="font-family: var(--nui-font-display); font-size: 24px; font-weight: 800; margin-bottom: 4px;">Create a Topic</div>
+            <form id="nui-create-topic-form" class="nui-surface" style="border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); padding: var(--nui-space-4); box-shadow: 0 4px 12px var(--nui-shadow); display: flex; flex-direction: column; gap: 14px;">
+                <label style="display:flex; flex-direction:column; gap:6px;">
+                    <span style="font-size:12px; font-weight:800; color:var(--nui-text-muted); text-transform:uppercase; letter-spacing:0.5px;">Board</span>
+                    <select name="board_id" class="nui-input" style="padding:10px 12px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface); color:var(--nui-text);">
+                        ${boardOptions.map(o => `<option value="${o.value}" ${o.selected ? 'selected' : ''}>${o.label}</option>`).join('')}
+                    </select>
+                </label>
+                <label style="display:flex; flex-direction:column; gap:6px;">
+                    <span style="font-size:12px; font-weight:800; color:var(--nui-text-muted); text-transform:uppercase; letter-spacing:0.5px;">Topic Title</span>
+                    <input type="text" name="topic_title" maxlength="80" required class="nui-input" style="padding:10px 12px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface); color:var(--nui-text);">
+                </label>
+                ${pens.length > 0 ? `
+                <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; -webkit-overflow-scrolling:touch;">
+                    ${pens.map(pen => `
+                        <button type="button" class="nui-ct-pen-opt" data-val="${pen.val}"
+                            style="flex-shrink:0; padding:6px 12px; border-radius:var(--nui-radius-pill); border:1px solid var(--nui-border); font-size:12px; font-weight:700; cursor:pointer;
+                            background:${pen.checked ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)'};
+                            color:${pen.checked ? 'var(--nui-accent)' : 'var(--nui-text-muted)'};">${pen.label}</button>
+                    `).join('')}
+                </div>` : ''}
+                ${smiliesHtml}
+                <label style="display:flex; flex-direction:column; gap:6px;">
+                    <span style="font-size:12px; font-weight:800; color:var(--nui-text-muted); text-transform:uppercase; letter-spacing:0.5px;">Message</span>
+                    <textarea name="message" maxlength="500" required class="nui-textarea" rows="8" style="resize:vertical;"></textarea>
+                </label>
+                <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                    <span id="nui-ct-status" style="font-size: 13px; font-weight: 700; color: var(--nui-text-muted);"></span>
+                    <button type="submit" class="nui-btn nui-btn-primary">Create Topic</button>
+                </div>
+            </form>
+        `;
+
+        wrapper.querySelector('.nui-index-link').addEventListener('click', (e) => {
+            if (!e.ctrlKey && !e.metaKey) { e.preventDefault(); switchTab('board'); }
+        });
+
+        const form = wrapper.querySelector('#nui-create-topic-form');
+        const textarea = form.querySelector('textarea[name="message"]');
+        let selectedPen = pens.find(p => p.checked) ? pens.find(p => p.checked).val : (pens[0] ? pens[0].val : '0');
+
+        const smileyToggle = wrapper.querySelector('#nui-ct-smiley-toggle');
+        const smileyDrawer = wrapper.querySelector('#nui-ct-smiley-drawer');
+        if (smileyToggle && smileyDrawer) {
+            smileyToggle.addEventListener('click', () => {
+                smileyDrawer.style.display = smileyDrawer.style.display !== 'none' ? 'none' : 'flex';
+            });
+            wrapper.querySelectorAll('.nui-smiley-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const ci = tab.getAttribute('data-tab');
+                    wrapper.querySelectorAll('.nui-smiley-tab').forEach(t => {
+                        const active = t.getAttribute('data-tab') === ci;
+                        t.style.background = active ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
+                        t.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                    });
+                    wrapper.querySelectorAll('.nui-smiley-panel').forEach(p => { p.style.display = p.getAttribute('data-cat') === ci ? 'flex' : 'none'; });
+                });
+            });
+        }
+        wrapper.querySelectorAll('.nui-smiley-btn').forEach(btn => {
+            btn.addEventListener('click', () => { textarea.value += btn.getAttribute('data-code'); textarea.focus(); });
+        });
+        wrapper.querySelectorAll('.nui-ct-pen-opt').forEach(btn => {
+            btn.addEventListener('click', () => {
+                selectedPen = btn.getAttribute('data-val');
+                wrapper.querySelectorAll('.nui-ct-pen-opt').forEach(b => {
+                    const active = b.getAttribute('data-val') === selectedPen;
+                    b.style.background = active ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
+                    b.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                });
+            });
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const statusEl = form.querySelector('#nui-ct-status');
+            submitBtn.disabled = true;
+            if (statusEl) { statusEl.style.color = 'var(--nui-text-muted)'; statusEl.textContent = 'Posting…'; }
+
+            const liveNativeForm = document.querySelector('form.nui-hidden-ct-form');
+            if (!liveNativeForm) {
+                if (statusEl) { statusEl.style.color = 'var(--nui-danger)'; statusEl.textContent = 'Error: form missing.'; }
+                submitBtn.disabled = false;
+                return;
+            }
+
+            const fd = new FormData(liveNativeForm);
+            fd.set('board_id', form.querySelector('select[name="board_id"]').value);
+            fd.set('topic_title', form.querySelector('input[name="topic_title"]').value);
+            fd.set('message', textarea.value);
+            if (pens.length > 0) fd.set('select_pen', selectedPen);
+
+            const action = liveNativeForm.getAttribute('action') || 'process_topic.phtml';
+            // See the identical fix in Quick Reply's submit handler — relative
+            // actions resolve against the page directory, not the site root.
+            const postUrl = new URL(action, formUrl).href;
+
+            try {
+                const res = await fetch(postUrl, { method: 'POST', body: fd });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const html = await res.text();
+                const newDoc = new DOMParser().parseFromString(html, 'text/html');
+
+                // A successful create redirects to the new topic's thread page,
+                // which fetch() follows transparently — res.url is the final URL.
+                const newBoardTopic = newDoc.getElementById('boardTopic');
+                if (newBoardTopic && res.url) {
+                    const newId = getTopicId(res.url);
+                    const titleEl = newBoardTopic.querySelector('.topicTitle h1');
+                    const title = titleEl ? titleEl.textContent.replace(/^Topic:\s*/i, '').trim() : (form.querySelector('input[name="topic_title"]').value || 'New Topic');
+                    if (newId) {
+                        openThreads.push({ id: newId, title, url: res.url, htmlCache: newDoc });
+                        switchTab(newId);
+                        return;
+                    }
+                }
+
+                // Fallback: couldn't confirm the new thread — go back to the board list.
+                switchTab('board');
+            } catch (err) {
+                if (statusEl) { statusEl.style.color = 'var(--nui-danger)'; statusEl.textContent = 'Failed to post.'; }
+                submitBtn.disabled = false;
+            }
+        });
     }
 
     // --------------------------------------------------------------------------
@@ -7228,6 +7943,14 @@
             const contentArea = document.getElementById('nui-content-area');
             loadBoardList(boardLink.href, contentArea);
         }
+
+        // Handle New Topic FAB
+        const newTopicLink = e.target.closest('.nui-new-topic-link');
+        if (newTopicLink && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            newTopicUrl = newTopicLink.href;
+            switchTab('create');
+        }
     });
 
     // --------------------------------------------------------------------------
@@ -7236,9 +7959,22 @@
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         try {
             const app = initAppShell();
-            if (isTopic) {
+            if (isCreateTopic) {
+                const resolvedBoard = resolveBoardListUrl(document, window.location.href);
+                if (resolvedBoard) currentBoardUrl = resolvedBoard;
+                activeTabId = 'create';
+                newTopicUrl = window.location.href;
+                renderTabs();
+                renderCreateTopicUI(document, document.getElementById('nui-content-area'), window.location.href);
+            } else if (isTopic) {
+                const resolvedBoard = resolveBoardListUrl(document, window.location.href);
+                if (resolvedBoard) currentBoardUrl = resolvedBoard;
                 const id = getTopicId(window.location.href);
-                openThreads.push({ id: id, title: 'Current Thread', url: window.location.href, htmlCache: document });
+                // Try to scrape the real title from the page DOM before falling back to placeholder
+                let initTitle = 'Thread';
+                const initTitleEl = document.querySelector('#boardTopic .topicTitle h1');
+                if (initTitleEl) initTitle = initTitleEl.textContent.replace(/^Topic:\s*/i, '').trim();
+                openThreads.push({ id: id, title: initTitle || 'Thread', url: window.location.href, htmlCache: document });
                 switchTab(id);
             } else {
                 switchTab('board');
@@ -7248,9 +7984,21 @@
         document.addEventListener('DOMContentLoaded', () => {
             try {
                 const app = initAppShell();
-                if (isTopic) {
+                if (isCreateTopic) {
+                    const resolvedBoard = resolveBoardListUrl(document, window.location.href);
+                    if (resolvedBoard) currentBoardUrl = resolvedBoard;
+                    activeTabId = 'create';
+                    newTopicUrl = window.location.href;
+                    renderTabs();
+                    renderCreateTopicUI(document, document.getElementById('nui-content-area'), window.location.href);
+                } else if (isTopic) {
+                    const resolvedBoard = resolveBoardListUrl(document, window.location.href);
+                    if (resolvedBoard) currentBoardUrl = resolvedBoard;
                     const id = getTopicId(window.location.href);
-                    openThreads.push({ id: id, title: 'Current Thread', url: window.location.href, htmlCache: document });
+                    let initTitle = 'Thread';
+                    const initTitleEl = document.querySelector('#boardTopic .topicTitle h1');
+                    if (initTitleEl) initTitle = initTitleEl.textContent.replace(/^Topic:\s*/i, '').trim();
+                    openThreads.push({ id: id, title: initTitle || 'Thread', url: window.location.href, htmlCache: document });
                     switchTab(id);
                 } else {
                     switchTab('board');
@@ -8997,7 +9745,7 @@
         // 5. Build App View layout
         const appWrapper = document.createElement('div');
         appWrapper.id = 'nui-nt-app';
-        appWrapper.style.cssText = 'display: flex; flex-direction: column; height: 100vh; padding-top: var(--nui-topbar-h); box-sizing: border-box;';
+        appWrapper.style.cssText = 'display: flex; overflow: hidden; flex-direction: column; height: 100vh; padding-top: var(--nui-topbar-h); box-sizing: border-box;';
 
         const topRow = document.createElement('div');
         topRow.style.cssText = 'display: flex; align-items: center; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border); flex-shrink: 0;';
@@ -9020,7 +9768,7 @@
 
         const contentArea = document.createElement('div');
         contentArea.id = 'nui-content-area';
-        contentArea.style.cssText = 'flex: 1; overflow-y: auto; padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; -webkit-overflow-scrolling: touch;';
+        contentArea.style.cssText = 'flex: 1; min-height: 0; overflow-y: auto; padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; -webkit-overflow-scrolling: touch;';
         appWrapper.appendChild(contentArea);
 
         document.body.appendChild(appWrapper);
@@ -9661,7 +10409,7 @@
 
         const contentArea = document.createElement('div');
         contentArea.id = 'nui-stocks-content';
-        contentArea.style.cssText = 'flex: 1; overflow-y: auto; padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; -webkit-overflow-scrolling: touch;';
+        contentArea.style.cssText = 'flex: 1; min-height: 0; overflow-y: auto; padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; -webkit-overflow-scrolling: touch;';
         appWrapper.appendChild(contentArea);
 
         document.body.appendChild(appWrapper);
@@ -10056,7 +10804,7 @@
         dashboard.style.cssText = 'border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg); overflow: hidden; box-shadow: 0 4px 16px var(--nui-shadow); text-align: center; display: flex; flex-direction: column; align-items: center; background: var(--nui-surface);';
 
         dashboard.innerHTML = `
-            <div style="width: 100%; height: 150px; border-bottom: 2px solid var(--nui-border); background: var(--nui-surface-2);">
+            <div id="coco-stage" style="width: 100%; height: 150px; border-bottom: 2px solid var(--nui-border); background: var(--nui-surface-2);">
                 <img src="https://images.neopets.com/games/clicktoplay/screenshot_fullsize_490_1_v1.png" style="width: 100%; height: 100%; object-fit: cover; object-position: center 20%;">
             </div>
 
@@ -10081,15 +10829,12 @@
         const btnThrow = dashboard.querySelector('#btn-throw');
         const resultBox = dashboard.querySelector('#coco-result-box');
         const cocoStage = dashboard.querySelector('#coco-stage');
-        const cocoImage = dashboard.querySelector('#coco-image');
         const counterEl = dashboard.querySelector('#throw-counter');
 
         btnThrow.addEventListener('click', async () => {
             btnThrow.disabled = true;
             btnThrow.textContent = 'Aiming...';
 
-            cocoImage.src = 'https://images.neopets.com/items/sph_coco_1.gif';
-            cocoImage.classList.add('nui-shake');
 
             resultBox.style.background = 'var(--nui-surface-2)';
             resultBox.style.borderColor = 'var(--nui-border)';
@@ -10101,11 +10846,9 @@
 
                 if (res.totalNp) updateLiveNP(res.totalNp);
 
-                cocoImage.classList.remove('nui-shake');
 
                 if (res.error) {
                     cocoStage.style.borderColor = 'var(--nui-danger)';
-                    cocoImage.src = 'https://images.neopets.com/shopkeepers/w64.gif';
                     resultBox.style.background = 'rgba(239, 68, 68, 0.05)';
                     resultBox.style.borderColor = 'var(--nui-danger)';
                     resultBox.style.color = 'var(--nui-danger)';
@@ -10120,7 +10863,6 @@
                 } else if (res.points === 10000) {
                     cocoStage.style.borderColor = 'var(--nui-success)';
                     cocoStage.style.background = 'rgba(16, 185, 129, 0.1)';
-                    cocoImage.src = `https://images.neopets.com/items/gen_nplarge.gif`;
 
                     resultBox.style.background = 'rgba(16, 185, 129, 0.1)';
                     resultBox.style.borderColor = 'var(--nui-success)';
@@ -10133,7 +10875,6 @@
 
                 } else if (res.points === 300) {
                     cocoStage.style.borderColor = 'var(--nui-success)';
-                    cocoImage.src = 'https://images.neopets.com/items/gen_npmed.gif';
                     resultBox.style.background = 'rgba(16, 185, 129, 0.05)';
                     resultBox.style.borderColor = 'var(--nui-success)';
                     resultBox.style.color = 'var(--nui-success)';
@@ -10141,13 +10882,11 @@
 
                 } else if (res.points === 50) {
                     cocoStage.style.borderColor = 'var(--nui-accent)';
-                    cocoImage.src = 'https://images.neopets.com/items/gen_npsmall.gif';
                     resultBox.style.color = 'var(--nui-accent)';
                     resultBox.innerHTML = `<span>You hit it, but it just wobbled. Won 50 NP.</span>`;
 
                 } else {
                     cocoStage.style.borderColor = 'var(--nui-border)';
-                    cocoImage.src = 'https://images.neopets.com/shopkeepers/w64.gif';
                     resultBox.style.color = 'var(--nui-text)';
                     resultBox.innerHTML = `<span>You completely missed!</span>`;
                 }
@@ -10158,7 +10897,6 @@
                 btnThrow.disabled = false;
 
             } catch (err) {
-                cocoImage.classList.remove('nui-shake');
                 cocoStage.style.borderColor = 'var(--nui-danger)';
                 resultBox.style.borderColor = 'var(--nui-danger)';
                 resultBox.style.color = 'var(--nui-danger)';
@@ -10175,6 +10913,436 @@
         document.addEventListener('DOMContentLoaded', () => {
             try { const container = initAppShell(); renderDashboard(container); } catch (err) { showFatalError(err); }
         });
+    }
+
+})();
+// ==============================================================================
+// MODULE 13: BURIED TREASURE (HEADLESS SPA WRAPPER)
+// ==============================================================================
+// Activates on: /pirates/buriedtreasure/index.phtml and
+//               /pirates/buriedtreasure/buriedtreasure.phtml
+//
+// The legacy flow spans four different server-rendered states glued together
+// by a plain HTML ISMAP: an intro/story screen with a "Play" button, a
+// pick-a-spot map, a post-dig cooldown screen, and (unsampled here, but
+// certain to exist) a win/lose result screen. All four are scraped from
+// whatever `document`/fetch response is on hand and re-rendered as one
+// mobile-forward card, with the whole loop — Play, pick a spot, get a
+// result — staying inside the SPA via fetch() instead of full page loads.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/pirates\/buriedtreasure\//.test(location.pathname)) return;
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI || !NeoUI.__ready) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Buried Treasure SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    const DAILY_TIMERS_KEY = 'neoui_daily_timers_v1';
+    const TIMER_ID = 'buried-treasure';
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Keep the shared Daily Timer Hub in sync with the real server cooldown,
+    // instead of relying on the person remembering to tap "done" over there
+    // too — we already know the exact minutes remaining from this page.
+    // ─────────────────────────────────────────────────────────────────────────
+    function syncTimer(msFromNow) {
+        try {
+            const raw = localStorage.getItem(DAILY_TIMERS_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            const list = Array.isArray(parsed) ? parsed : [];
+            let entry = list.find(function (item) { return item && item.id === TIMER_ID; });
+            if (!entry) { entry = { id: TIMER_ID }; list.push(entry); }
+            entry.nextAt = Date.now() + msFromNow;
+            localStorage.setItem(DAILY_TIMERS_KEY, JSON.stringify(list));
+        } catch (e) {}
+    }
+
+    function formatClock(msLeft) {
+        const totalSec = Math.max(0, Math.ceil(msLeft / 1000));
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        const pad = function (n) { return String(n).padStart(2, '0'); };
+        return pad(h) + ':' + pad(m) + ':' + pad(s);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SCRAPERS — figure out which of the four server states `doc` holds
+    // ─────────────────────────────────────────────────────────────────────────
+    function scrapeState(doc, baseUrl) {
+        const content = doc.querySelector('td.content') || doc.body;
+        const raw = content.innerHTML;
+        const jackpotMatch = raw.match(/Cumulative Jackpot[^0-9]*([\d,]+)\s*NP/i);
+        const jackpot = jackpotMatch ? jackpotMatch[1] : null;
+
+        // Cooldown: "Sorry, you have to wait NNN minutes to play again"
+        const waitMatch = raw.match(/wait another\s*(\d+)\s*minutes/i);
+        if (waitMatch) {
+            const petImg = content.querySelector('img[src*="/cpn/"]') || content.querySelector('img');
+            return {
+                type: 'cooldown',
+                minutes: parseInt(waitMatch[1], 10),
+                petImage: petImg ? new URL(petImg.getAttribute('src'), baseUrl).href : null,
+            };
+        }
+
+        // Ready state: the intro story + "Click to Play!" submit button
+        const playForm = Array.prototype.find.call(content.querySelectorAll('form'), function (f) {
+            return /buriedtreasure\.phtml/i.test(f.getAttribute('action') || '');
+        });
+        if (playForm) {
+            const submitBtn = playForm.querySelector('input[type="submit"]');
+            if (submitBtn && /click to play/i.test(submitBtn.value || '')) {
+                return {
+                    type: 'ready',
+                    playAction: new URL(playForm.getAttribute('action'), baseUrl).href,
+                };
+            }
+        }
+
+        // Map state: an ISMAP image wrapped in an <a>
+        const mapAnchor = Array.prototype.find.call(content.querySelectorAll('a'), function (a) {
+            return a.querySelector('img[ismap], img[ISMAP]');
+        });
+        if (mapAnchor) {
+            const img = mapAnchor.querySelector('img');
+            return {
+                type: 'map',
+                jackpot: jackpot,
+                mapImg: new URL(img.getAttribute('src'), baseUrl).href,
+                mapAction: new URL(mapAnchor.getAttribute('href'), baseUrl).href,
+                naturalWidth: parseInt(img.getAttribute('width'), 10) || 540,
+                naturalHeight: parseInt(img.getAttribute('height'), 10) || 550,
+            };
+        }
+
+        // Result state: "[pet] pulls out a ticket... And..." followed by
+        // the outcome, laid out as a table with the pet's picture next to
+        // a picture of the prize (or nothing, if empty-handed). Grab every
+        // image in the table in document order (pet first, prize after)
+        // along with the narration as separate lines rather than one
+        // run-on blob, since the two sentences read better split apart.
+        const resultScope = content.querySelector('table') || content;
+        const images = Array.prototype.map.call(resultScope.querySelectorAll('img'), function (img) {
+            return {
+                src: new URL(img.getAttribute('src'), baseUrl).href,
+                alt: (img.getAttribute('alt') || '').trim(),
+            };
+        });
+        const lines = content.innerHTML
+            .replace(/<(br|\/tr|\/td|\/p|\/div|\/center)\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, ' ')
+            .split('\n')
+            .map(function (s) { return s.replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim(); })
+            .filter(Boolean);
+        return {
+            type: 'result',
+            lines: lines,
+            images: images,
+        };
+    }
+
+    async function fetchState(url) {
+        const res = await fetch(url, { credentials: 'include' });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        return scrapeState(doc, url);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHARED CHROME — hero banner reused across every state
+    // ─────────────────────────────────────────────────────────────────────────
+    function buildBanner() {
+        const banner = document.createElement('div');
+        banner.className = 'nui-surface';
+        banner.style.cssText = 'border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;box-shadow:0 4px 12px var(--nui-shadow);position:relative;';
+        banner.innerHTML = `
+            <div style="position:relative;width:100%;height:110px;overflow:hidden;background:linear-gradient(135deg,#0B2B2E 0%,#124A44 50%,#0B2B2E 100%);display:flex;align-items:center;gap:14px;padding:0 var(--nui-space-4);">
+                <img src="https://images.neopets.com/pirates/map_frontpg.gif"
+                     style="width:74px;height:74px;border-radius:var(--nui-radius-md);border:2px solid rgba(255,255,255,0.25);object-fit:cover;flex-shrink:0;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.6));background:#fff;"
+                     onerror="this.style.display='none'">
+                <div>
+                    <div style="font-family:var(--nui-font-display);font-weight:800;font-size:26px;color:#FFD060;text-shadow:0 2px 8px rgba(0,0,0,0.6);line-height:1.1;">Buried Treasure</div>
+                    <div style="font-size:12.5px;color:rgba(180,255,225,0.9);font-weight:600;margin-top:3px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">Treasure of the Black Pawkeet · once every 3 hours</div>
+                </div>
+            </div>
+        `;
+        return banner;
+    }
+
+    function backToKrawkButton() {
+        const btn = document.createElement('a');
+        btn.href = '/pirates/index.phtml';
+        btn.className = 'nui-btn nui-btn-secondary nui-btn-block';
+        btn.style.cssText = 'text-decoration:none;display:block;box-sizing:border-box;';
+        btn.textContent = '← Back to Krawk Island';
+        return btn;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STATE RENDERERS
+    // ─────────────────────────────────────────────────────────────────────────
+    let clockInterval = null;
+    function clearClock() {
+        if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+    }
+
+    function renderReady(wrapper, state) {
+        clearClock();
+        wrapper.innerHTML = '';
+        wrapper.appendChild(buildBanner());
+
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
+        card.innerHTML = `
+            <div style="font-size:15px;color:var(--nui-text-muted);line-height:1.5;max-width:420px;">
+                Somewhere on Krawk Island, the old pirate Bloodhook's treasure is
+                still waiting for someone to dig it up. Pick a square on the map
+                and see if fortune's on your side.
+            </div>
+            <button type="button" id="bt-play-btn" class="nui-btn nui-btn-primary" style="font-size:16px;padding:14px 28px;border-radius:30px;width:100%;max-width:300px;box-shadow:0 4px 12px var(--nui-shadow);">
+                Dig for Treasure (300 NP)
+            </button>
+        `;
+        wrapper.appendChild(card);
+        wrapper.appendChild(backToKrawkButton());
+
+        card.querySelector('#bt-play-btn').addEventListener('click', async function () {
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Setting sail...';
+            try {
+                const next = await fetchState(state.playAction);
+                renderState(wrapper, next);
+            } catch (err) {
+                showFatalError(err);
+                btn.disabled = false;
+                btn.textContent = 'Dig for Treasure (300 NP)';
+            }
+        });
+    }
+
+    function renderMap(wrapper, state) {
+        clearClock();
+        wrapper.innerHTML = '';
+        wrapper.appendChild(buildBanner());
+
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
+
+        const jackpotHtml = state.jackpot
+            ? '<span class="nui-badge nui-badge-accent" style="font-size:12px;padding:5px 12px;">💰 Jackpot: ' + state.jackpot + ' NP</span>'
+            : '';
+
+        card.innerHTML = `
+            ${jackpotHtml}
+            <div style="font-size:14px;font-weight:700;color:var(--nui-text);text-align:center;">Where do <em>you</em> think it's buried?</div>
+            <div id="bt-map-wrap" style="position:relative;width:100%;max-width:480px;border-radius:var(--nui-radius-md);overflow:hidden;border:1px solid var(--nui-border);cursor:crosshair;">
+                <img id="bt-map-img" src="${state.mapImg}" style="display:block;width:100%;height:auto;">
+            </div>
+            <div style="font-size:12px;color:var(--nui-text-faint);">Tap anywhere on the map to dig there.</div>
+        `;
+        wrapper.appendChild(card);
+        wrapper.appendChild(backToKrawkButton());
+
+        const mapImg = card.querySelector('#bt-map-img');
+        const mapWrap = card.querySelector('#bt-map-wrap');
+        let locked = false;
+
+        mapImg.addEventListener('click', async function (e) {
+            if (locked) return;
+            locked = true;
+
+            const rect = mapImg.getBoundingClientRect();
+            const scaleX = state.naturalWidth / rect.width;
+            const scaleY = state.naturalHeight / rect.height;
+            const x = Math.round((e.clientX - rect.left) * scaleX);
+            const y = Math.round((e.clientY - rect.top) * scaleY);
+
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;';
+            overlay.textContent = 'Digging...';
+            mapWrap.style.position = 'relative';
+            mapWrap.appendChild(overlay);
+
+            try {
+                const digUrl = state.mapAction + '?' + x + ',' + y;
+                const next = await fetchState(digUrl);
+                renderState(wrapper, next);
+            } catch (err) {
+                overlay.remove();
+                locked = false;
+                showFatalError(err);
+            }
+        });
+    }
+
+    function renderCooldown(wrapper, state) {
+        clearClock();
+        wrapper.innerHTML = '';
+        wrapper.appendChild(buildBanner());
+
+        const targetAt = Date.now() + state.minutes * 60 * 1000;
+        syncTimer(state.minutes * 60 * 1000);
+
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
+        card.innerHTML = `
+            ${state.petImage ? '<img src="' + state.petImage + '" style="width:120px;height:120px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);object-fit:cover;">' : ''}
+            <div style="font-size:15px;font-weight:700;color:var(--nui-text);">You've already tried your luck this round.</div>
+            <div id="bt-clock" style="font-family:var(--nui-font-display);font-size:32px;font-weight:800;color:var(--nui-accent);letter-spacing:1px;">${formatClock(targetAt - Date.now())}</div>
+            <div style="font-size:12px;color:var(--nui-text-faint);">until you can dig again</div>
+            <button type="button" id="bt-retry-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;" disabled>Not ready yet</button>
+        `;
+        wrapper.appendChild(card);
+        wrapper.appendChild(backToKrawkButton());
+
+        const clockEl = card.querySelector('#bt-clock');
+        const retryBtn = card.querySelector('#bt-retry-btn');
+
+        clockInterval = setInterval(function () {
+            const remaining = targetAt - Date.now();
+            if (remaining <= 0) {
+                clockEl.textContent = '00:00:00';
+                retryBtn.disabled = false;
+                retryBtn.textContent = 'Check Again';
+                clearClock();
+                return;
+            }
+            clockEl.textContent = formatClock(remaining);
+        }, 1000);
+
+        retryBtn.addEventListener('click', async function () {
+            retryBtn.disabled = true;
+            retryBtn.textContent = 'Checking...';
+            try {
+                const next = await fetchState(new URL('index.phtml', location.href).href);
+                renderState(wrapper, next);
+            } catch (err) {
+                showFatalError(err);
+                retryBtn.disabled = false;
+                retryBtn.textContent = 'Check Again';
+            }
+        });
+    }
+
+    function renderResult(wrapper, state) {
+        clearClock();
+        wrapper.innerHTML = '';
+        wrapper.appendChild(buildBanner());
+
+        const lines = (state.lines && state.lines.length) ? state.lines : ['The tide has come in — check back later.'];
+        const images = state.images || [];
+        const fullText = lines.join(' ');
+
+        // Best-effort win/empty-handed read on the narration, purely to pick
+        // an accent color + emoji — never hides or alters the actual text.
+        const isWin = /\bwon\b|prize|congrat/i.test(fullText) && !/nothing|sorry|empty[- ]handed|no prize|better luck/i.test(fullText);
+        const isEmpty = /nothing|sorry|empty[- ]handed|no prize|better luck/i.test(fullText);
+        const badge = isWin
+            ? '<span class="nui-badge nui-badge-success" style="font-size:12px;padding:5px 12px;">🎉 Treasure Found</span>'
+            : (isEmpty ? '<span class="nui-badge" style="font-size:12px;padding:5px 12px;">🌊 Empty-Handed</span>' : '');
+
+        const imagesHtml = images.length
+            ? '<div style="display:flex;gap:var(--nui-space-3);justify-content:center;flex-wrap:wrap;">' +
+                images.map(function (im) {
+                    return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">' +
+                        '<img src="' + im.src + '" style="width:110px;height:110px;object-fit:contain;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);background:var(--nui-surface-alt,#f4f4f4);">' +
+                        (im.alt ? '<div style="font-size:11px;color:var(--nui-text-faint);max-width:110px;text-align:center;">' + im.alt + '</div>' : '') +
+                        '</div>';
+                }).join('') +
+              '</div>'
+            : '';
+
+        const linesHtml = lines.map(function (line, i) {
+            return i === 0
+                ? '<div style="font-size:14.5px;font-weight:700;color:var(--nui-text);line-height:1.5;">' + line + '</div>'
+                : '<div style="font-size:15px;font-weight:600;color:' + (isWin ? 'var(--nui-success, #16a34a)' : 'var(--nui-text)') + ';line-height:1.5;">' + line + '</div>';
+        }).join('');
+
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
+        card.innerHTML = `
+            ${badge}
+            ${imagesHtml}
+            ${linesHtml}
+            <button type="button" id="bt-refresh-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;">Refresh</button>
+        `;
+        wrapper.appendChild(card);
+        wrapper.appendChild(backToKrawkButton());
+
+        card.querySelector('#bt-refresh-btn').addEventListener('click', async function () {
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Refreshing...';
+            try {
+                const next = await fetchState(new URL('index.phtml', location.href).href);
+                renderState(wrapper, next);
+            } catch (err) {
+                showFatalError(err);
+                btn.disabled = false;
+                btn.textContent = 'Refresh';
+            }
+        });
+    }
+
+    function renderState(wrapper, state) {
+        if (state.type === 'ready') return renderReady(wrapper, state);
+        if (state.type === 'map') return renderMap(wrapper, state);
+        if (state.type === 'cooldown') return renderCooldown(wrapper, state);
+        return renderResult(wrapper, state);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // INIT
+    // ─────────────────────────────────────────────────────────────────────────
+    async function init() {
+        const profile = NeoUI.scrapeLegacyProfile();
+        const initialState = scrapeState(document, location.href);
+
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'nui-reset';
+        wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5); max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--nui-space-4);';
+        document.body.appendChild(wrapper);
+
+        renderState(wrapper, initialState);
+    }
+
+    let booted = false;
+    function boot() {
+        if (booted) return;
+        booted = true;
+        init().catch(showFatalError);
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        boot();
+    } else {
+        document.addEventListener('DOMContentLoaded', boot);
     }
 
 })();
