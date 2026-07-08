@@ -10960,30 +10960,35 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             };
         }
 
-        // Result state: "[pet] pulls out a ticket... And..." followed by
-        // the outcome, laid out as a table with the pet's picture next to
-        // a picture of the prize (or nothing, if empty-handed). Grab every
-        // image in the table in document order (pet first, prize after)
-        // along with the narration as separate lines rather than one
-        // run-on blob, since the two sentences read better split apart.
-        const resultScope = content.querySelector('table') || content;
-        const images = Array.prototype.map.call(resultScope.querySelectorAll('img'), function (img) {
-            return {
-                src: new URL(img.getAttribute('src'), baseUrl).href,
-                alt: (img.getAttribute('alt') || '').trim(),
-            };
-        });
-        const lines = content.innerHTML
-            .replace(/<(br|\/tr|\/td|\/p|\/div|\/center)\s*\/?>/gi, '\n')
-            .replace(/<[^>]+>/g, ' ')
-            .split('\n')
-            .map(function (s) { return s.replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim(); })
-            .filter(Boolean);
-        return {
-            type: 'result',
-            lines: lines,
-            images: images,
-        };
+       // Result state: a "[pet] pulls out a ticket... and..." narration line,
+// then a table whose first row holds the win/lose headline (e.g. "You
+// Won Nothing :(" or "You Won 5,000 NP!") spanning both columns, and a
+// second row with the pet's picture next to the prize (or blank scroll)
+// picture. A closing italic line offers encouragement either way.
+const table = content.querySelector('table');
+const scope = table || content;
+const images = Array.prototype.map.call(scope.querySelectorAll('img'), function (img) {
+    return {
+        src: new URL(img.getAttribute('src'), baseUrl).href,
+        alt: (img.getAttribute('alt') || '').trim(),
+    };
+});
+const headlineCell = table ? table.querySelector('td[colspan], td[bgcolor], th') : null;
+const headline = headlineCell ? headlineCell.textContent.replace(/\s+/g, ' ').trim() : null;
+const narrationP = Array.prototype.find.call(content.querySelectorAll('p'), function (p) {
+    return /pulls out a ticket/i.test(p.textContent);
+});
+const narration = narrationP ? narrationP.textContent.replace(/\s+/g, ' ').trim() : null;
+const flavorEl = content.querySelector('i');
+const flavor = flavorEl ? flavorEl.textContent.replace(/\s+/g, ' ').trim() : null;
+
+return {
+    type: 'result',
+    narration: narration,
+    headline: headline,
+    flavor: flavor,
+    images: images,
+};
     }
 
     async function fetchState(url) {
@@ -11174,65 +11179,53 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     }
 
     function renderResult(wrapper, state) {
-        clearClock();
-        wrapper.innerHTML = '';
-        wrapper.appendChild(buildBanner());
+    clearClock();
+    wrapper.innerHTML = '';
+    wrapper.appendChild(buildBanner());
 
-        const lines = (state.lines && state.lines.length) ? state.lines : ['The tide has come in — check back later.'];
-        const images = state.images || [];
-        const fullText = lines.join(' ');
+    const headline = state.headline || 'The tide has come in — check back later.';
+    const isWin = !/nothing/i.test(headline);
+    const images = state.images || [];
 
-        // Best-effort win/empty-handed read on the narration, purely to pick
-        // an accent color + emoji — never hides or alters the actual text.
-        const isWin = /\bwon\b|prize|congrat/i.test(fullText) && !/nothing|sorry|empty[- ]handed|no prize|better luck/i.test(fullText);
-        const isEmpty = /nothing|sorry|empty[- ]handed|no prize|better luck/i.test(fullText);
-        const badge = isWin
-            ? '<span class="nui-badge nui-badge-success" style="font-size:12px;padding:5px 12px;">🎉 Treasure Found</span>'
-            : (isEmpty ? '<span class="nui-badge" style="font-size:12px;padding:5px 12px;">🌊 Empty-Handed</span>' : '');
+    const imagesHtml = images.length
+        ? '<div style="display:flex;gap:var(--nui-space-3);justify-content:center;flex-wrap:wrap;">' +
+            images.map(function (im) {
+                return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">' +
+                    '<img src="' + im.src + '" style="width:110px;height:110px;object-fit:contain;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);background:var(--nui-surface-alt,#f4f4f4);">' +
+                    (im.alt ? '<div style="font-size:11px;color:var(--nui-text-faint);max-width:110px;text-align:center;">' + im.alt + '</div>' : '') +
+                    '</div>';
+            }).join('') +
+          '</div>'
+        : '';
 
-        const imagesHtml = images.length
-            ? '<div style="display:flex;gap:var(--nui-space-3);justify-content:center;flex-wrap:wrap;">' +
-                images.map(function (im) {
-                    return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">' +
-                        '<img src="' + im.src + '" style="width:110px;height:110px;object-fit:contain;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);background:var(--nui-surface-alt,#f4f4f4);">' +
-                        (im.alt ? '<div style="font-size:11px;color:var(--nui-text-faint);max-width:110px;text-align:center;">' + im.alt + '</div>' : '') +
-                        '</div>';
-                }).join('') +
-              '</div>'
-            : '';
+    const card = document.createElement('div');
+    card.className = 'nui-surface';
+    card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
+    card.innerHTML = `
+        ${isWin ? '<span class="nui-badge nui-badge-success" style="font-size:12px;padding:5px 12px;">🎉 Treasure Found</span>' : '<span class="nui-badge" style="font-size:12px;padding:5px 12px;">🌊 Empty-Handed</span>'}
+        ${state.narration ? '<div style="font-size:14px;font-weight:600;color:var(--nui-text-muted);line-height:1.5;">' + state.narration + '</div>' : ''}
+        ${imagesHtml}
+        <div style="font-family:var(--nui-font-display);font-size:19px;font-weight:800;color:${isWin ? 'var(--nui-success, #16a34a)' : 'var(--nui-text)'};line-height:1.4;">${headline}</div>
+        ${state.flavor ? '<div style="font-size:13px;font-style:italic;color:var(--nui-text-faint);">' + state.flavor + '</div>' : ''}
+        <button type="button" id="bt-refresh-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;">Refresh</button>
+    `;
+    wrapper.appendChild(card);
+    wrapper.appendChild(backToKrawkButton());
 
-        const linesHtml = lines.map(function (line, i) {
-            return i === 0
-                ? '<div style="font-size:14.5px;font-weight:700;color:var(--nui-text);line-height:1.5;">' + line + '</div>'
-                : '<div style="font-size:15px;font-weight:600;color:' + (isWin ? 'var(--nui-success, #16a34a)' : 'var(--nui-text)') + ';line-height:1.5;">' + line + '</div>';
-        }).join('');
-
-        const card = document.createElement('div');
-        card.className = 'nui-surface';
-        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
-        card.innerHTML = `
-            ${badge}
-            ${imagesHtml}
-            ${linesHtml}
-            <button type="button" id="bt-refresh-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;">Refresh</button>
-        `;
-        wrapper.appendChild(card);
-        wrapper.appendChild(backToKrawkButton());
-
-        card.querySelector('#bt-refresh-btn').addEventListener('click', async function () {
-            const btn = this;
-            btn.disabled = true;
-            btn.textContent = 'Refreshing...';
-            try {
-                const next = await fetchState(new URL('index.phtml', location.href).href);
-                renderState(wrapper, next);
-            } catch (err) {
-                showFatalError(err);
-                btn.disabled = false;
-                btn.textContent = 'Refresh';
-            }
-        });
-    }
+    card.querySelector('#bt-refresh-btn').addEventListener('click', async function () {
+        const btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Refreshing...';
+        try {
+            const next = await fetchState(new URL('index.phtml', location.href).href);
+            renderState(wrapper, next);
+        } catch (err) {
+            showFatalError(err);
+            btn.disabled = false;
+            btn.textContent = 'Refresh';
+        }
+    });
+}
 
     function renderState(wrapper, state) {
         if (state.type === 'ready') return renderReady(wrapper, state);
