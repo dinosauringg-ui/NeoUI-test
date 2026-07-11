@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI Core Framework
 // @namespace    http://tampermonkey.net/
-// @version      0.9.0
+// @version      0.9.1
 // @description  Shared design system & runtime for the Neopets Mobile Overhaul suite. Other scripts @require this.
 // @author       Ext1nct
 // @match        *://*.neopets.com/*
@@ -15,17 +15,17 @@
  * A standalone, @require-able design system for Neopets mobile-overhaul
  * userscripts. Provides:
  *
- *   1. Design tokens (CSS variables) for 7 swappable themes
- *   2. A base component library (topbar, nav, list items, bubbles, buttons,
- *      forms, badges, empty states, modals)
- *   3. A tiny JS runtime: window.NeoUI
- *        - NeoUI.init()                 mounts styles + floating theme menu
- *        - NeoUI.setTheme(name)         switches theme, persists, broadcasts
- *        - NeoUI.getTheme()             current theme name
- *        - NeoUI.injectViewport()       forces mobile viewport meta
- *        - NeoUI.mount(el)              appends el to document.body
- *        - NeoUI.h(tag, attrs, html)    tiny element-creation helper
- *        - NeoUI.THEMES                 theme metadata (for custom pickers)
+ * 1. Design tokens (CSS variables) for 7 swappable themes
+ * 2. A base component library (topbar, nav, list items, bubbles, buttons,
+ * forms, badges, empty states, modals)
+ * 3. A tiny JS runtime: window.NeoUI
+ * - NeoUI.init()                 mounts styles + floating theme menu
+ * - NeoUI.setTheme(name)         switches theme, persists, broadcasts
+ * - NeoUI.getTheme()             current theme name
+ * - NeoUI.injectViewport()       forces mobile viewport meta
+ * - NeoUI.mount(el)              appends el to document.body
+ * - NeoUI.h(tag, attrs, html)    tiny element-creation helper
+ * - NeoUI.THEMES                 theme metadata (for custom pickers)
  *
  * Consuming scripts should @require this file, then call NeoUI.init() before
  * building their own UI. NeoUI guarantees the <style> and theme attribute
@@ -51,7 +51,7 @@
     const THEMES = {
         neopia: {
             label: 'Neopia Central',
-            emoji: '🏠 ',
+            emoji: '🏠',
             tokens: {
                 '--nui-bg':            '#FFF6E0',
                 '--nui-surface':       '#FFFFFF',
@@ -328,7 +328,8 @@
 
         /* ---------- Top Bar ---------- */
                               .nui-header-wrapper {
-            position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+            position: fixed;
+            top: 0; left: 0; right: 0; z-index: 9999;
             background-color: var(--nui-bg);
             background-image:
                 linear-gradient(to bottom, transparent 30%, var(--nui-bg) 100%),
@@ -343,7 +344,8 @@
            layers of a background-image list is solid in Chromium but
            unreliable in WebKit/Safari, so each theme gets its own full
            declaration here instead of relying on that pattern. Each
-           gradient still safely references single var(--nui-*) tokens. */
+           gradient still safely references single var(--nui-*) tokens.
+        */
         [data-neoui-theme="neopia"] .nui-header-wrapper {
             background-image:
                 linear-gradient(to bottom, transparent 30%, var(--nui-bg) 100%),
@@ -361,7 +363,8 @@
         [data-neoui-theme="moltara"] .nui-header-wrapper {
             /* Drifting embers rising off molten rock, instead of a crosshatch
                that read as a chain-link/diamond grid rather than lava cracks.
-               Denser and larger toward the bottom to suggest they're rising. */
+               Denser and larger toward the bottom to suggest they're rising.
+            */
             background-image:
                 linear-gradient(to bottom, transparent 30%, var(--nui-bg) 100%),
                 radial-gradient(circle at 10% 85%, var(--nui-accent) 1.5px, transparent 2px),
@@ -425,9 +428,11 @@
         }
 
         .nui-topbar-title {
-            font-family: "TP Cafeteria", cursive; /* New decorative font */
+            font-family: "TP Cafeteria", cursive;
+            /* New decorative font */
             font-weight: 400;
-            font-size: 26px; /* Bumped up size for the stylized font */
+            font-size: 26px;
+            /* Bumped up size for the stylized font */
             color: var(--nui-accent);
             letter-spacing: 0.5px;
             display: flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -527,7 +532,8 @@
        .nui-item {
     padding: var(--nui-space-3) var(--nui-space-4);
     margin: 8px 12px; /* Adds space around each item */
-    border-radius: var(--nui-radius-md); /* Rounds the cards */
+    border-radius: var(--nui-radius-md);
+    /* Rounds the cards */
     border: 1px solid var(--nui-border);
     display: grid;
     grid-template-columns: 48px 1fr;
@@ -603,14 +609,12 @@
 }
 
         .nui-bubble.is-mine {
-            align-self: flex-end;
-            background: var(--nui-accent-2-soft);
+            align-self: flex-end; background: var(--nui-accent-2-soft);
             border-color: var(--nui-accent-2-soft);
             border-bottom-right-radius: 6px;
         }
         .nui-bubble.is-theirs {
-            align-self: flex-start;
-            border-bottom-left-radius: 6px;
+            align-self: flex-start; border-bottom-left-radius: 6px;
         }
 
         .nui-bubble-header {
@@ -638,8 +642,7 @@
             cursor: pointer;
             display: flex; align-items: center; justify-content: center;
             padding: 0;
-            flex-shrink: 0;
-            transition: transform var(--nui-dur-fast) var(--nui-ease-snap);
+            flex-shrink: 0; transition: transform var(--nui-dur-fast) var(--nui-ease-snap);
         }
         .nui-neogo-btn:active { transform: scale(0.92); }
         .nui-neogo-btn svg { width: 100%; height: 100%; display: block; }
@@ -658,16 +661,14 @@
             width: min(82vw, 340px);
             background: var(--nui-surface);
             box-shadow: 4px 0 24px var(--nui-shadow);
-            transform: translateX(-100%);
-            transition: transform var(--nui-dur-slow) var(--nui-ease);
+            transform: translateX(-100%); transition: transform var(--nui-dur-slow) var(--nui-ease);
             display: flex; flex-direction: column;
             overflow: hidden;
         }
         .nui-drawer-backdrop.is-open .nui-drawer { transform: translateX(0); }
 
         .nui-drawer-views {
-            position: relative;
-            flex: 1;
+            position: relative; flex: 1;
             overflow: hidden;
         }
 
@@ -679,12 +680,10 @@
         }
         /* nav view is the resting view; settings view slides in from the right over it */
         .nui-drawer-view[data-view="settings"] {
-            transform: translateX(100%);
-            background: var(--nui-surface);
+            transform: translateX(100%); background: var(--nui-surface);
         }
         .nui-drawer[data-active-view="settings"] .nui-drawer-view[data-view="nav"] {
-            transform: translateX(-30%);
-            opacity: 0.4;
+            transform: translateX(-30%); opacity: 0.4;
         }
         .nui-drawer[data-active-view="settings"] .nui-drawer-view[data-view="settings"] {
             transform: translateX(0);
@@ -693,26 +692,22 @@
         .nui-drawer-profile {
             display: flex; align-items: center; gap: 14px;
             /* Negative margins pull the background flush to the edges of the drawer */
-            margin: calc(var(--nui-space-4) * -1) calc(var(--nui-space-4) * -1) var(--nui-space-4) calc(var(--nui-space-4) * -1);
-            padding: var(--nui-space-5) var(--nui-space-4);
+            margin: calc(var(--nui-space-4) * -1) calc(var(--nui-space-4) * -1) var(--nui-space-4) calc(var(--nui-space-4) * -1); padding: var(--nui-space-5) var(--nui-space-4);
             background: linear-gradient(135deg, var(--nui-accent-soft), var(--nui-surface-2));
             border-bottom: 2px solid var(--nui-border);
         }
                 .nui-drawer-avatar {
     width: 90px; height: 90px;
     background: transparent; /* No background needed if image covers */
-    border: 4px solid var(--nui-surface);
-    box-shadow: 0 4px 12px var(--nui-shadow);
+    border: 4px solid var(--nui-surface); box-shadow: 0 4px 12px var(--nui-shadow);
     flex-shrink: 0;
     object-fit: cover;
     margin-left: -10px; /* Pulls it slightly left for visual balance */
 }
 
         .nui-drawer-name {
-            font-weight: 800;
-            font-size: 20px; /* Scaled up to match the larger avatar */
-            color: var(--nui-text);
-            line-height: 1.1;
+            font-weight: 800; font-size: 20px; /* Scaled up to match the larger avatar */
+            color: var(--nui-text); line-height: 1.1;
         }
     .nui-drawer-sub { font-size: 13px; color: var(--nui-accent); font-weight: 700; margin-top: 2px; }
 
@@ -722,8 +717,7 @@
             margin-bottom: var(--nui-space-2);
         }
         .nui-drawer-stat {
-            flex: 1;
-            background: var(--nui-surface-2);
+            flex: 1; background: var(--nui-surface-2);
             border-radius: var(--nui-radius-stamp);
             padding: 8px 10px;
             text-decoration: none;
@@ -738,8 +732,7 @@
             color: var(--nui-text); font-weight: 800;
             background: var(--nui-surface-2);
             padding: 12px 14px; margin-bottom: 4px;
-            border-radius: var(--nui-radius-sm);
-            transition: filter var(--nui-dur-fast) var(--nui-ease);
+            border-radius: var(--nui-radius-sm); transition: filter var(--nui-dur-fast) var(--nui-ease);
         }
         .nui-drawer-section-title:active { filter: brightness(0.9); }
 
@@ -750,8 +743,7 @@
         .nui-drawer-item {
             display: flex; align-items: center; gap: 10px;
             padding: 10px 6px; font-size: 14px; font-weight: 600; color: var(--nui-text);
-            text-decoration: none; border-radius: var(--nui-radius-sm);
-            transition: background var(--nui-dur-fast) var(--nui-ease);
+            text-decoration: none; border-radius: var(--nui-radius-sm); transition: background var(--nui-dur-fast) var(--nui-ease);
         }
         .nui-drawer-item:active { background: var(--nui-surface-2); }
         .nui-drawer-item .nui-drawer-ic { width: 20px; text-align: center; flex-shrink: 0; font-size: 15px; }
@@ -771,45 +763,40 @@
         }
 
         .nui-theme-option {
-            position: relative;
-            display: flex; flex-direction: column;
+            position: relative; display: flex; flex-direction: column;
             border-radius: var(--nui-radius-md);
             border: 2px solid var(--nui-border);
             background: var(--nui-surface);
             cursor: pointer;
-            overflow: hidden;
-            transition: border-color var(--nui-dur-fast) var(--nui-ease),
+            overflow: hidden; transition: border-color var(--nui-dur-fast) var(--nui-ease),
                         transform var(--nui-dur-fast) var(--nui-ease-snap),
                         box-shadow var(--nui-dur-fast) var(--nui-ease);
         }
         .nui-theme-option:active { transform: scale(0.97); }
         .nui-theme-option.is-selected {
-            border-color: var(--nui-accent);
-            box-shadow: 0 0 0 3px var(--nui-accent-soft);
+            border-color: var(--nui-accent); box-shadow: 0 0 0 3px var(--nui-accent-soft);
         }
 
         /* Mini live preview of the theme's own palette, independent of the
            page's CURRENT theme — everything inside .nui-theme-preview-card
            is painted with that theme's own tokens via inline style, not
            var(--nui-*), so it actually shows what the theme looks like
-           instead of two abstract dots. */
+           instead of two abstract dots.
+        */
         .nui-theme-preview {
-            position: relative;
-            padding: 10px;
+            position: relative; padding: 10px;
             display: flex;
             align-items: center;
             border-bottom: 1px solid var(--nui-border);
         }
 
         .nui-theme-preview-card {
-            display: flex;
-            align-items: center;
+            display: flex; align-items: center;
             gap: 7px;
             width: 100%;
             padding: 8px;
             border-radius: 10px;
-            border: 1px solid;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+            border: 1px solid; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
         }
 
         .nui-theme-preview-avatar {
@@ -840,17 +827,14 @@
         }
 
         .nui-theme-check {
-            position: absolute;
-            top: 6px; right: 6px;
+            position: absolute; top: 6px; right: 6px;
             width: 20px; height: 20px;
             border-radius: 50%;
             background: var(--nui-accent);
             color: var(--nui-accent-ink);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 11px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-            opacity: 0; transform: scale(0.5);
-            transition: opacity var(--nui-dur-fast) var(--nui-ease-snap), transform var(--nui-dur-fast) var(--nui-ease-snap);
+            opacity: 0; transform: scale(0.5); transition: opacity var(--nui-dur-fast) var(--nui-ease-snap), transform var(--nui-dur-fast) var(--nui-ease-snap);
         }
         .nui-theme-option.is-selected .nui-theme-check {
             opacity: 1; transform: scale(1);
@@ -865,15 +849,13 @@
         .nui-theme-emoji { font-size: 14px; line-height: 1; }
         .nui-theme-label { line-height: 1.15; }
     `;
-
     // ==========================================================================
     // 4. RUNTIME
     // ==========================================================================
 
     // ---- NeoGo logo mark (original artwork: stylized "n" + sparkle badge) ----
     // Uses currentColor so it inherits --nui-accent via the button's color.
-            const NEOGO_MARK_SVG = '<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M13.5 2.5 l2.2 6.2 l6.8 -1.2 l-4.6 5.3 l2.3 6.7 l-7.2 -3.2 l-6.4 4.8 l1.8 -7.1 l-6.2 -4.3 l7.1 -0.8 z"/></svg>';
-
+    const NEOGO_MARK_SVG = '<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M13.5 2.5 l2.2 6.2 l6.8 -1.2 l-4.6 5.3 l2.3 6.7 l-7.2 -3.2 l-6.4 4.8 l1.8 -7.1 l-6.2 -4.3 l7.1 -0.8 z"/></svg>';
 
     // ---- Real Neopets site navigation (desktop #template_nav, mirrored) ----
     // Each section matches the live site's dropdown groupings so the drawer
@@ -1091,22 +1073,22 @@
         drawerBuilt = true;
 
         const navHtml = SITE_NAV.map(function (section) {
-    const itemsHtml = section.items.map(function (item) {
-        return '<a class="nui-drawer-item" href="' + item.href + '">' + item.label + '</a>';
-    }).join('');
+            const itemsHtml = section.items.map(function (item) {
+                return '<a class="nui-drawer-item" href="' + item.href + '">' + item.label + '</a>';
+            }).join('');
 
-    return (
-        '<details class="nui-drawer-section">' +
-            '<summary class="nui-drawer-section-title" style="cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;">' +
-                section.title +
-                '<span style="font-size: 10px; opacity: 0.5;">▼</span>' +
-            '</summary>' +
-            '<div style="margin-top: 8px;">' + itemsHtml + '</div>' +
-        '</details>'
-    );
-}).join('');
+            return (
+                '<details class="nui-drawer-section">' +
+                    '<summary class="nui-drawer-section-title" style="cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;">' +
+                        section.title +
+                        '<span style="font-size: 10px; opacity: 0.5;">▼</span>' +
+                    '</summary>' +
+                    '<div style="margin-top: 8px;">' + itemsHtml + '</div>' +
+                '</details>'
+            );
+        }).join('');
 
-                const backdrop = h('div', { class: 'nui-drawer-backdrop nui-reset' },
+        const backdrop = h('div', { class: 'nui-drawer-backdrop nui-reset' },
             '<div class="nui-drawer" data-active-view="nav"><div class="nui-drawer-views"><div class="nui-drawer-view" data-view="nav">' +
 
                 // Profile Section updated with an img tag for the pet
@@ -1118,13 +1100,10 @@
                     '</div>' +
                 '</div>' +
 
-                // (The redundant stats block has been deleted from here)
-
                 '<a class="nui-drawer-item is-action" href="/quickref.phtml">Quickref</a>' + navHtml +
                 '<div class="nui-drawer-section"><div class="nui-drawer-item" data-action="open-settings">Settings</div><a class="nui-drawer-item is-danger" href="/logout.phtml">Logout</a></div>' +
             '</div><div class="nui-drawer-view" data-view="settings"><div class="nui-drawer-back" data-action="back-to-nav">&larr; Back</div><div data-slot="settings-sections"></div></div></div></div>'
         );
-
 
         const drawer = backdrop.querySelector('.nui-drawer');
         const settingsContainer = backdrop.querySelector('[data-slot="settings-sections"]');
@@ -1148,10 +1127,12 @@
         backdrop.addEventListener('click', function (e) {
             if (e.target === backdrop) closeDrawer();
         });
+
         backdrop.querySelector('[data-action="open-settings"]').addEventListener('click', function () {
             renderSettings();
             drawer.setAttribute('data-active-view', 'settings');
         });
+
         backdrop.querySelector('[data-action="back-to-nav"]').addEventListener('click', function () {
             drawer.setAttribute('data-active-view', 'nav');
         });
@@ -1174,25 +1155,22 @@
         return btn;
     }
 
-        function setProfileInfo(info) {
-        buildDrawer(); if (!drawerEl) return; info = info || {};
+    function setProfileInfo(info) {
+        buildDrawer();
+        if (!drawerEl) return; info = info || {};
 
-        // We only map username and petname now
         const map = { username: info.username, petname: info.petname };
-
         Object.keys(map).forEach(function (key) {
             if (map[key] === undefined) return;
             const el = drawerEl.querySelector('[data-slot="' + key + '"]');
             if (el) el.textContent = map[key];
         });
 
-        // Target the image slot and update the src attribute
         if (info.petImage) {
             const imgEl = drawerEl.querySelector('[data-slot="petImage"]');
             if (imgEl) imgEl.src = info.petImage;
         }
     }
-
 
     function setTheme(name) {
         if (!THEMES[name]) name = DEFAULT_THEME;
@@ -1205,6 +1183,166 @@
 
     function onThemeChange(fn) {
         if (typeof fn === 'function') listeners.push(fn);
+    }
+
+    // ---- NOTIFICATION DRAWER LOGIC ----
+
+    function getNotifications() {
+        // Find the legacy event cell before the DOM is wiped
+        const eventCell = document.querySelector('td.eventIcon');
+
+        // If it doesn't exist or is empty (just a space), return null
+        if (!eventCell || eventCell.innerHTML.trim() === '&nbsp;' || eventCell.textContent.trim() === '') {
+            return null;
+        }
+
+        // We have an event! Extract the image and text.
+        const img = eventCell.querySelector('img');
+        const iconSrc = img ? img.src : '';
+
+        // Clean up the legacy text formatting
+        let rawText = eventCell.textContent.replace('» See all events «', '').trim();
+
+        return {
+            hasNotification: true,
+            text: rawText,
+            icon: iconSrc,
+            url: '/allevents.phtml'
+        };
+    }
+
+    function buildNotificationBell(notifData) {
+        const btn = h('button', {
+            class: 'nui-neogo-btn nui-reset',
+            style: 'color: var(--nui-text-muted); position: relative; background: transparent; border: none; cursor: pointer; padding: 5px;',
+            title: notifData ? notifData.text : 'No new events'
+        });
+
+        btn.innerHTML = `<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`;
+
+        if (notifData && notifData.hasNotification) {
+            btn.style.color = 'var(--nui-accent)';
+            const dot = h('div', { class: 'nui-dot', style: 'display: block; position: absolute; right: 4px; top: 4px; width: 10px; height: 10px; background: var(--nui-danger); border-radius: 50%; border: 2px solid var(--nui-surface);' });
+            btn.appendChild(dot);
+        }
+
+        // Trigger the iframe drawer on click
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            openEventDrawer();
+        });
+
+        return btn;
+    }
+
+    function openEventDrawer() {
+        // 1. Create the dark overlay
+        const overlay = h('div', {
+            style: 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 99998; opacity: 0; transition: opacity 0.3s ease;'
+        });
+
+        // 2. Create the sliding right-side drawer
+        const drawer = h('div', {
+            style: 'position: fixed; top: 0; right: -450px; width: 100%; max-width: 400px; height: 100vh; background: var(--nui-bg); z-index: 99999; transition: right 0.3s cubic-bezier(0.25, 1, 0.5, 1); display: flex; flex-direction: column; box-shadow: -4px 0 24px rgba(0,0,0,0.15);'
+        });
+
+        // 3. Build the Header
+        const header = h('div', {
+            style: 'display: flex; justify-content: space-between; align-items: center; padding: var(--nui-space-4); border-bottom: 1px solid var(--nui-border); background: var(--nui-surface);'
+        });
+        header.appendChild(h('div', { style: 'font-weight: 800; font-size: 18px; color: var(--nui-text);' }, 'Event Inbox'));
+
+        const closeBtn = h('button', { style: 'background: transparent; border: none; font-size: 28px; line-height: 1; color: var(--nui-text-muted); cursor: pointer;' }, '×');
+
+        const closeDrawer = () => {
+            drawer.style.right = '-450px';
+            overlay.style.opacity = '0';
+            setTimeout(() => { overlay.remove(); drawer.remove(); }, 300);
+        };
+
+        closeBtn.addEventListener('click', closeDrawer);
+        overlay.addEventListener('click', closeDrawer);
+
+        header.appendChild(closeBtn);
+        drawer.appendChild(header);
+
+        // 4. Build the Iframe Wrapper
+        const iframeWrap = h('div', { style: 'flex: 1; position: relative; overflow: hidden; background: var(--nui-bg);' });
+
+        // Loading spinner
+        const loadingText = h('div', { style: 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--nui-text-muted); font-weight: bold;' }, 'Loading events...');
+        iframeWrap.appendChild(loadingText);
+
+        const iframe = h('iframe', {
+            src: '/allevents.phtml',
+            style: 'width: 100%; height: 100%; border: none; position: relative; z-index: 2; opacity: 0; transition: opacity 0.3s;'
+        });
+
+        // 5. Intercept the iframe load to inject CSS
+        iframe.addEventListener('load', () => {
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+                // Inject the NeoUI aesthetic directly into the child document
+                const style = doc.createElement('style');
+                style.textContent = `
+                    /* Fallback variables in case the parent root doesn't cascade into the frame */
+                    :root {
+                        --frame-bg: #f4f7f6;
+                        --frame-surface: #ffffff;
+                        --frame-border: #dce1e6;
+                        --frame-primary: #4479BA;
+                        --frame-danger: #dc3545;
+                        --frame-text: #333333;
+                    }
+
+                    /* Nuke the legacy DOM */
+                    td.sidebar, #header, #footer, #superfooter, #ban, .premium_bar_spacer { display: none !important; }
+                    body { background: var(--frame-bg) !important; padding: 15px !important; margin: 0 !important; font-family: 'Segoe UI', Roboto, Helvetica, sans-serif !important; color: var(--frame-text) !important; }
+                    #content > table > tbody > tr > td.content { display: block !important; width: 100% !important; padding: 0 !important; border: none !important; }
+
+                    /* Hide redundant text */
+                    b:contains('Event Inbox') { display: none !important; }
+
+                    /* Modernize the Event Table */
+                    table[border="1"] { border: 1px solid var(--frame-border) !important; border-radius: 8px !important; overflow: hidden !important; width: 100% !important; background: var(--frame-surface) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important; }
+                    table[border="1"] th { background: var(--frame-surface) !important; color: var(--frame-text) !important; padding: 12px !important; font-size: 14px !important; border: none !important; border-bottom: 2px solid var(--frame-border) !important; }
+                    table[border="1"] td { border: none !important; border-bottom: 1px solid var(--frame-border) !important; padding: 12px !important; font-size: 14px !important; background: var(--frame-surface) !important; }
+
+                    /* Format the bottom utility row */
+                    table[border="1"] tr:last-child td { border-bottom: none !important; background: #fafafa !important; padding: 15px !important; }
+
+                    /* NeoUI Buttons & Links */
+                    input[type="submit"] { background: var(--frame-danger) !important; color: white !important; border: none !important; padding: 10px 16px !important; border-radius: 6px !important; font-weight: bold !important; cursor: pointer !important; width: 100%; transition: opacity 0.2s; }
+                    input[type="submit"]:hover { opacity: 0.9; }
+                    a { color: var(--frame-primary) !important; text-decoration: none !important; font-weight: bold !important; }
+
+                    /* Clean up the images */
+                    img { border-radius: 6px; border: 1px solid var(--frame-border); }
+                `;
+                doc.head.appendChild(style);
+
+                // Fade the iframe in once it's styled
+                iframe.style.opacity = '1';
+                loadingText.style.display = 'none';
+
+            } catch (e) {
+                console.error("NeoUI Iframe Injection Blocked:", e);
+                iframe.style.opacity = '1';
+            }
+        });
+
+        iframeWrap.appendChild(iframe);
+        drawer.appendChild(iframeWrap);
+
+        document.body.appendChild(overlay);
+        document.body.appendChild(drawer);
+
+        // Slide animation triggers on next frame
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+            drawer.style.right = '0';
+        });
     }
 
     // ---- Public init ----
@@ -1234,6 +1372,8 @@
         openDrawer: openDrawer,
         setProfileInfo: setProfileInfo,
         registerSettingsSection: registerSettingsSection,
+        getNotifications: getNotifications,
+        notificationBell: buildNotificationBell,
         get isInitialized() { return initialized; },
     };
 
