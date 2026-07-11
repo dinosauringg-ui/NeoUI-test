@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.15
+// @version      1.1.26
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -17,6 +17,124 @@
  * A single install for a mobile-forward Neopets experience: a shared design
  * system, a polished theme picker, a custom theme builder, a global search
  * overlay, and a daily-timer hub for timed dailies.
+ *
+ * v1.1.22
+ *   - Neopian Times: dropped the internal-scroll-container approach
+ *     entirely. v1.1.21's diagnostic overlay (confirmed on Android Firefox)
+ *     showed touchstart/touchmove events reaching contentArea just fine —
+ *     the touch gesture wasn't being intercepted by anything — so the
+ *     problem was the nested overflow-y:auto scroll region itself not
+ *     translating those events into an actual scroll on that engine,
+ *     regardless of how contentArea got its height (flex-basis, then
+ *     absolute positioning — both landed with zero change). Rather than
+ *     try a third sizing strategy for the same nested-scroll pattern,
+ *     removed it: appWrapper is now a normal in-flow block (no more
+ *     position:fixed shell), contentArea sizes to its content with no
+ *     overflow-y at all, and html/body scroll normally like any other
+ *     webpage. topRow (the section tab bar) uses position:sticky so it
+ *     still stays parked under the global topbar while scrolling, keeping
+ *     the app-like feel without an internal scroller to fight. Removed the
+ *     v1.1.21 diagnostic overlay and the now-irrelevant forced
+ *     touch-action:pan-y from sanitizeLegacyMarkup along with it; the on*
+ *     attribute/inline-style stripping stays since it's still useful
+ *     against leftover position/height rules distorting layout.
+ * v1.1.21
+ *   - Neopian Times: v1.1.19 (strip inline handlers/styles off scraped markup)
+ *     and v1.1.20 (switch contentArea to explicit absolute sizing) both landed
+ *     with no change reported — confirmed on Android Firefox, where the
+ *     horizontal tab row scrolls fine via touch but the vertical article body
+ *     doesn't, regardless of which of those two approaches contentArea uses.
+ *     That rules out both theories (legacy markup content, and flex vs.
+ *     absolute sizing) rather than fixing anything, so guessing a third
+ *     variant blind isn't a good use of anyone's time. Added a temporary,
+ *     non-interactive on-screen overlay (bottom-right corner) that reads
+ *     contentArea's actual scrollHeight/clientHeight/scrollTop, its resolved
+ *     overflow-y/touch-action/position, and live touchstart/touchmove counts
+ *     straight off the affected device, so the next change can be aimed at
+ *     the real cause instead of another guess.
+ * v1.1.20
+ *   - Neopian Times: v1.1.19's sanitizer only stripped inline CSS off the
+ *     raw scraped markup, which wasn't enough — touch was still completely
+ *     dead on articles/comics/editorials. Two more layers added:
+ *     (1) sanitizeLegacyMarkup() now also strips inline on* event-handler
+ *     attributes (onmousedown, ontouchstart, onclick, etc.) from the
+ *     injected markup. Unlike <script> tags, these go live the instant
+ *     they're set via innerHTML, and Neopets leaves them on comic
+ *     <img>/<a> tags for old right-click protection and lightbox popups —
+ *     a touchstart handler in there eating the gesture would explain dead
+ *     scrolling especially well for comics, where the image is nearly the
+ *     entire touchable area. touch-action: pan-y is now also force-set on
+ *     every injected element as a second line of defense.
+ *     (2) contentArea itself switched from flex:1/min-height:0 sizing to
+ *     position:absolute with an explicit pixel `top` (measured off
+ *     topRow.offsetHeight once it's actually laid out, re-measured on
+ *     resize/orientation change). iOS Safari has a known history of not
+ *     reliably treating an overflow-y:auto box as touch-scrollable when
+ *     its height only comes from flex-basis inside a position:fixed
+ *     ancestor; an explicit box removes that ambiguity entirely.
+ * v1.1.19
+ *   - Neopian Times: fixed scrolling being completely dead on articles,
+ *     comics, and the editorial — the one thing every previous scroll fix
+ *     (v1.1.15/17/18) missed. Those three views are the only ones that
+ *     inject raw scraped Neopets markup (contentTd.innerHTML / bodyHtml)
+ *     straight into contentArea; list/home views are hand-built from
+ *     scraped text and never carry this problem. The raw markup brings
+ *     its own inline overflow/height/position rules along from Neopets'
+ *     old table layout (the Editorial section in particular is normally
+ *     boxed into a small fixed-height scroll cell on the real site), and
+ *     those nested rules were hijacking the touch-scroll gesture before it
+ *     ever reached contentArea's own overflow-y:auto. Added
+ *     sanitizeLegacyMarkup(), run on contentArea right after every
+ *     injection, which strips overflow/height/position off anything nested
+ *     inside the injected HTML and removes stray <script>/<style> tags, so
+ *     contentArea is left as the only scrollable region again.
+ * v1.1.18
+ *   - Neopian Times: v1.1.17's fix was half right and introduced a new bug.
+ *     Forcing html/body to height:100% via JS post-load is what caused the
+ *     page to render "zoomed in" — that kind of post-load height change is
+ *     a known trigger for mobile Safari's automatic text-size inflation
+ *     heuristic. Replaced that approach entirely: appWrapper is now
+ *     position:fixed; inset:0 instead of height:100vh/100dvh, which sizes
+ *     directly against the real visual viewport (tracks the address bar
+ *     live, no vh-unit guessing needed) and removes appWrapper from
+ *     document flow altogether, so body never has anything in flow to
+ *     create a second scroll region from in the first place — no need to
+ *     force a height on it at all. html/body keep overflow:hidden as a
+ *     backstop and now also get -webkit-text-size-adjust/text-size-adjust:
+ *     100% to shut off the auto-inflation heuristic outright rather than
+ *     tiptoe around what triggers it.
+ * v1.1.17
+ *   - Neopian Times: actually fixed mobile scrolling this time. v1.1.15 only
+ *     removed overflow:hidden from appWrapper (an inner box); the real
+ *     problem was that html/body were left with no defined height/overflow
+ *     of their own, so on mobile they could open a second, independent
+ *     scroll region alongside contentArea's overflow-y:auto — a touch-drag
+ *     could get claimed by that outer region, which barely moves and then
+ *     stops handing off to the inner one, reading as scrolling being stuck
+ *     partway into an article or comic. html/body are now pinned to
+ *     100%/hidden so contentArea is the only scrollable region, and
+ *     appWrapper uses 100dvh (with 100vh fallback) instead of 100vh,
+ *     which on mobile is measured against the layout viewport (address bar
+ *     collapsed) and renders taller than what's actually visible — the
+ *     extra bit at the bottom of the list/article had nothing able to
+ *     scroll to it. Also added overscroll-behavior:contain on contentArea
+ *     and safe-area-aware bottom padding so the last item in a list has
+ *     clearance instead of sitting flush against the edge.
+ * v1.1.16
+ *   - Character counters on all four message composers: Neomail compose
+ *     (2000 limit), Neomail inline reply (2000), Neoboards quick reply (500),
+ *     Neoboards new topic (500). Counter goes warning colour at 85%, danger at
+ *     100%. maxlength attributes added where missing as a hard browser cap.
+ *   - Theme editor — Advanced section: collapsible <details> below the 4 basic
+ *     color pickers exposing 7 additional tokens (surface-2, border, text,
+ *     text-muted, success, warning, danger). seedFromBase() now seeds all 11
+ *     tokens; base-change handler repaints all swatches including advanced.
+ *   - Theme editor — Texture picker replaced: TEXTURE_PRESETS rebuilt as 18
+ *     SVG data URI patterns (polka dots, stars, waves, pebbles, sparkles,
+ *     honeycomb, hearts, diamonds, triangles, bubbles, argyle, crosshatch,
+ *     cobblestone, motes, herringbone, pinstripe, scales, grid). Picker now
+ *     renders as a 2-col visual card grid inside the Advanced section instead
+ *     of unlabelled pill buttons; active state uses border highlight.
  *
  * v1.1.15
  *   - Neoboards My Boards: tiles now use minmax(130px, 1fr) grid columns (was
@@ -1689,7 +1807,7 @@
                         'filter: drop-shadow(0 2px 4px var(--nui-shadow));' +
                     '"></a>' +
                 '</div>' +
-                '<div class="nui-topbar-stats" id="nui-topbar-stats" style="z-index:2;">NP: <b>' + stats.np + '</b> &nbsp; NC: <b>' + stats.nc + '</b></div>' +
+                '<div class="nui-topbar-stats" id="nui-topbar-stats" style="z-index:2;"><a href="/inventory.phtml" style="color:inherit;text-decoration:none;">NP: <b>' + stats.np + '</b></a> &nbsp; NC: <b>' + stats.nc + '</b></div>' +
             '</div>';
 
         document.body.insertBefore(wrapper, document.body.firstChild);
@@ -2136,6 +2254,21 @@
         document.body.appendChild(backdrop);
         const input = backdrop.querySelector('#nui-search-input');
         const results = backdrop.querySelector('#nui-search-results');
+        function renderSiteSearchBtn(query) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'nui-reset';
+            btn.style.cssText = 'display:flex; align-items:center; justify-content:space-between; width:100%; padding:10px 12px; border-radius:var(--nui-radius-sm); border:1px dashed var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text); text-align:left; cursor:pointer; margin-top:4px;';
+            const label = query ? '\u{1F310} Search Neopets.com for \u201C' + query + '\u201D' : '\u{1F310} Search Neopets.com\u2026';
+            btn.innerHTML = '<span style="display:flex; flex-direction:column; gap:2px; min-width:0;"><span style="font-weight:700;">' + label + '</span><span style="font-size:12px; color:var(--nui-text-muted);">Neopets site search</span></span><span style="font-size:12px; color:var(--nui-text-muted);">Go</span>';
+            btn.addEventListener('click', function () {
+                const enc = encodeURIComponent(query || '');
+                window.location.assign('/search.phtml?selected_type=item&search_string=' + enc);
+                backdrop.remove();
+            });
+            return btn;
+        }
+
         function render(query) {
             const q = normalizeSearchText(query);
             const filtered = buildSiteSearchCatalog().filter(function (item) {
@@ -2145,7 +2278,11 @@
             }).slice(0, 24);
             results.innerHTML = '';
             if (!filtered.length) {
-                results.innerHTML = '<div style="padding:16px 8px; color:var(--nui-text-muted); font-size:13px;">No matches yet. Try a page name, daily, or NeoUI tool.</div>';
+                const msg = document.createElement('div');
+                msg.style.cssText = 'padding:16px 8px; color:var(--nui-text-muted); font-size:13px;';
+                msg.textContent = 'No local matches. Try searching Neopets.com directly:';
+                results.appendChild(msg);
+                results.appendChild(renderSiteSearchBtn(query));
                 return;
             }
             filtered.forEach(function (item) {
@@ -2163,6 +2300,8 @@
                 });
                 results.appendChild(btn);
             });
+            // Always append Neopets.com site search at the bottom when there is a query
+            if (q) results.appendChild(renderSiteSearchBtn(query));
         }
         render('');
         input.addEventListener('input', function () { render(this.value); });
@@ -2548,18 +2687,31 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     // Texture presets — literal CSS background-image values using fixed colors
     // so they render correctly in the preview without needing resolved tokens.
     const TEXTURE_PRESETS = [
-        { label: 'None',       value: 'none' },
-        { label: 'Diagonal',   value: 'repeating-linear-gradient(45deg,rgba(128,128,128,0.12) 0,rgba(128,128,128,0.12) 1px,transparent 1px,transparent 12px)' },
-        { label: 'Crosshatch', value: 'repeating-linear-gradient(0deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 14px),repeating-linear-gradient(90deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 14px)' },
-        { label: 'Dots',       value: 'repeating-radial-gradient(circle at center,rgba(128,128,128,0.2) 0,rgba(128,128,128,0.2) 1px,transparent 1px,transparent 16px)' },
-        { label: 'Stars',      value: 'radial-gradient(circle at 20% 30%,rgba(180,130,255,0.35) 1px,transparent 2px),radial-gradient(circle at 55% 70%,rgba(100,180,255,0.3) 1px,transparent 2px),radial-gradient(circle at 80% 20%,rgba(255,255,255,0.2) 1px,transparent 1.5px),radial-gradient(circle at 40% 85%,rgba(180,130,255,0.25) 1px,transparent 1.5px)' },
-        { label: 'Clouds',     value: 'radial-gradient(ellipse 65% 55% at 18% 30%,rgba(180,200,255,0.18) 0%,transparent 80%),radial-gradient(ellipse 55% 45% at 78% 70%,rgba(200,180,255,0.15) 0%,transparent 80%)' },
-        { label: 'Herringbone',value: 'repeating-linear-gradient(60deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 16px),repeating-linear-gradient(120deg,rgba(128,128,128,0.1) 0,rgba(128,128,128,0.1) 1px,transparent 1px,transparent 16px)' },
-        { label: 'Waves',      value: 'repeating-radial-gradient(circle at 50% 130%,rgba(128,128,128,0.12) 0,rgba(128,128,128,0.12) 1px,transparent 1px,transparent 16px)' },
-        { label: 'Embers',     value: 'radial-gradient(circle at 12% 82%,rgba(255,120,40,0.3) 1.5px,transparent 2px),radial-gradient(circle at 28% 55%,rgba(255,190,60,0.25) 1px,transparent 1.5px),radial-gradient(circle at 48% 88%,rgba(255,120,40,0.2) 1px,transparent 1.5px),radial-gradient(circle at 65% 68%,rgba(255,120,40,0.28) 1.5px,transparent 2px),radial-gradient(circle at 82% 80%,rgba(255,190,60,0.22) 1px,transparent 1.5px)' },
-        { label: 'Cracks',     value: 'repeating-linear-gradient(75deg,rgba(128,128,128,0.08) 0,rgba(128,128,128,0.08) 1px,transparent 1px,transparent 20px),repeating-linear-gradient(15deg,rgba(128,128,128,0.06) 0,rgba(128,128,128,0.06) 1px,transparent 1px,transparent 28px)' },
-        { label: 'Sand',       value: 'repeating-radial-gradient(circle at 20% 30%,rgba(180,150,80,0.15) 0,rgba(180,150,80,0.15) 1px,transparent 1px,transparent 10px),repeating-radial-gradient(circle at 70% 75%,rgba(180,150,80,0.1) 0,rgba(180,150,80,0.1) 1px,transparent 1px,transparent 10px)' },
-    ];
+        { label: 'None',         svg: null },
+        { label: 'Polka dots',   svg: `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><circle cx='12' cy='12' r='3' fill='none' stroke='rgba(128,128,128,0.45)' stroke-width='1.2'/></svg>` },
+        { label: 'Stars',        svg: `<svg xmlns='http://www.w3.org/2000/svg' width='56' height='56'><path d='M14 6 L16.4 13.4 L24.2 13.4 L18 18.2 L20.4 25.6 L14 21 L7.6 25.6 L10 18.2 L3.8 13.4 L11.6 13.4 Z' fill='rgba(128,128,128,0.2)' transform='rotate(-10,14,16)'/><path d='M42 22 L43.8 27.6 L49.8 27.6 L45 31 L46.8 36.6 L42 33.2 L37.2 36.6 L39 31 L34.2 27.6 L40.2 27.6 Z' fill='none' stroke='rgba(128,128,128,0.32)' stroke-width='0.9' transform='rotate(18,42,29)'/><path d='M20 40 L21 43 L24.2 43 L21.8 44.8 L22.8 47.8 L20 46 L17.2 47.8 L18.2 44.8 L15.8 43 L19 43 Z' fill='rgba(128,128,128,0.18)' transform='rotate(6,20,44)'/><circle cx='6' cy='46' r='1.3' fill='rgba(128,128,128,0.28)'/><circle cx='32' cy='32' r='0.9' fill='rgba(128,128,128,0.2)'/></svg>` },
+        { label: 'Waves',        svg: `<svg xmlns='http://www.w3.org/2000/svg' width='48' height='56'><path d='M0 14 C8 7 16 7 24 14 C32 21 40 21 48 14' fill='none' stroke='rgba(128,128,128,0.4)' stroke-width='1.3' stroke-linecap='round'/><path d='M0 30 C8 23 16 23 24 30 C32 37 40 37 48 30' fill='none' stroke='rgba(128,128,128,0.22)' stroke-width='1' stroke-linecap='round'/><path d='M0 46 C8 39 16 39 24 46 C32 53 40 53 48 46' fill='none' stroke='rgba(128,128,128,0.13)' stroke-width='0.8' stroke-linecap='round'/></svg>` },
+        { label: 'Pebbles',      svg: `<svg xmlns='http://www.w3.org/2000/svg' width='52' height='48'><ellipse cx='12' cy='10' rx='7' ry='5' transform='rotate(-15,12,10)' fill='rgba(128,128,128,0.1)' stroke='rgba(128,128,128,0.28)' stroke-width='1'/><ellipse cx='32' cy='8' rx='4' ry='3' transform='rotate(10,32,8)' fill='rgba(128,128,128,0.07)' stroke='rgba(128,128,128,0.22)' stroke-width='0.9'/><ellipse cx='44' cy='16' rx='6' ry='4' transform='rotate(-8,44,16)' fill='rgba(128,128,128,0.06)' stroke='rgba(128,128,128,0.18)' stroke-width='0.8'/><ellipse cx='18' cy='28' rx='10' ry='6' transform='rotate(5,18,28)' fill='rgba(128,128,128,0.07)' stroke='rgba(128,128,128,0.2)' stroke-width='1'/><ellipse cx='40' cy='30' rx='5' ry='7' transform='rotate(-20,40,30)' fill='rgba(128,128,128,0.05)' stroke='rgba(128,128,128,0.16)' stroke-width='0.8'/><ellipse cx='8' cy='42' rx='5' ry='3' transform='rotate(12,8,42)' fill='rgba(128,128,128,0.05)' stroke='rgba(128,128,128,0.14)' stroke-width='0.8'/><ellipse cx='30' cy='44' rx='3' ry='2' fill='rgba(128,128,128,0.08)' stroke='rgba(128,128,128,0.2)' stroke-width='0.7'/></svg>` },
+        { label: 'Sparkles',     svg: `<svg xmlns='http://www.w3.org/2000/svg' width='56' height='56'><path d='M14 6 L15.4 10.6 L20 12 L15.4 13.4 L14 18 L12.6 13.4 L8 12 L12.6 10.6 Z' fill='rgba(128,128,128,0.42)'/><path d='M40 32 L41 35 L44 36 L41 37 L40 40 L39 37 L36 36 L39 35 Z' fill='rgba(128,128,128,0.36)'/><path d='M8 40 L8.8 42.6 L11.4 43.4 L8.8 44.2 L8 46.8 L7.2 44.2 L4.6 43.4 L7.2 42.6 Z' fill='rgba(128,128,128,0.25)'/><circle cx='44' cy='10' r='1.4' fill='rgba(128,128,128,0.38)'/><circle cx='28' cy='28' r='0.9' fill='rgba(128,128,128,0.28)'/><circle cx='50' cy='46' r='0.8' fill='rgba(128,128,128,0.22)'/></svg>` },
+        { label: 'Honeycomb',    svg: `<svg xmlns='http://www.w3.org/2000/svg' width='28' height='32'><polygon points='14,2 24,7.5 24,18.5 14,24 4,18.5 4,7.5' fill='none' stroke='rgba(128,128,128,0.35)' stroke-width='1'/></svg>` },
+        { label: 'Hearts',       svg: `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><path d='M16 26 C16 26 4 18 4 10 C4 6 8 3 12 5 C13.5 5.8 15 7 16 9 C17 7 18.5 5.8 20 5 C24 3 28 6 28 10 C28 18 16 26 16 26Z' fill='rgba(128,128,128,0.2)' stroke='rgba(128,128,128,0.32)' stroke-width='0.8'/></svg>` },
+        { label: 'Diamonds',     svg: `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><path d='M12 2 L22 12 L12 22 L2 12 Z' fill='none' stroke='rgba(128,128,128,0.35)' stroke-width='1'/><path d='M12 7 L17 12 L12 17 L7 12 Z' fill='rgba(128,128,128,0.1)'/></svg>` },
+        { label: 'Triangles',    svg: `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><path d='M12 3 L22 21 L2 21 Z' fill='none' stroke='rgba(128,128,128,0.35)' stroke-width='1'/></svg>` },
+        { label: 'Bubbles',      svg: `<svg xmlns='http://www.w3.org/2000/svg' width='52' height='52'><circle cx='16' cy='14' r='10' fill='none' stroke='rgba(128,128,128,0.28)' stroke-width='1.1'/><circle cx='16' cy='14' r='6' fill='none' stroke='rgba(128,128,128,0.15)' stroke-width='0.7'/><circle cx='38' cy='36' r='8' fill='none' stroke='rgba(128,128,128,0.22)' stroke-width='1'/><circle cx='38' cy='36' r='4' fill='none' stroke='rgba(128,128,128,0.12)' stroke-width='0.6'/><circle cx='40' cy='12' r='4' fill='none' stroke='rgba(128,128,128,0.18)' stroke-width='0.8'/><circle cx='12' cy='42' r='5' fill='none' stroke='rgba(128,128,128,0.16)' stroke-width='0.8'/></svg>` },
+        { label: 'Argyle',       svg: `<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><path d='M20 0 L40 20 L20 40 L0 20 Z' fill='none' stroke='rgba(128,128,128,0.28)' stroke-width='1'/><path d='M20 8 L32 20 L20 32 L8 20 Z' fill='none' stroke='rgba(128,128,128,0.16)' stroke-width='0.7'/><line x1='20' y1='0' x2='20' y2='40' stroke='rgba(128,128,128,0.1)' stroke-width='0.6'/><line x1='0' y1='20' x2='40' y2='20' stroke='rgba(128,128,128,0.1)' stroke-width='0.6'/></svg>` },
+        { label: 'Crosshatch',   svg: `<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><line x1='0' y1='0' x2='20' y2='20' stroke='rgba(128,128,128,0.22)' stroke-width='0.8'/><line x1='20' y1='0' x2='0' y2='20' stroke='rgba(128,128,128,0.22)' stroke-width='0.8'/></svg>` },
+        { label: 'Cobblestone',  svg: `<svg xmlns='http://www.w3.org/2000/svg' width='48' height='32'><ellipse cx='12' cy='10' rx='10' ry='7' fill='none' stroke='rgba(128,128,128,0.38)' stroke-width='1'/><ellipse cx='36' cy='10' rx='10' ry='7' fill='none' stroke='rgba(128,128,128,0.3)' stroke-width='1'/><ellipse cx='24' cy='26' rx='10' ry='7' fill='none' stroke='rgba(128,128,128,0.34)' stroke-width='1'/><ellipse cx='0' cy='26' rx='10' ry='7' fill='none' stroke='rgba(128,128,128,0.28)' stroke-width='0.9'/><ellipse cx='48' cy='26' rx='10' ry='7' fill='none' stroke='rgba(128,128,128,0.28)' stroke-width='0.9'/></svg>` },
+        { label: 'Motes',        svg: `<svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'><circle cx='20' cy='18' r='1.2' fill='rgba(128,128,128,0.5)'/><circle cx='60' cy='50' r='0.9' fill='rgba(128,128,128,0.4)'/><circle cx='44' cy='30' r='0.7' fill='rgba(128,128,128,0.32)'/><circle cx='10' cy='62' r='0.8' fill='rgba(128,128,128,0.28)'/><circle cx='70' cy='14' r='0.6' fill='rgba(128,128,128,0.25)'/><circle cx='36' cy='68' r='1' fill='rgba(128,128,128,0.35)'/><circle cx='66' cy='72' r='0.7' fill='rgba(128,128,128,0.28)'/></svg>` },
+        { label: 'Herringbone',  svg: `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><line x1='0' y1='12' x2='12' y2='0' stroke='rgba(128,128,128,0.28)' stroke-width='1' stroke-linecap='round'/><line x1='12' y1='24' x2='24' y2='12' stroke='rgba(128,128,128,0.28)' stroke-width='1' stroke-linecap='round'/><line x1='0' y1='24' x2='24' y2='0' stroke='rgba(128,128,128,0.14)' stroke-width='0.6' stroke-linecap='round'/></svg>` },
+        { label: 'Pinstripe',    svg: `<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><line x1='0' y1='0' x2='0' y2='20' stroke='rgba(128,128,128,0.22)' stroke-width='1'/><line x1='10' y1='0' x2='10' y2='20' stroke='rgba(128,128,128,0.1)' stroke-width='0.6'/></svg>` },
+        { label: 'Scales',       svg: `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><path d='M0 16 Q8 0 16 0 Q24 0 32 16' fill='none' stroke='rgba(128,128,128,0.3)' stroke-width='1'/><path d='M0 32 Q8 16 16 16 Q24 16 32 32' fill='none' stroke='rgba(128,128,128,0.22)' stroke-width='0.9'/><path d='M-16 24 Q-8 8 0 8' fill='none' stroke='rgba(128,128,128,0.18)' stroke-width='0.8'/><path d='M16 8 Q24 -8 32 -8' fill='none' stroke='rgba(128,128,128,0.18)' stroke-width='0.8'/></svg>` },
+        { label: 'Grid',         svg: `<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><line x1='0' y1='0' x2='20' y2='0' stroke='rgba(128,128,128,0.2)' stroke-width='0.7'/><line x1='0' y1='10' x2='20' y2='10' stroke='rgba(128,128,128,0.12)' stroke-width='0.5'/><line x1='0' y1='0' x2='0' y2='20' stroke='rgba(128,128,128,0.2)' stroke-width='0.7'/><line x1='10' y1='0' x2='10' y2='20' stroke='rgba(128,128,128,0.12)' stroke-width='0.5'/></svg>` },
+    ].map(tp => ({
+        ...tp,
+        value: tp.svg
+            ? 'url("data:image/svg+xml,' + tp.svg.replace(/"/g, "'").replace(/%/g, '%25').replace(/#/g, '%23') + '")'
+            : 'none'
+    }));
 
     // Merge base theme + in-progress edits into a complete token set — used
     // both by the live preview (every keystroke/drag) and by Save & Apply,
@@ -2588,8 +2740,18 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
         function seedFromBase() {
             const base = THEMES[baseKey] || THEMES[DEFAULT_THEME];
-            CUSTOM_EDITOR_COLORS.forEach(c => { working[c.key] = base.tokens[c.key] || '#888888'; });
+            [...CUSTOM_EDITOR_COLORS, ...ADVANCED_COLORS].forEach(c => { working[c.key] = base.tokens[c.key] || '#888888'; });
         }
+
+        const ADVANCED_COLORS = [
+            { key: '--nui-surface-2',  label: 'Surface 2'  },
+            { key: '--nui-border',     label: 'Border'     },
+            { key: '--nui-text',       label: 'Text'       },
+            { key: '--nui-text-muted', label: 'Text Muted' },
+            { key: '--nui-success',    label: 'Success'    },
+            { key: '--nui-warning',    label: 'Warning'    },
+            { key: '--nui-danger',     label: 'Danger'     },
+        ];
         seedFromBase();
 
         const backdrop = document.createElement('div');
@@ -2637,11 +2799,30 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             THEMES[k].emoji + ' ' + THEMES[k].label + '</option>'
         ).join('');
 
+        function swatchBtn(c) {
+            return '<button type="button" class="nui-ct-swatch-btn nui-reset" data-ckey="' + c.key + '" style="display:flex; align-items:center; gap:8px; padding:6px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); cursor:pointer; text-align:left;">' +
+                '<span class="nui-ct-swatch" data-ckey="' + c.key + '" style="width:28px; height:28px; border-radius:6px; border:1px solid var(--nui-border); flex-shrink:0; background:' + safeHex(working[c.key]) + ';"></span>' +
+                '<span style="font-size:12px; font-weight:700; color:var(--nui-text);">' + c.label + '</span>' +
+            '</button>';
+        }
+
+        function texCardHtml(tp) {
+            const isNone = tp.value === 'none';
+            const active = workingTexture === tp.value;
+            const border = active ? '2px solid var(--nui-accent)' : '1.5px solid var(--nui-border)';
+            const previewBg = isNone
+                ? 'repeating-linear-gradient(45deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 8px)'
+                : tp.value;
+            return '<button type="button" class="nui-ct-tex" data-tex="' + tp.value.replace(/"/g, '&quot;') + '" ' +
+                'style="border-radius:8px; overflow:hidden; border:' + border + '; cursor:pointer; background:none; padding:0; text-align:left; width:100%;">' +
+                '<div style="height:56px; background:var(--nui-surface); background-image:' + (isNone ? 'repeating-linear-gradient(45deg,var(--nui-border) 0,var(--nui-border) 1px,transparent 1px,transparent 8px)' : tp.value) + '; background-repeat:repeat; background-size:auto;"></div>' +
+                '<div style="padding:5px 7px; background:var(--nui-surface-2); border-top:1px solid var(--nui-border);">' +
+                    '<div style="font-size:11px; font-weight:700; color:' + (active ? 'var(--nui-accent)' : 'var(--nui-text)') + ';">' + tp.label + '</div>' +
+                '</div>' +
+            '</button>';
+        }
+
         content.innerHTML =
-            // Live preview — a self-contained mini "device" whose CSS custom
-            // properties are set locally on this wrapper (never touching the
-            // real page theme), so every nui-btn/badge/surface inside it
-            // renders exactly as it will once the theme is actually applied.
             '<div id="nui-ct-preview" class="nui-reset" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-lg); overflow:hidden; background:var(--nui-bg);">' +
                 '<div id="nui-ct-preview-header" style="height:56px; display:flex; align-items:center; padding:0 14px; border-bottom:2px solid var(--nui-border);">' +
                     '<div style="width:28px;height:28px;border-radius:50%;background:var(--nui-accent-soft);display:flex;align-items:center;justify-content:center;color:var(--nui-accent);font-size:14px;flex-shrink:0;">🎨</div>' +
@@ -2654,6 +2835,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                         '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">' +
                             '<button type="button" class="nui-btn nui-btn-primary nui-btn-sm" tabindex="-1">Primary</button>' +
                             '<span style="font-size:11px; font-weight:700; padding:3px 9px; border-radius:var(--nui-radius-pill); background:var(--nui-accent-2-soft); color:var(--nui-accent-2);">Badge</span>' +
+                            '<span style="font-size:11px; font-weight:700; padding:3px 9px; border-radius:var(--nui-radius-pill); background:var(--nui-success)22; color:var(--nui-success);">Success</span>' +
+                            '<span style="font-size:11px; font-weight:700; padding:3px 9px; border-radius:var(--nui-radius-pill); background:var(--nui-danger)22; color:var(--nui-danger);">Danger</span>' +
                         '</div>' +
                     '</div>' +
                 '</div>' +
@@ -2663,25 +2846,30 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 '<select id="nui-ct-base" style="flex:1; padding:6px 8px; font-size:12px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' + baseOpts + '</select>' +
             '</div>' +
             '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
-                CUSTOM_EDITOR_COLORS.map(c =>
-                    '<button type="button" class="nui-ct-swatch-btn nui-reset" data-ckey="' + c.key + '" style="display:flex; align-items:center; gap:8px; padding:6px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); cursor:pointer; text-align:left;">' +
-                        '<span class="nui-ct-swatch" data-ckey="' + c.key + '" style="width:28px; height:28px; border-radius:6px; border:1px solid var(--nui-border); flex-shrink:0; background:' + safeHex(working[c.key]) + ';"></span>' +
-                        '<span style="font-size:12px; font-weight:700; color:var(--nui-text);">' + c.label + '</span>' +
-                    '</button>'
-                ).join('') +
+                CUSTOM_EDITOR_COLORS.map(swatchBtn).join('') +
             '</div>' +
-            '<div>' +
-                '<div style="font-size:11px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:6px;">Texture</div>' +
-                '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
-                    TEXTURE_PRESETS.map(tp =>
-                        '<button type="button" class="nui-ct-tex" data-tex="' + tp.value.replace(/"/g, '&quot;') + '" ' +
-                        'style="padding:3px 10px; border-radius:var(--nui-radius-pill); border:1px solid var(--nui-border); font-size:11px; font-weight:700; cursor:pointer; ' +
-                        'background:' + (workingTexture === tp.value ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)') + '; ' +
-                        'color:' + (workingTexture === tp.value ? 'var(--nui-accent)' : 'var(--nui-text-muted)') + ';">' +
-                        tp.label + '</button>'
-                    ).join('') +
+            // ---- Advanced section ----
+            '<details id="nui-ct-advanced" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); overflow:hidden;">' +
+                '<summary style="padding:10px 12px; font-size:12px; font-weight:800; color:var(--nui-text-muted); text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center; background:var(--nui-surface-2);">' +
+                    'Advanced <span style="font-size:10px; opacity:0.5;">▼</span>' +
+                '</summary>' +
+                '<div style="padding:12px; display:flex; flex-direction:column; gap:12px;">' +
+                    // Extra color tokens
+                    '<div>' +
+                        '<div style="font-size:10px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:8px;">Additional tokens</div>' +
+                        '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">' +
+                            ADVANCED_COLORS.map(swatchBtn).join('') +
+                        '</div>' +
+                    '</div>' +
+                    // Texture browser
+                    '<div>' +
+                        '<div style="font-size:10px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:8px;">Texture</div>' +
+                        '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;" id="nui-ct-tex-grid">' +
+                            TEXTURE_PRESETS.map(texCardHtml).join('') +
+                        '</div>' +
+                    '</div>' +
                 '</div>' +
-            '</div>' +
+            '</details>' +
             '<div style="display:flex; gap:6px;">' +
                 '<input id="nui-ct-emoji" type="text" maxlength="2" value="🎨" placeholder="🎨" style="width:38px; text-align:center; font-size:16px; padding:6px 4px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' +
                 '<input id="nui-ct-name" type="text" placeholder="Theme name" style="flex:1; padding:6px 8px; font-size:13px; font-weight:700; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' +
@@ -2701,14 +2889,16 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         content.querySelector('#nui-ct-base').addEventListener('change', function () {
             baseKey = this.value;
             seedFromBase();
-            workingTexture = 'none'; // reset texture when base changes
+            workingTexture = 'none';
             content.querySelectorAll('.nui-ct-swatch').forEach(s => {
-                s.style.background = safeHex(working[s.getAttribute('data-ckey')]);
+                const key = s.getAttribute('data-ckey');
+                s.style.background = safeHex(working[key] || '#888888');
             });
             content.querySelectorAll('.nui-ct-tex').forEach(b => {
                 const active = b.getAttribute('data-tex') === workingTexture;
-                b.style.background = active ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
-                b.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                b.style.border = active ? '2px solid var(--nui-accent)' : '1.5px solid var(--nui-border)';
+                const label = b.querySelector('div > div');
+                if (label) label.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text)';
             });
             updatePreview();
         });
@@ -2717,7 +2907,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             btn.addEventListener('click', function () {
                 const key = this.getAttribute('data-ckey');
                 const swatch = this.querySelector('.nui-ct-swatch');
-                openPopover = openColorPopover(this, safeHex(working[key]), (hex) => {
+                const currentVal = working[key] || (THEMES[baseKey] || THEMES[DEFAULT_THEME]).tokens[key] || '#888888';
+                openPopover = openColorPopover(this, safeHex(currentVal), (hex) => {
                     working[key] = hex;
                     swatch.style.background = hex;
                     updatePreview();
@@ -2730,8 +2921,9 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 workingTexture = this.getAttribute('data-tex');
                 content.querySelectorAll('.nui-ct-tex').forEach(b => {
                     const active = b.getAttribute('data-tex') === workingTexture;
-                    b.style.background = active ? 'var(--nui-accent-soft)' : 'var(--nui-surface-2)';
-                    b.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                    b.style.border = active ? '2px solid var(--nui-accent)' : '1.5px solid var(--nui-border)';
+                    const label = b.querySelector('div > div');
+                    if (label) label.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text)';
                 });
                 updatePreview();
             });
@@ -2870,7 +3062,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 // (The redundant stats block has been deleted from here)
 
                 '<a class="nui-drawer-item is-action" href="/quickref.phtml">Quickref</a>' + navHtml +
-                '<div class="nui-drawer-section"><div class="nui-drawer-item" data-action="open-daily-hub">📅 Dailies Hub</div><div class="nui-drawer-item" data-action="open-global-search">🔎 Search</div><div class="nui-drawer-item" data-action="open-settings">⚙️ NeoUI Settings</div><a class="nui-drawer-item is-danger" href="/logout.phtml">Logout</a></div>' +
+                '<div class="nui-drawer-section"><div class="nui-drawer-item" data-action="open-daily-hub">📅 Dailies Hub</div><div class="nui-drawer-item" data-action="open-global-search">🔎 Search</div><a class="nui-drawer-item" href="/ntimes/index.phtml?">📰 Neopian Times</a><div class="nui-drawer-item" data-action="open-settings">⚙️ NeoUI Settings</div><a class="nui-drawer-item is-danger" href="/logout.phtml">Logout</a></div>' +
             '</div><div class="nui-drawer-view" data-view="settings"><div class="nui-drawer-back" data-action="back-to-nav">&larr; Back</div><div data-slot="settings-sections"></div></div></div></div>'
         );
 
@@ -2881,10 +3073,12 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         function renderSettings() {
             settingsContainer.innerHTML = '';
             settingsSections.forEach(function (section) {
-                const wrap = document.createElement('div');
-                wrap.className = 'nui-drawer-section';
-                settingsContainer.appendChild(wrap);
-                section.render(wrap);
+                // Each render() sets container.innerHTML to a <details> — use a
+                // throwaway div so we can pull the element out and append it directly,
+                // avoiding the double-nested nui-drawer-section wrapping.
+                const tmp = document.createElement('div');
+                section.render(tmp);
+                while (tmp.firstChild) settingsContainer.appendChild(tmp.firstChild);
             });
         }
 
@@ -3320,7 +3514,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                         <div>
                             <label style="font-size: 13px; font-weight: 800; color: var(--nui-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: block;">Message:</label>
-                            <textarea name="message_body" rows="6" class="nui-textarea" placeholder="Write your message here..." required></textarea>
+                            <textarea name="message_body" rows="6" class="nui-textarea" placeholder="Write your message here..." required maxlength="2000"></textarea>
+                            <div id="nui-compose-counter" style="text-align:right;font-size:11px;font-weight:800;color:var(--nui-text-muted);margin-top:3px;">0 / 2000</div>
                         </div>
 
                         <div style="display: flex; justify-content: flex-end; align-items: center; gap: 14px; margin-top: 8px;">
@@ -3337,6 +3532,14 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
             const form = viewerContent.querySelector('#neomail-compose-form');
             const statusText = viewerContent.querySelector('#compose-status-text');
+            const composeTA = form.querySelector('textarea[name="message_body"]');
+            const composeCounter = form.querySelector('#nui-compose-counter');
+            composeTA.addEventListener('input', () => {
+                const len = composeTA.value.length;
+                const pct = len / 2000;
+                composeCounter.textContent = `${len} / 2000`;
+                composeCounter.style.color = pct >= 1 ? 'var(--nui-danger)' : pct >= 0.85 ? 'var(--nui-warning)' : 'var(--nui-text-muted)';
+            });
 
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -3520,6 +3723,10 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                         const keys = Object.keys(vibes);
                         const presets = window.VibeRater.PRESETS;
 
+                        // Preserve open state of the details wrapper if it already exists
+                        const existingDetails = settingsContainer.querySelector('details.nui-drawer-section');
+                        const wasOpen = existingDetails ? existingDetails.open : true;
+
                         const rows = keys.length === 0
                             ? '<div style="font-size:13px; color:var(--nui-text-muted); padding:8px 0;">No vibes assigned yet.</div>'
                             : keys.map(u => {
@@ -3540,8 +3747,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                             </div>
                         `).join('');
 
-                                                settingsContainer.innerHTML = `
-                            <details class="nui-drawer-section">
+                        settingsContainer.innerHTML = `
+                            <details class="nui-drawer-section"${wasOpen ? ' open' : ''}>
                                 <summary class="nui-drawer-section-title" style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;">
                                     Vibe Rater <span style="font-size:10px; opacity:0.5;">▼</span>
                                 </summary>
@@ -3562,7 +3769,6 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                                 </div>
                             </details>
                         `;
-
 
                         const updatePresets = () => {
                             const newPresets = [];
@@ -3587,7 +3793,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                             });
                         });
 
-                        settingsContainer.querySelector('#nui-add-preset').addEventListener('click', () => {
+                        settingsContainer.querySelector('#nui-add-preset').addEventListener('click', (e) => {
+                            e.stopPropagation();
                             const current = window.VibeRater.PRESETS;
                             current.push({ id: `new_${Date.now()}`, label: 'New Vibe', color: '#888888' });
                             window.VibeRater.saveCustomPresets(current);
@@ -3595,14 +3802,15 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                         });
 
                         settingsContainer.querySelectorAll('[data-vr]').forEach(btn => {
-                            btn.addEventListener('click', () => {
+                            btn.addEventListener('click', (e) => {
+                                e.stopPropagation();
                                 window.VibeRater.clearVibe(btn.getAttribute('data-vr'));
                                 renderVibeSettings();
                             });
                         });
 
                         const clearAll = settingsContainer.querySelector('#nui-vr-clear-all');
-                        if (clearAll) clearAll.addEventListener('click', () => { window.VibeRater.clearAll(); renderVibeSettings(); });
+                        if (clearAll) clearAll.addEventListener('click', (e) => { e.stopPropagation(); window.VibeRater.clearAll(); renderVibeSettings(); });
                     }
 
                     renderVibeSettings();
@@ -4197,7 +4405,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             container.innerHTML = `
                 <div class="neomail-reply-box nui-reset">
                     <form id="neomail-inline-form" style="width: 100%; max-width: 600px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-                        <textarea name="message_body" rows="3" class="nui-textarea" placeholder="Write a reply..." required style="text-align: center;"></textarea>
+                        <textarea name="message_body" rows="3" class="nui-textarea" placeholder="Write a reply..." required maxlength="2000" style="text-align: center;"></textarea>
+                        <div class="nui-inline-reply-counter" style="text-align:right;font-size:11px;font-weight:800;color:var(--nui-text-muted);margin-top:-6px;width:100%;">0 / 2000</div>
                         <div class="neomail-actions" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%;">
                             <button type="button" class="nui-btn nui-btn-warning nui-btn-sm" id="neomail-btn-clear-server">Clear from Site</button>
                             <button type="button" class="nui-btn nui-btn-danger nui-btn-sm" id="neomail-btn-delete-local">Delete Entirely</button>
@@ -4210,6 +4419,14 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
             const form = container.querySelector('#neomail-inline-form');
             const statusText = container.querySelector('#neomail-status-text');
+            const inlineTA = form.querySelector('textarea[name="message_body"]');
+            const inlineCounter = form.querySelector('.nui-inline-reply-counter');
+            inlineTA.addEventListener('input', () => {
+                const len = inlineTA.value.length;
+                const pct = len / 2000;
+                inlineCounter.textContent = `${len} / 2000`;
+                inlineCounter.style.color = pct >= 1 ? 'var(--nui-danger)' : pct >= 0.85 ? 'var(--nui-warning)' : 'var(--nui-text-muted)';
+            });
 
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -6065,7 +6282,9 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     // --- State Management ---
     let openThreads = []; // Array of { id, title, url, htmlCache }
     let activeTabId = 'board'; // 'board', 'create', or a thread ID
-    let currentBoardUrl = window.location.href;
+    // Restore the last-visited board URL so a refresh lands back where you were
+    const _savedBoardUrl = localStorage.getItem('nui_last_board_url');
+    let currentBoardUrl = (_savedBoardUrl && _savedBoardUrl.includes('neopets.com')) ? _savedBoardUrl : window.location.href;
     let newTopicUrl = null; // scraped from the board list's "createTopicButton" link
 
     let favThreads = JSON.parse(localStorage.getItem('nui_fav_threads') || '[]');
@@ -6256,6 +6475,10 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     const keys = Object.keys(vibes);
                     const presets = window.VibeRater.PRESETS;
 
+                    // Preserve open state of the details wrapper if it already exists
+                    const existingDetails = container.querySelector('details.nui-drawer-section');
+                    const wasOpen = existingDetails ? existingDetails.open : true;
+
                     // Assigned Users List
                     const rows = keys.length === 0
                         ? '<div style="font-size:13px; color:var(--nui-text-muted); padding:8px 0;">No vibes assigned yet.</div>'
@@ -6279,7 +6502,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     `).join('');
 
                     container.innerHTML = `
-                        <details class="nui-drawer-section">
+                        <details class="nui-drawer-section"${wasOpen ? ' open' : ''}>
                             <summary class="nui-drawer-section-title" style="cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;">
                                 Vibe Rater <span style="font-size:10px; opacity:0.5;">▼</span>
                             </summary>
@@ -6301,7 +6524,6 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                         </details>
                     `;
 
-
                     // Preset Editing Logic
                     const updatePresets = () => {
                         const newPresets = [];
@@ -6319,14 +6541,16 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     });
 
                     container.querySelectorAll('[data-preset-del]').forEach(btn => {
-                        btn.addEventListener('click', () => {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
                             btn.parentElement.remove();
                             updatePresets();
-                            renderVibeSettings(); // refresh UI
+                            renderVibeSettings();
                         });
                     });
 
-                    container.querySelector('#nui-add-preset').addEventListener('click', () => {
+                    container.querySelector('#nui-add-preset').addEventListener('click', (e) => {
+                        e.stopPropagation();
                         const current = window.VibeRater.PRESETS;
                         current.push({ id: `new_${Date.now()}`, label: 'New Vibe', color: '#888888' });
                         window.VibeRater.saveCustomPresets(current);
@@ -6335,14 +6559,15 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                     // User Assignment Logic
                     container.querySelectorAll('[data-vr]').forEach(btn => {
-                        btn.addEventListener('click', () => {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
                             window.VibeRater.clearVibe(btn.getAttribute('data-vr'));
                             renderVibeSettings();
                         });
                     });
 
                     const clearAll = container.querySelector('#nui-vr-clear-all');
-                    if (clearAll) clearAll.addEventListener('click', () => { window.VibeRater.clearAll(); renderVibeSettings(); });
+                    if (clearAll) clearAll.addEventListener('click', (e) => { e.stopPropagation(); window.VibeRater.clearAll(); renderVibeSettings(); });
                 }
 
                 renderVibeSettings();
@@ -6968,7 +7193,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     ${replyFormData.hiddenInputs.map(inp => `<input type="hidden" name="${inp.name}" value="${inp.value}">`).join('')}
                     ${pensHtml}
                     ${smiliesHtml}
-                    <textarea name="message" class="nui-textarea" rows="4" placeholder="Write your reply here..." required style="resize: vertical; margin-bottom: 8px;"></textarea>
+                    <textarea name="message" class="nui-textarea" rows="4" placeholder="Write your reply here..." required maxlength="500" style="resize: vertical; margin-bottom: 4px;"></textarea>
+                    <div style="text-align:right;font-size:11px;font-weight:800;color:var(--nui-text-muted);margin-bottom:8px;" class="nui-reply-counter">0 / 500</div>
                     <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
                         <span id="nui-reply-status" style="font-size: 13px; font-weight: 700; color: var(--nui-text-muted);"></span>
                         <button type="submit" class="nui-btn nui-btn-primary">Post Reply</button>
@@ -6977,6 +7203,13 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             `;
 
             const textarea = replyWrap.querySelector('textarea');
+            const replyCounter = replyWrap.querySelector('.nui-reply-counter');
+            textarea.addEventListener('input', () => {
+                const len = textarea.value.length;
+                const pct = len / 500;
+                replyCounter.textContent = `${len} / 500`;
+                replyCounter.style.color = pct >= 1 ? 'var(--nui-danger)' : pct >= 0.85 ? 'var(--nui-warning)' : 'var(--nui-text-muted)';
+            });
 
             const smileyToggle = replyWrap.querySelector('#nui-smiley-toggle');
             const smileyDrawer = replyWrap.querySelector('#nui-smiley-drawer');
@@ -7122,6 +7355,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     // --------------------------------------------------------------------------
     function loadBoardList(url, container) {
         currentBoardUrl = url;
+        try { localStorage.setItem('nui_last_board_url', url); } catch (e) {}
         container.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">📡</span><br>Fetching board...</div>`;
 
         fetch(url).then(res => res.text()).then(html => {
@@ -7697,6 +7931,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 <label style="display:flex; flex-direction:column; gap:6px;">
                     <span style="font-size:12px; font-weight:800; color:var(--nui-text-muted); text-transform:uppercase; letter-spacing:0.5px;">Message</span>
                     <textarea name="message" maxlength="500" required class="nui-textarea" rows="8" style="resize:vertical;"></textarea>
+                    <div id="nui-newtopic-counter" style="text-align:right;font-size:11px;font-weight:800;color:var(--nui-text-muted);margin-top:3px;">0 / 500</div>
                 </label>
                 <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
                     <span id="nui-ct-status" style="font-size: 13px; font-weight: 700; color: var(--nui-text-muted);"></span>
@@ -7711,6 +7946,13 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
         const form = wrapper.querySelector('#nui-create-topic-form');
         const textarea = form.querySelector('textarea[name="message"]');
+        const topicCounter = form.querySelector('#nui-newtopic-counter');
+        textarea.addEventListener('input', () => {
+            const len = textarea.value.length;
+            const pct = len / 500;
+            topicCounter.textContent = `${len} / 500`;
+            topicCounter.style.color = pct >= 1 ? 'var(--nui-danger)' : pct >= 0.85 ? 'var(--nui-warning)' : 'var(--nui-text-muted)';
+        });
         let selectedPen = pens.find(p => p.checked) ? pens.find(p => p.checked).val : (pens[0] ? pens[0].val : '0');
 
         const smileyToggle = wrapper.querySelector('#nui-ct-smiley-toggle');
@@ -7845,14 +8087,14 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             const app = initAppShell();
             if (isCreateTopic) {
                 const resolvedBoard = resolveBoardListUrl(document, window.location.href);
-                if (resolvedBoard) currentBoardUrl = resolvedBoard;
+                if (resolvedBoard) { currentBoardUrl = resolvedBoard; try { localStorage.setItem('nui_last_board_url', resolvedBoard); } catch (e) {} }
                 activeTabId = 'create';
                 newTopicUrl = window.location.href;
                 renderTabs();
                 renderCreateTopicUI(document, document.getElementById('nui-content-area'), window.location.href);
             } else if (isTopic) {
                 const resolvedBoard = resolveBoardListUrl(document, window.location.href);
-                if (resolvedBoard) currentBoardUrl = resolvedBoard;
+                if (resolvedBoard) { currentBoardUrl = resolvedBoard; try { localStorage.setItem('nui_last_board_url', resolvedBoard); } catch (e) {} }
                 const id = getTopicId(window.location.href);
                 // Try to scrape the real title from the page DOM before falling back to placeholder
                 let initTitle = 'Thread';
@@ -7870,14 +8112,14 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 const app = initAppShell();
                 if (isCreateTopic) {
                     const resolvedBoard = resolveBoardListUrl(document, window.location.href);
-                    if (resolvedBoard) currentBoardUrl = resolvedBoard;
+                    if (resolvedBoard) { currentBoardUrl = resolvedBoard; try { localStorage.setItem('nui_last_board_url', resolvedBoard); } catch (e) {} }
                     activeTabId = 'create';
                     newTopicUrl = window.location.href;
                     renderTabs();
                     renderCreateTopicUI(document, document.getElementById('nui-content-area'), window.location.href);
                 } else if (isTopic) {
                     const resolvedBoard = resolveBoardListUrl(document, window.location.href);
-                    if (resolvedBoard) currentBoardUrl = resolvedBoard;
+                    if (resolvedBoard) { currentBoardUrl = resolvedBoard; try { localStorage.setItem('nui_last_board_url', resolvedBoard); } catch (e) {} }
                     const id = getTopicId(window.location.href);
                     let initTitle = 'Thread';
                     const initTitleEl = document.querySelector('#boardTopic .topicTitle h1');
@@ -9639,6 +9881,8 @@ contentInner.appendChild(collectBtn);
         document.body.className = 'nui-reset';
         document.documentElement.style.background = 'var(--nui-bg)';
         document.body.style.background = 'var(--nui-bg)';
+        document.documentElement.style.webkitTextSizeAdjust = '100%';
+        document.documentElement.style.textSizeAdjust = '100%';
 
         // 4. Initialize NeoUI & Topbar
         NeoUI.init();
@@ -9646,12 +9890,30 @@ contentInner.appendChild(collectBtn);
         NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
 
         // 5. Build App View layout
+        //
+        // Previous versions built this as a fixed, inset:0 shell with a
+        // single internal overflow-y:auto scroll box (contentArea), on the
+        // theory that pinning the page and giving it exactly one scrollable
+        // region would be the most reliable setup. In practice, across
+        // several different sizing strategies (flex-basis, then explicit
+        // absolute positioning) touch events reached contentArea fine but
+        // never actually scrolled it on at least one real engine (Android
+        // Firefox) — so the nested-scroll-container approach itself is what
+        // isn't cooperating, not any particular sizing method.
+        //
+        // Simpler and more robust: don't fight the browser for a custom
+        // scroll region at all. appWrapper is a normal, in-flow block;
+        // contentArea sizes to its content (no overflow-y, no fixed height);
+        // and the actual document (html/body) scrolls the ordinary way,
+        // same as any other webpage. topRow uses position:sticky so the tab
+        // bar still stays put under the global topbar while you scroll,
+        // keeping the app-like feel without needing an internal scroller.
         const appWrapper = document.createElement('div');
         appWrapper.id = 'nui-nt-app';
-        appWrapper.style.cssText = 'display: flex; flex-direction: column; height: 100vh; padding-top: var(--nui-topbar-h); box-sizing: border-box;';
+        appWrapper.style.cssText = 'padding-top: var(--nui-topbar-h); box-sizing: border-box; min-height: 100vh;';
 
         const topRow = document.createElement('div');
-        topRow.style.cssText = 'display: flex; align-items: center; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border); flex-shrink: 0;';
+        topRow.style.cssText = 'display: flex; align-items: center; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border); position: sticky; top: var(--nui-topbar-h); z-index: 10;';
 
         const tabBar = document.createElement('div');
         tabBar.id = 'nui-nt-tabs';
@@ -9671,10 +9933,15 @@ contentInner.appendChild(collectBtn);
 
         const contentArea = document.createElement('div');
         contentArea.id = 'nui-content-area';
-        contentArea.style.cssText = 'flex: 1; min-height: 0; overflow-y: auto; padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; -webkit-overflow-scrolling: touch;';
+        // No overflow-y, no explicit height — this box is exactly as tall
+        // as its content and the page itself scrolls past it. Bottom
+        // padding (plus the iOS home-indicator safe area) keeps the last
+        // item off the very edge of the screen.
+        contentArea.style.cssText = 'padding: var(--nui-space-4); padding-bottom: calc(var(--nui-space-5) + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; align-items: center;';
         appWrapper.appendChild(contentArea);
 
         document.body.appendChild(appWrapper);
+
 
         // 6. Section Configurations
         const SECTIONS = [
@@ -9914,6 +10181,42 @@ contentInner.appendChild(collectBtn);
             });
         }
 
+        // Strips inline properties from raw, scraped Neopets markup that can
+        // hijack scrolling once it's dropped into our full-page contentArea
+        // (leftover overflow/height/position rules from Neopets' own table
+        // layout, e.g. the little fixed-height scroll boxes the Editorial
+        // section normally lives in). Now that the page itself scrolls
+        // rather than an internal contentArea scroll box, this mostly
+        // guards against those leftover rules distorting layout (e.g. a
+        // stray position:absolute/fixed nested element) rather than
+        // fighting for scroll ownership.
+        //
+        // Also strips inline on* event-handler attributes (onmousedown,
+        // ontouchstart, onclick, etc.) — old right-click/drag protection
+        // and lightbox hooks Neopets leaves on comic <img>/<a> tags. Unlike
+        // <script> tags, on* attributes DO go live the moment they're set
+        // via innerHTML, so they're worth clearing out regardless.
+        function sanitizeLegacyMarkup(root) {
+            root.querySelectorAll('*').forEach(el => {
+                el.getAttributeNames().forEach(attr => {
+                    if (attr.startsWith('on')) el.removeAttribute(attr);
+                });
+            });
+            root.querySelectorAll('[style]').forEach(el => {
+                el.style.removeProperty('overflow');
+                el.style.removeProperty('overflow-x');
+                el.style.removeProperty('overflow-y');
+                el.style.removeProperty('height');
+                el.style.removeProperty('max-height');
+                el.style.removeProperty('min-height');
+                const pos = el.style.position;
+                if (pos === 'fixed' || pos === 'absolute' || pos === 'sticky') {
+                    el.style.removeProperty('position');
+                }
+            });
+            root.querySelectorAll('script, style').forEach(el => el.remove());
+        }
+
         // 8. Core Router Engine
         async function loadPage(url) {
             const isReadingView = !!url.match(/[?&]section=\d+/);
@@ -9922,7 +10225,7 @@ contentInner.appendChild(collectBtn);
             if (url === '#bookmarks') {
                 renderNav(url);
                 renderBookmarksView();
-                contentArea.scrollTop = 0;
+                window.scrollTo(0, 0);
                 window.history.pushState({ path: url }, '', url);
                 return;
             }
@@ -9987,13 +10290,30 @@ contentInner.appendChild(collectBtn);
 
                 contentArea.innerHTML = viewHtml;
 
+                // Articles/comics/editorials inject raw scraped Neopets markup
+                // (contentTd.innerHTML / bodyHtml) straight into contentArea.
+                // That legacy HTML carries its own inline overflow/height/
+                // position rules from Neopets' old table layout (the Editorial
+                // section in particular is normally boxed into a small
+                // fixed-height scrolling cell on the real site). Left in place,
+                // those hijack the touch-scroll gesture on a nested element
+                // before it ever reaches contentArea's own overflow-y:auto,
+                // which reads as "the page won't scroll." List/home views never
+                // hit this because they're built fresh from scraped text with
+                // no legacy markup passed through. Strip the offending inline
+                // properties (and any embedded <script>/<style>) from whatever
+                // was just injected. contentArea itself no longer scrolls (the
+                // page does), but leftover inline height/position rules can
+                // still distort layout, so this stays in place.
+                sanitizeLegacyMarkup(contentArea);
+
                 contentArea.querySelectorAll('img').forEach(img => {
                     img.style.maxWidth = '100%';
                     img.style.height = 'auto';
                     img.style.borderRadius = 'var(--nui-radius-sm)';
                 });
 
-                contentArea.scrollTop = 0;
+                window.scrollTo(0, 0);
 
                 if (url !== window.location.href) {
                     window.history.pushState({ path: url }, '', url);
@@ -11431,4 +11751,701 @@ return {
     } else {
         document.addEventListener('DOMContentLoaded', function () { try { run(); } catch (e) {} });
     }
+})();
+// ==============================================================================
+// MODULE 15: NEOUI HOMEPAGE DASHBOARD (WITH EDITORS)
+// ==============================================================================
+(function () {
+    'use strict';
+
+    if (!/\/home\/(index\.phtml)?$/.test(location.pathname)) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Homepage Dashboard crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    function isSnowagerAsleep() {
+        const ptHour = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" })).getHours();
+        return ptHour === 6 || ptHour === 14 || ptHour === 22;
+    }
+
+    // --- GLOBAL ACTIONS ---
+    window.nuiChangeActivePet = function(petName) {
+        if (!petName) return;
+
+        let refCk = '';
+        const scripts = document.getElementsByTagName('script');
+        for (let i = 0; i < scripts.length; i++) {
+            const content = scripts[i].innerHTML;
+            const ckMatch = content.match(/_ref_ck['"]?\s*:\s*['"]([a-f0-9]+)['"]/i) ||
+                            content.match(/getCK\(\)\s*\{\s*return\s*['"]([a-f0-9]+)['"]/i);
+            if (ckMatch) {
+                refCk = ckMatch[1];
+                break;
+            }
+        }
+
+        if (!refCk) {
+            alert('Could not find security token (_ref_ck).');
+            return;
+        }
+
+        fetch('/np-templates/ajax/changepet.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'Accept': 'application/json, text/javascript, */*; q=0.01',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: '_ref_ck=' + encodeURIComponent(refCk) + '&new_active_pet=' + encodeURIComponent(petName)
+        }).then(res => res.json()).then(data => {
+            if (data.status === 'success') window.location.reload();
+            else alert('Failed to change pet: ' + (data.error || 'Unknown error'));
+        }).catch(err => {
+            console.error('Pet change error:', err);
+            window.location.reload();
+        });
+    };
+
+    // --- EDITOR MODAL SYSTEM ---
+    window.nuiOpenLinkEditor = function(type) {
+        const isDailies = type === 'dailies';
+        const storageKey = isDailies ? 'neoui_home_dailies' : 'neoui_home_quicklinks';
+        const title = isDailies ? 'Edit Dailies' : 'Edit Quick Links';
+
+        const CURATED_DAILIES = [
+            // — Freebies —
+            { name: 'Anchor Management', url: '/pirates/anchormanagement.phtml', icon: '🦑', group: 'Freebies' },
+            { name: 'Apple Bobbing', url: '/halloween/applebobbing.phtml', icon: '🍎', group: 'Freebies' },
+            { name: 'Bank Interest', url: '/bank.phtml', icon: '🏦', group: 'Freebies' },
+            { name: 'Buried Treasure', url: '/pirates/buriedtreasure/index.phtml', icon: '🗺️', group: 'Freebies' },
+            { name: 'Coconut Shy', url: '/halloween/coconutshy.phtml', icon: '🥥', group: 'Freebies' },
+            { name: 'Coltzan\'s Shrine', url: '/desert/shrine.phtml', icon: '🏜️', group: 'Freebies' },
+            { name: 'Dark Cave', url: '/magma/darkcave.phtml', icon: '🌑', group: 'Freebies' },
+            { name: 'Deserted Tomb', url: '/worlds/geraptiku/tomb.phtml', icon: '⚰️', group: 'Freebies' },
+            { name: 'Faerie Crossword', url: '/games/crossword/index.phtml', icon: '📝', group: 'Freebies' },
+            { name: 'Faerie Quests', url: '/quests.phtml', icon: '🧚', group: 'Freebies' },
+            { name: 'Forgotten Shore', url: '/pirates/forgottenshore.phtml', icon: '🏖️', group: 'Freebies' },
+            { name: 'Fruit Machine', url: '/desert/fruitmachine.phtml', icon: '🎰', group: 'Freebies' },
+            { name: 'Giant Jelly', url: '/jelly/jelly.phtml', icon: '🍮', group: 'Freebies' },
+            { name: 'Giant Omelette', url: '/prehistoric/omelette.phtml', icon: '🍳', group: 'Freebies' },
+            { name: 'Grave Danger', url: '/halloween/gravedanger/', icon: '💀', group: 'Freebies' },
+            { name: 'Grumpy Old King', url: '/medieval/grumpyking.phtml', icon: '👑', group: 'Freebies' },
+            { name: 'Healing Springs', url: '/faerieland/springs.phtml', icon: '⛲', group: 'Freebies' },
+            { name: 'Kiko Pop', url: '/worlds/kiko/kpop/', icon: '🎈', group: 'Freebies' },
+            { name: 'Lab Ray', url: '/lab2.phtml', icon: '⚡', group: 'Freebies' },
+            { name: 'Lunar Temple', url: '/shenkuu/lunar/', icon: '🌙', group: 'Freebies' },
+            { name: 'Meteor', url: '/moon/meteor.phtml', icon: '☄️', group: 'Freebies' },
+            { name: 'Moltara Quarry', url: '/magma/quarry.phtml', icon: '🪨', group: 'Freebies' },
+            { name: 'Mysterious Negg Cave', url: '/shenkuu/neggcave/', icon: '🥚', group: 'Freebies' },
+            { name: 'Petpet Lab Ray', url: '/petpetlab.phtml', icon: '🔬', group: 'Freebies' },
+            { name: 'Rich Slorg', url: '/shop_of_offers.phtml?slorg_payout=yes', icon: '🐌', group: 'Freebies' },
+            { name: 'Tombola', url: '/island/tombola.phtml', icon: '🎟️', group: 'Freebies' },
+            { name: 'Trudy\'s Surprise', url: '/trudys_surprise.phtml', icon: '🎁', group: 'Freebies' },
+            { name: 'Underwater Fishing', url: '/water/fishing.phtml', icon: '🎣', group: 'Freebies' },
+            // — Wheels —
+            { name: 'Wheel of Excitement', url: '/faerieland/wheel.phtml', icon: '🎡', group: 'Wheels' },
+            { name: 'Wheel of Extravagance', url: '/desert/extravagance.phtml', icon: '🎡', group: 'Wheels' },
+            { name: 'Wheel of Knowledge', url: '/medieval/knowledge.phtml', icon: '🎡', group: 'Wheels' },
+            { name: 'Wheel of Mediocrity', url: '/prehistoric/mediocrity.phtml', icon: '🎡', group: 'Wheels' },
+            { name: 'Wheel of Misfortune', url: '/halloween/wheel/index.phtml', icon: '🎡', group: 'Wheels' },
+            { name: 'Wheel of Monotony', url: '/prehistoric/monotony/monotony.phtml', icon: '🎡', group: 'Wheels' },
+            { name: 'Wheel of Starlight (Premium)', url: '/premium/wheel.phtml', icon: '⭐', group: 'Wheels' },
+            // — Training —
+            { name: 'Mystery Island Training School', url: '/island/training.phtml', icon: '⚔️', group: 'Training' },
+            { name: 'Secret Ninja Training School', url: '/island/fight_training.phtml', icon: '🥷', group: 'Training' },
+            { name: 'Swashbuckling Academy', url: '/pirates/academy.phtml', icon: '⚓', group: 'Training' },
+        ];
+
+        let currentData = [];
+        try {
+            const raw = localStorage.getItem(storageKey);
+            if (raw) currentData = JSON.parse(raw);
+        } catch (e) {}
+
+        // Fallbacks if empty
+        if (!currentData || currentData.length === 0) {
+            if (isDailies) {
+                currentData = [
+                    { name: 'Buried Treasure', url: '/pirates/buriedtreasure/index.phtml', icon: '🗺️' },
+                    { name: 'Coconut Shy', url: '/halloween/coconutshy.phtml', icon: '🥥' },
+                    { name: 'Faerie Quests', url: '/quests.phtml', icon: '🧚' },
+                    { name: 'Lab Ray', url: '/lab2.phtml', icon: '⚡' },
+                    { name: 'Trudy\'s Surprise', url: '/trudys_surprise.phtml', icon: '🎁' }
+                ];
+            } else {
+                currentData = [
+                    { name: 'Inventory', url: '/inventory.phtml', icon: '🎒' },
+                    { name: 'Bank', url: '/bank.phtml', icon: '🏦' },
+                    { name: 'Shop Wizard', url: '/market.phtml?type=wizard', icon: '🪄' },
+                    { name: 'Neoboards', url: '/neoboards/index.phtml', icon: '💬' },
+                    { name: 'Trading Post', url: '/island/tradingpost.phtml', icon: '📜' },
+                    { name: 'Food Club', url: '/pirates/foodclub.phtml?type=bet', icon: '🍗' }
+                ];
+            }
+        }
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(2px);';
+
+        const modal = document.createElement('div');
+        modal.className = 'nui-surface';
+        modal.style.cssText = 'width:90%; max-width:600px; max-height:90vh; overflow-y:auto; border-radius:var(--nui-radius-lg); padding:var(--nui-space-4); display:flex; flex-direction:column; gap:var(--nui-space-3); border:1px solid var(--nui-border); box-shadow: 0 10px 25px rgba(0,0,0,0.2);';
+
+        const titleEl = document.createElement('div');
+        titleEl.style.cssText = 'font-size:20px; font-weight:800; border-bottom:1px solid var(--nui-border); padding-bottom:8px;';
+        titleEl.textContent = title;
+        modal.appendChild(titleEl);
+
+        const listContainer = document.createElement('div');
+        listContainer.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-bottom:12px;';
+
+        function renderList() {
+            listContainer.innerHTML = '';
+            currentData.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'nui-edit-row';
+                row.style.cssText = 'display:flex; gap:8px; align-items:center; background:var(--nui-surface-2); padding:8px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border);';
+
+                if (isDailies) {
+                    // Curated Dailies just show the text and a delete button
+                    row.innerHTML = `
+                        <div style="width:30px; text-align:center; font-size:18px;">${item.icon || '📌'}</div>
+                        <div style="flex:1; font-weight:700; color:var(--nui-text);">${item.name}</div>
+                        <button class="nui-btn nui-btn-red nui-btn-sm" style="padding:4px 8px; background:var(--nui-danger-soft); color:var(--nui-danger); border:none;" onclick="this.parentElement.remove()">🗑️</button>
+                    `;
+                    row.setAttribute('data-icon', item.icon || '📌');
+                    row.setAttribute('data-name', item.name);
+                    row.setAttribute('data-url', item.url);
+                } else {
+                    // Quick Links get the free-text inputs
+                    row.innerHTML = `
+                        <input type="text" class="nui-input" value="${item.icon || ''}" placeholder="Emoji" style="width:50px; text-align:center;">
+                        <input type="text" class="nui-input" value="${item.name || ''}" placeholder="Name" style="flex:1; min-width:100px;">
+                        <input type="text" class="nui-input" value="${item.url || ''}" placeholder="/url.phtml" style="flex:2; min-width:150px;">
+                        <button class="nui-btn nui-btn-red nui-btn-sm" style="padding:4px 8px; background:var(--nui-danger-soft); color:var(--nui-danger); border:none;" onclick="this.parentElement.remove()">🗑️</button>
+                    `;
+                }
+                listContainer.appendChild(row);
+            });
+        }
+        renderList();
+        modal.appendChild(listContainer);
+
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex; gap:8px; justify-content:space-between; margin-top:8px; align-items:center;';
+
+        if (isDailies) {
+            const addWrap = document.createElement('div');
+            addWrap.style.cssText = 'display:flex; gap:8px; flex:1;';
+
+            const select = document.createElement('select');
+            select.className = 'nui-select';
+            select.style.flex = '1';
+
+            const groups = {};
+            CURATED_DAILIES.forEach((d, i) => {
+                const g = d.group || 'Other';
+                if (!groups[g]) groups[g] = [];
+                groups[g].push({ d, i });
+            });
+            Object.entries(groups).forEach(([groupName, entries]) => {
+                const og = document.createElement('optgroup');
+                og.label = groupName;
+                entries.forEach(({ d, i }) => {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = `${d.icon} ${d.name}`;
+                    og.appendChild(opt);
+                });
+                select.appendChild(og);
+            });
+
+            const addBtn = document.createElement('button');
+            addBtn.className = 'nui-btn nui-btn-secondary';
+            addBtn.textContent = '+ Add';
+            addBtn.onclick = () => {
+                const selectedDaily = CURATED_DAILIES[select.value];
+                const existing = Array.from(listContainer.children).find(row => row.getAttribute('data-name') === selectedDaily.name);
+                if (!existing) {
+                    currentData.push({ ...selectedDaily });
+                    renderList();
+                } else {
+                    alert('This daily is already in your list!');
+                }
+            };
+
+            addWrap.appendChild(select);
+            addWrap.appendChild(addBtn);
+            btnRow.appendChild(addWrap);
+        } else {
+            const addBtn = document.createElement('button');
+            addBtn.className = 'nui-btn nui-btn-secondary';
+            addBtn.textContent = '+ Add Custom Link';
+            addBtn.onclick = () => {
+                currentData.push({ icon: '🔗', name: 'New Link', url: '/' });
+                renderList();
+            };
+            btnRow.appendChild(addBtn);
+        }
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.cssText = 'display:flex; gap:8px;';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'nui-btn nui-btn-secondary';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.onclick = () => overlay.remove();
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'nui-btn nui-btn-primary';
+        saveBtn.textContent = 'Save Changes';
+        saveBtn.onclick = () => {
+            const rows = listContainer.children;
+            const newData = [];
+            for (let i = 0; i < rows.length; i++) {
+                if (isDailies) {
+                    newData.push({
+                        icon: rows[i].getAttribute('data-icon'),
+                        name: rows[i].getAttribute('data-name'),
+                        url: rows[i].getAttribute('data-url')
+                    });
+                } else {
+                    const inputs = rows[i].querySelectorAll('input');
+                    newData.push({
+                        icon: inputs[0].value.trim(),
+                        name: inputs[1].value.trim(),
+                        url: inputs[2].value.trim()
+                    });
+                }
+            }
+            localStorage.setItem(storageKey, JSON.stringify(newData));
+            overlay.remove();
+            window.location.reload();
+        };
+
+        actionsDiv.appendChild(cancelBtn);
+        actionsDiv.appendChild(saveBtn);
+        btnRow.appendChild(actionsDiv);
+
+        modal.appendChild(btnRow);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+    };
+
+    // ── NST Clock helpers ────────────────────────────────────────────────────
+    function getNSTDate() {
+        return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    }
+    function formatNST(d) {
+        const h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const hh = h % 12 || 12;
+        return `${hh}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} ${ampm} NST`;
+    }
+
+    // ── Training scraper (inline, no module dependency) ──────────────────────
+    function scrapeTrainingStatus(doc) {
+        const pets = [];
+        const rows = doc.querySelectorAll('table[align="center"] tr');
+        let i = 0;
+        while (i < rows.length) {
+            const headerTd = rows[i] && rows[i].querySelector('td[bgcolor="#efefef"]');
+            if (!headerTd) { i++; continue; }
+            const headerText = headerTd.textContent.trim();
+            const m = headerText.match(/^(.+?)\s+\(Level\s+(\d+)\)\s+(.*)/);
+            if (!m) { i++; continue; }
+            const name = m[1].trim();
+            const statusText = m[3].trim();
+            const onCourse = statusText.startsWith('is currently studying');
+            const courseSubject = onCourse ? statusText.replace('is currently studying', '').trim() : null;
+            let courseFinished = false, totalSeconds = 0, codestonesNeeded = [];
+            const dataRow = rows[i + 1];
+            if (dataRow) {
+                const actionTd = dataRow.querySelectorAll('td')[1];
+                if (actionTd) {
+                    const txt = actionTd.textContent.trim();
+                    if (txt.includes('Course Finished')) courseFinished = true;
+                    const tm = txt.match(/(\d+)\s*hrs?,?\s*(\d+)\s*minutes?,?\s*(\d+)\s*seconds?/i);
+                    if (tm) totalSeconds = (parseInt(tm[1]) * 3600) + (parseInt(tm[2]) * 60) + parseInt(tm[3]);
+                    actionTd.querySelectorAll('b').forEach(b => {
+                        if (b.textContent.includes('Codestone')) codestonesNeeded.push(b.textContent.trim());
+                    });
+                }
+            }
+            pets.push({ name, onCourse, courseSubject, courseFinished, totalSeconds, codestonesNeeded });
+            i += 2;
+        }
+        return pets;
+    }
+
+    // ── Card builder helper ──────────────────────────────────────────────────
+    function nuiCard(extraStyle) {
+        const el = document.createElement('div');
+        el.className = 'nui-surface';
+        el.style.cssText = 'border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); padding: var(--nui-space-4); box-shadow: 0 4px 12px var(--nui-shadow); display: flex; flex-direction: column; gap: var(--nui-space-3);' + (extraStyle || '');
+        return el;
+    }
+    function cardHeader(title, actionHtml) {
+        return `<div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);border-bottom:1px solid var(--nui-border);padding-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><span>${title}</span>${actionHtml || ''}</div>`;
+    }
+    function accordionWrap(summaryHtml, bodyHtml, open) {
+        return `<details${open ? ' open' : ''} style="border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);overflow:hidden;"><summary style="cursor:pointer;padding:10px 12px;font-size:13px;font-weight:700;color:var(--nui-text-muted);user-select:none;list-style:none;display:flex;justify-content:space-between;align-items:center;background:var(--nui-surface-2);">${summaryHtml}<span style="font-size:11px;opacity:0.5;">▾</span></summary><div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px;">${bodyHtml}</div></details>`;
+    }
+    function dailyRow(icon, name, subtitle, url, btnLabel, btnClass) {
+        return `<a href="${url}" style="display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);background:var(--nui-surface);text-decoration:none;color:var(--nui-text);transition:background var(--nui-dur-fast) var(--nui-ease);"><span style="display:flex;align-items:center;gap:10px;min-width:0;"><span style="font-size:18px;flex-shrink:0;">${icon}</span><span style="display:flex;flex-direction:column;gap:1px;min-width:0;"><span style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</span>${subtitle ? `<span style="font-size:11px;color:var(--nui-text-muted);">${subtitle}</span>` : ''}</span></span><span class="nui-btn ${btnClass || 'nui-btn-secondary'} nui-btn-sm" style="padding:4px 10px;font-size:11px;flex-shrink:0;pointer-events:none;">${btnLabel || 'Go'}</span></a>`;
+    }
+
+    // --- MAIN RUNNER ---
+    async function run() {
+        const NeoUI = window.NeoUI;
+        if (!NeoUI || !NeoUI.__ready) {
+            throw new Error('NeoUI Core Framework was not found.');
+        }
+
+        // 1. DATA SCRAPING
+        const usernameEl = document.querySelector('a[href^="/userlookup.phtml?user="].text-muted');
+        const username = usernameEl ? usernameEl.textContent.trim() : 'Player';
+
+        const npEl = document.getElementById('npanchor');
+        const ncEl = document.getElementById('ncanchor');
+        const activeStats = {
+            np: npEl ? npEl.textContent.replace(/,/g, '') : 0,
+            nc: ncEl ? ncEl.textContent.replace(/,/g, '') : 0
+        };
+
+        const pets = [];
+        document.querySelectorAll('.hp-carousel-pet').forEach(el => {
+            pets.push({
+                name: el.getAttribute('data-name'),
+                species: el.getAttribute('data-species'),
+                color: el.getAttribute('data-color'),
+                level: el.getAttribute('data-level'),
+                health: el.getAttribute('data-health'),
+                maxhealth: el.getAttribute('data-maxhealth'),
+                image: el.getAttribute('data-petimage'),
+                active: el.getAttribute('data-active') === 'true',
+                petpet: el.getAttribute('data-petpet') || null,
+                petpetimg: el.getAttribute('data-petpetimg') || null
+            });
+        });
+
+        const fallbackEl = document.querySelector('.profile-dropdown-link');
+        const fallbackName = fallbackEl ? fallbackEl.textContent.trim() : null;
+        let activePet = pets.find(p => p.active) || pets.find(p => p.name === fallbackName) || pets[0];
+        const inactivePets = pets.filter(p => p.name !== (activePet ? activePet.name : ''));
+
+        // Load stored data
+        let savedDailies = [], quickLinks = [];
+        try {
+            const rawDailies = localStorage.getItem('neoui_home_dailies');
+            if (rawDailies) savedDailies = JSON.parse(rawDailies);
+            else savedDailies = [
+                { name: 'Trudy\'s Surprise', url: '/trudys_surprise.phtml', icon: '🎁' },
+                { name: 'Healing Springs', url: '/faerieland/springs.phtml', icon: '⛲' },
+                { name: 'Giant Omelette', url: '/prehistoric/omelette.phtml', icon: '🍳' },
+                { name: 'Giant Jelly', url: '/jelly/jelly.phtml', icon: '🍮' },
+                { name: 'Faerie Crossword', url: '/games/crossword/index.phtml', icon: '📝' },
+                { name: 'Lab Ray', url: '/lab2.phtml', icon: '⚡' },
+                { name: 'Fruit Machine', url: '/desert/fruitmachine.phtml', icon: '🎰' },
+                { name: 'Anchor Management', url: '/pirates/anchormanagement.phtml', icon: '🦑' },
+                { name: 'Wheel of Excitement', url: '/faerieland/wheel.phtml', icon: '🎡' },
+                { name: 'Wheel of Mediocrity', url: '/prehistoric/mediocrity.phtml', icon: '🎡' },
+                { name: 'Wheel of Misfortune', url: '/halloween/wheel/index.phtml', icon: '🎡' }
+            ];
+
+            const rawLinks = localStorage.getItem('neoui_home_quicklinks');
+            if (rawLinks) quickLinks = JSON.parse(rawLinks);
+            else quickLinks = [
+                { name: 'Inventory', url: '/inventory.phtml', icon: '🎒' },
+                { name: 'Bank', url: '/bank.phtml', icon: '🏦' },
+                { name: 'Shop Wizard', url: '/market.phtml?type=wizard', icon: '🪄' },
+                { name: 'Neoboards', url: '/neoboards/index.phtml', icon: '💬' },
+                { name: 'Trading Post', url: '/island/tradingpost.phtml', icon: '📜' },
+                { name: 'Food Club', url: '/pirates/foodclub.phtml?type=bet', icon: '🍗' }
+            ];
+        } catch (e) {}
+
+        // 2. NUKE THE DOM
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        // 3. INIT TOPBAR
+        NeoUI.init();
+        NeoUI.buildTopbar({ stats: activeStats, username: username, hasNotification: false });
+
+        // 4. BUILD LAYOUT
+        const pageWrapper = document.createElement('div');
+        pageWrapper.id = 'nui-home-app';
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box;gap:var(--nui-space-4);';
+
+        // ── Hero banner ──────────────────────────────────────────────────────
+        const heroBanner = document.createElement('div');
+        heroBanner.style.cssText = 'width:100%;max-width:960px;border-radius:var(--nui-radius-lg);background:linear-gradient(135deg,var(--nui-accent-soft),var(--nui-surface-2));border:1px solid var(--nui-border);padding:16px 20px;display:flex;flex-direction:column;gap:10px;box-shadow:0 4px 12px var(--nui-shadow);';
+
+        const heroBannerTop = document.createElement('div');
+        heroBannerTop.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;';
+        heroBannerTop.innerHTML = `
+            <div>
+                <div style="font-family:var(--nui-font-display);font-size:22px;font-weight:800;color:var(--nui-text);line-height:1.2;">Welcome back, ${username}!</div>
+                <div id="nui-nst-clock" style="font-size:13px;color:var(--nui-text-muted);font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums;">${formatNST(getNSTDate())}</div>
+            </div>
+        `;
+
+        // Snowager alert inside hero if asleep
+        const heroBannerAlerts = document.createElement('div');
+        heroBannerAlerts.id = 'nui-hero-alerts';
+        heroBannerAlerts.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+
+        if (isSnowagerAsleep()) {
+            heroBannerAlerts.innerHTML += `<a href="/winter/snowager.phtml" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--nui-radius-sm);background:#e0f2fe;border:1px solid #bae6fd;text-decoration:none;"><span style="font-size:16px;">❄️</span><span style="flex:1;display:flex;flex-direction:column;"><span style="font-weight:700;font-size:13px;color:#0369a1;">The Snowager is asleep!</span><span style="font-size:11px;color:#0284c7;">Go steal something before he wakes up.</span></span><span style="font-size:11px;font-weight:700;color:#0369a1;flex-shrink:0;">Steal →</span></a>`;
+        }
+
+        // Training summary pill row — starts hidden, shown only when fetch resolves
+        const trainingPillRow = document.createElement('div');
+        trainingPillRow.id = 'nui-hero-training-pills';
+        trainingPillRow.style.cssText = 'display:none;gap:6px;flex-wrap:wrap;';
+
+        heroBanner.appendChild(heroBannerTop);
+        heroBanner.appendChild(trainingPillRow);
+        heroBanner.appendChild(heroBannerAlerts);
+        pageWrapper.appendChild(heroBanner);
+
+        // Start NST clock tick
+        const clockEl = heroBannerTop.querySelector('#nui-nst-clock');
+        const clockInterval = setInterval(() => {
+            if (!document.body.contains(clockEl)) { clearInterval(clockInterval); return; }
+            clockEl.textContent = formatNST(getNSTDate());
+        }, 1000);
+
+        // ── Training status card (live fetch) ────────────────────────────────
+        // Training is shown as pills in the hero banner above.
+        // We also build a hidden detail row per pet that expands from the hero.
+        const trainingDetailContainer = document.createElement('div');
+        trainingDetailContainer.id = 'nui-training-detail';
+        trainingDetailContainer.style.cssText = 'display:none;flex-direction:column;gap:6px;margin-top:4px;';
+        heroBannerAlerts.before(trainingDetailContainer);
+
+        // Kick off live training fetch — use captured references, never getElementById
+        (async () => {
+            try {
+                const res = await fetch('/island/training.phtml?type=status', { credentials: 'include' });
+                const html = await res.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const trainingPets = scrapeTrainingStatus(doc);
+                const activePets = trainingPets.filter(p => p.onCourse || p.courseFinished || p.codestonesNeeded.length > 0);
+
+                // Nothing in training — leave pill row hidden
+                if (!activePets.length) return;
+
+                // Build pills
+                const timerIds = [];
+                trainingPillRow.innerHTML = activePets.map(pet => {
+                    let pillStyle = 'display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--nui-radius-pill);font-size:12px;font-weight:700;border:1px solid;cursor:pointer;text-decoration:none;';
+                    let label;
+                    if (pet.courseFinished) {
+                        label = `✅ ${pet.name} — Done!`;
+                        pillStyle += `background:var(--nui-success)22;color:var(--nui-success);border-color:var(--nui-success);`;
+                    } else if (pet.codestonesNeeded.length > 0) {
+                        label = `💎 ${pet.name} — Pay now`;
+                        pillStyle += `background:var(--nui-warning)22;color:var(--nui-warning);border-color:var(--nui-warning);`;
+                    } else {
+                        const timerId = 'nui-pill-timer-' + pet.name.replace(/\W/g, '');
+                        const h = Math.floor(pet.totalSeconds / 3600), m = Math.floor((pet.totalSeconds % 3600) / 60);
+                        label = `⚔️ ${pet.name} — <span id="${timerId}">${h ? `${h}h ${m}m` : `${m}m`}</span>`;
+                        timerIds.push({ id: timerId, seconds: pet.totalSeconds });
+                        pillStyle += `background:var(--nui-accent-soft);color:var(--nui-accent);border-color:var(--nui-accent);`;
+                    }
+                    return `<a href="/island/training.phtml" style="${pillStyle}">${label}</a>`;
+                }).join('');
+                trainingPillRow.style.display = 'flex';
+
+                // Pill countdown timers
+                timerIds.forEach(t => {
+                    const span = trainingPillRow.querySelector('#' + t.id);
+                    if (!span) return;
+                    let secs = t.seconds;
+                    const fmt = s => s <= 0 ? 'Done!' : (Math.floor(s/3600) ? `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m ${s%60}s` : Math.floor(s/60) ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`);
+                    const iv = setInterval(() => {
+                        secs--;
+                        if (!trainingPillRow.isConnected) { clearInterval(iv); return; }
+                        span.innerHTML = fmt(secs);
+                        if (secs <= 0) clearInterval(iv);
+                    }, 1000);
+                });
+
+                // Expandable detail rows
+                if (trainingDetailContainer) {
+                    trainingDetailContainer.innerHTML = activePets.map(pet => {
+                        let statusHtml, actionHtml;
+                        if (pet.courseFinished) {
+                            statusHtml = `<span style="font-size:11px;color:var(--nui-success);font-weight:700;">✅ Course Finished!</span>`;
+                            actionHtml = `<a href="/island/training.phtml" class="nui-btn nui-btn-primary nui-btn-sm" style="text-decoration:none;padding:4px 10px;font-size:11px;flex-shrink:0;">Complete!</a>`;
+                        } else if (pet.codestonesNeeded.length > 0) {
+                            statusHtml = `<span style="font-size:11px;color:var(--nui-warning);">Needs: ${pet.codestonesNeeded.join(', ')}</span>`;
+                            actionHtml = `<a href="/island/training.phtml" class="nui-btn nui-btn-primary nui-btn-sm" style="text-decoration:none;padding:4px 10px;font-size:11px;flex-shrink:0;">Pay</a>`;
+                        } else {
+                            const timerId = 'nui-detail-timer-' + pet.name.replace(/\W/g, '');
+                            const fmt2 = s => s <= 0 ? 'Done!' : (Math.floor(s/3600) ? `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m ${s%60}s` : Math.floor(s/60) ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`);
+                            statusHtml = `<span style="font-size:11px;color:var(--nui-text-muted);">${pet.courseSubject} · <span id="${timerId}">${fmt2(pet.totalSeconds)}</span></span>`;
+                            actionHtml = `<a href="/island/training.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;padding:4px 10px;font-size:11px;flex-shrink:0;">View</a>`;
+                            let secs2 = pet.totalSeconds;
+                            setTimeout(() => {
+                                const sp = trainingDetailContainer.querySelector('#' + timerId);
+                                if (!sp) return;
+                                const iv2 = setInterval(() => {
+                                    secs2--;
+                                    if (!trainingDetailContainer.isConnected) { clearInterval(iv2); return; }
+                                    sp.textContent = fmt2(secs2);
+                                    if (secs2 <= 0) clearInterval(iv2);
+                                }, 1000);
+                            }, 0);
+                        }
+                        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:var(--nui-radius-sm);background:var(--nui-surface);border:1px solid var(--nui-border);gap:8px;">
+                            <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                                <span style="font-size:16px;flex-shrink:0;">⚔️</span>
+                                <div style="display:flex;flex-direction:column;gap:1px;min-width:0;">
+                                    <span style="font-weight:700;font-size:13px;color:var(--nui-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pet.name}</span>
+                                    ${statusHtml}
+                                </div>
+                            </div>
+                            ${actionHtml}
+                        </div>`;
+                    }).join('');
+                    trainingDetailContainer.style.display = 'flex';
+                }
+            } catch (e) {
+                // Fetch failed silently — pill row stays hidden, no placeholder shown
+            }
+        })();
+
+        // ── Main two-column grid ─────────────────────────────────────────────
+        const gridContainer = document.createElement('div');
+        gridContainer.style.cssText = 'width:100%;max-width:960px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--nui-space-4);align-items:start;';
+
+        // --- PET CARD ---
+        const petCard = nuiCard();
+
+        let petHtml = cardHeader('🐾 My Pets') + `
+            <div style="display:flex;gap:var(--nui-space-3);align-items:center;">
+                <div style="width:90px;height:90px;border-radius:var(--nui-radius-md);background:var(--nui-surface-2) url('${activePet ? activePet.image : ''}') no-repeat center/contain;border:1px solid var(--nui-border);flex-shrink:0;"></div>
+                <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0;">
+                    <div style="font-size:18px;font-weight:800;color:var(--nui-accent);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${activePet ? activePet.name : 'No Pet'}</div>
+                    <div style="font-size:12px;color:var(--nui-text-muted);font-weight:600;">${activePet ? activePet.color + ' ' + activePet.species : ''}</div>
+                    <div style="display:flex;gap:6px;margin-top:2px;flex-wrap:wrap;">
+                        <span class="nui-badge">Lvl ${activePet ? activePet.level : 0}</span>
+                        <span class="nui-badge nui-badge-success">HP ${activePet ? activePet.health : 0}/${activePet ? activePet.maxhealth : 0}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (activePet && activePet.petpet) {
+            petHtml += `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--nui-surface-2);border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);">
+                <img src="${activePet.petpetimg}" style="width:36px;height:36px;object-fit:contain;">
+                <div style="flex:1;font-size:12px;color:var(--nui-text);">
+                    <div style="font-weight:700;">${activePet.petpet.split(' the ')[0]}</div>
+                    <div style="color:var(--nui-text-muted);">${activePet.petpet.split(' the ')[1] || 'Petpet'}</div>
+                </div>
+                <a href="/petpetlab.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;padding:4px 8px;font-size:11px;">Lab</a>
+            </div>`;
+        }
+
+        petHtml += `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <a href="/customise/" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;">🎨 Customise</a>
+                <a href="/quickref.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;">📋 Quickref</a>
+            </div>
+        `;
+
+        if (inactivePets.length > 0) {
+            let inactiveRows = inactivePets.map(p => `
+                <div onclick="window.nuiChangeActivePet('${p.name}')" title="Make ${p.name} active" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px;border-radius:var(--nui-radius-sm);background:var(--nui-surface-2);border:1px solid var(--nui-border);transition:all 0.2s;min-width:60px;max-width:80px;">
+                    <img src="${p.image}" style="width:44px;height:44px;border-radius:50%;border:1px solid var(--nui-border);object-fit:cover;background:var(--nui-bg);">
+                    <span style="font-size:10px;font-weight:700;color:var(--nui-text);text-align:center;overflow:hidden;text-overflow:ellipsis;width:100%;white-space:nowrap;">${p.name}</span>
+                </div>
+            `).join('');
+            petHtml += accordionWrap(
+                `Other Pets`,
+                `<div style="display:flex;overflow-x:auto;gap:10px;padding-bottom:4px;scrollbar-width:thin;">${inactiveRows}</div>`,
+                false
+            );
+        }
+
+        petCard.innerHTML = petHtml;
+        gridContainer.appendChild(petCard);
+
+        // --- DAILIES CARD ---
+        const dailyCard = nuiCard();
+
+        // Split dailies into wheels vs regular
+        const wheels = savedDailies.filter(d => d.name && d.name.toLowerCase().includes('wheel'));
+        const nonWheels = savedDailies.filter(d => !d.name || !d.name.toLowerCase().includes('wheel'));
+
+        let dailiesBodyHtml = '';
+        nonWheels.forEach(d => {
+            dailiesBodyHtml += dailyRow(d.icon || '📌', d.name, '', d.url, 'Go');
+        });
+
+        let wheelsBodyHtml = '';
+        wheels.forEach(d => {
+            wheelsBodyHtml += dailyRow(d.icon || '🎡', d.name, '', d.url, 'Spin');
+        });
+
+        let dailyHtml = cardHeader('📅 My Dailies', `<button class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:2px 8px;font-size:11px;" onclick="window.nuiOpenLinkEditor('dailies')">Edit</button>`);
+
+        // Dailies section — open by default
+        dailyHtml += accordionWrap(
+            `Dailies`,
+            dailiesBodyHtml || '<div style="font-size:12px;color:var(--nui-text-muted);">No dailies added yet.</div>',
+            true
+        );
+
+        // Wheels section — open by default if any wheels present
+        if (wheels.length > 0) {
+            dailyHtml += accordionWrap(
+                `🎡 Wheels`,
+                wheelsBodyHtml,
+                true
+            );
+        }
+
+        dailyCard.innerHTML = dailyHtml;
+        gridContainer.appendChild(dailyCard);
+
+        // --- QUICK LINKS CARD ---
+        const linksCard = nuiCard('height:fit-content;');
+
+        let linksBodyHtml = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;">`;
+        quickLinks.forEach(link => {
+            linksBodyHtml += `<a href="${link.url}" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;background:var(--nui-surface-2);border:1px solid var(--nui-border);border-radius:var(--nui-radius-sm);text-decoration:none;color:var(--nui-text);font-weight:700;transition:background var(--nui-dur-fast) var(--nui-ease);text-align:center;">
+                <span style="font-size:22px;">${link.icon}</span>
+                <span style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${link.name}</span>
+            </a>`;
+        });
+        linksBodyHtml += '</div>';
+
+        let linksHtml = cardHeader('⚡ Quick Links', `<button class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:2px 8px;font-size:11px;" onclick="window.nuiOpenLinkEditor('quicklinks')">Edit</button>`);
+        linksHtml += accordionWrap(
+            `Links`,
+            linksBodyHtml,
+            true
+        );
+
+        linksCard.innerHTML = linksHtml;
+        gridContainer.appendChild(linksCard);
+
+        pageWrapper.appendChild(gridContainer);
+        document.body.appendChild(pageWrapper);
+    }
+
+    run().catch(err => showFatalError(err));
 })();
