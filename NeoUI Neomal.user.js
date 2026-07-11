@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         NeoUI Neomail
 // @namespace    http://tampermonkey.net/
-// @version      0.6.3
-// @description  Mobile-friendly Neomail overhaul: single-pane SPA layout, local thread archive, native reply/delete.
+// @version      0.6.4
+// @description  Mobile-friendly Neomail overhaul: single-pane SPA layout, local thread archive, native reply/delete, and mail counters.
 // @author       ext1nct
 // @match        *://*.neopets.com/neomessages.phtml*
 // @require      https://your-host-or-cdn/neoui-core.user.js
@@ -130,6 +130,16 @@
         function getLocalArchive() { try { return JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); } catch (e) { return []; } }
         function saveLocalArchive(archiveArray) { if (archiveArray.length > 2000) archiveArray = archiveArray.slice(-2000); try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archiveArray)); } catch (e) {} }
 
+        function updateMailStats() {
+            const statsEl = document.getElementById('neomail-stats');
+            if (!statsEl) return;
+            const stats = getStats();
+            const archive = getLocalArchive();
+            const onsiteCount = archive.filter(m => m.isOnServer).length;
+            const archivedCount = archive.filter(m => !m.isOnServer).length;
+            statsEl.innerHTML = `NP: <b>${stats.np}</b> &nbsp; NC: <b>${stats.nc}</b> &nbsp;|&nbsp; Onsite: <b>${onsiteCount}</b> &nbsp; Archived: <b>${archivedCount}</b>`;
+        }
+
         function addSentMessageToArchive(recipient, subject, bodyText) {
             const archive = getLocalArchive();
             const baseSubject = subject.replace(/^(Re:\s*)+/i, '').trim();
@@ -151,12 +161,6 @@
             } catch (e) { return 0; }
         }
 
-        // --- Vibe Rater integration (optional companion script) -----------
-        // Purely a reader: if "Neopets - User Vibe Rater" is installed, it
-        // exposes window.VibeRater = { getVibe, onChange }. Neomail has no
-        // vibe data or storage of its own, and no-ops cleanly if the
-        // companion script isn't installed. Only applied to received
-        // messages, never the current user's own sent bubbles.
         function hexToRgba(hex, alpha) {
             const clean = hex.replace('#', '');
             const full = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean;
@@ -191,9 +195,6 @@
 
         function escapeHTML(str) { const div = document.createElement('div'); div.textContent = str; return div.innerHTML; }
 
-        // Wraps a username in a link to their userlookup page. Opens in a new
-        // tab (so people don't lose their place in the Neomail SPA) and stops
-        // the click from bubbling up to any parent row/item click handler.
         function userLink(name, extraClass) {
             const safeName = escapeHTML(name);
             const cls = 'nui-user-link' + (extraClass ? ' ' + extraClass : '');
@@ -289,6 +290,7 @@
 
                         addSentMessageToArchive(recipient, subject, bodyText);
                         allThreads = syncAndProcessThreads([]);
+                        updateMailStats();
 
                         recipientInput.value = '';
                         subjectInput.value = '';
@@ -346,8 +348,7 @@
 
             document.body.insertBefore(headerWrapper, document.body.firstChild);
             headerWrapper.querySelector('#neomail-neogo-slot').appendChild(NeoUI.neoGoButton());
-            const stats = getStats();
-            headerWrapper.querySelector('#neomail-stats').innerHTML = `NP: <b>${stats.np}</b> &nbsp; NC: <b>${stats.nc}</b>`;
+            updateMailStats();
 
             headerWrapper.querySelectorAll('.nui-hnav .nui-pill').forEach(function (pill) {
                 pill.addEventListener('click', function () {
@@ -387,6 +388,7 @@
 
                     container.querySelector('#nui-clear-archive').addEventListener('click', function() {
                         localStorage.removeItem(ARCHIVE_KEY);
+                        updateMailStats();
                         const status = container.querySelector('#nui-settings-status');
                         status.style.color = 'var(--nui-warning)';
                         status.textContent = 'Archive cleared! Refresh page to resync.';
@@ -481,6 +483,7 @@
             setTimeout(() => syncStatus.remove(), 300);
 
             allThreads = syncAndProcessThreads(liveMessages);
+            updateMailStats();
             renderSidebarList('inbox');
 
             const targetId = urlParams.get('id');
@@ -723,6 +726,7 @@
                 const archive = getLocalArchive();
                 thread.messages.forEach(tm => { const archMsg = archive.find(am => am.id === tm.id); if (archMsg && tm.body) archMsg.body = tm.body; });
                 saveLocalArchive(archive);
+                updateMailStats();
             }
 
             const replyContainer = container.querySelector('#neomail-reply-container');
@@ -780,6 +784,8 @@
                         statusText.style.color = 'var(--nui-success)';
                         statusText.textContent = 'Sent!';
                         addSentMessageToArchive(recipient, subject, bodyText);
+                        allThreads = syncAndProcessThreads([]);
+                        updateMailStats();
                         form.querySelector('textarea').value = '';
 
                         const listEl = document.getElementById('neomail-thread-list');
@@ -821,6 +827,7 @@
                             let archive = getLocalArchive();
                             serverMessages.forEach(sm => { const match = archive.find(a => a.id === sm.id); if (match) match.isOnServer = false; });
                             saveLocalArchive(archive);
+                            updateMailStats();
                             statusSpan.style.color = 'var(--nui-success)'; statusSpan.textContent = 'Cleared!'; btnClear.style.display = 'none';
                             const activeItem = document.querySelector('.nui-item.is-active');
                             if (activeItem) {
@@ -843,6 +850,7 @@
                 let archive = getLocalArchive();
                 archive = archive.filter(a => `${a.sender}::${a.baseSubject}` !== thread.key && `${a.recipient}::${a.baseSubject}` !== thread.key);
                 saveLocalArchive(archive);
+                updateMailStats();
                 document.getElementById('neomail-viewer-content').style.display = 'none';
                 const emptyViewer = document.getElementById('neomail-viewer-empty');
                 emptyViewer.style.display = 'block'; emptyViewer.innerHTML = '<span class="nui-empty-emoji">🗑️</span>Thread deleted.';
