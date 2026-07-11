@@ -9741,7 +9741,7 @@ collectBtn.addEventListener('click', async () => {
     collectBtn.disabled = true;
     collectBtn.textContent = 'Collecting…';
     const fd = new FormData();
-    fd.append('type', 'collect_all');
+    fd.append('type', 'collect');
     try {
         const res = await fetch('/pirates/process_foodclub.phtml', {
             method: 'POST',
