@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.26
+// @version      1.1.38
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -12,213 +12,114 @@
 
 /*
  * ============================================================================
- * NEOUI: UNIFIED SUITE
- * ----------------------------------------------------------------------------
- * A single install for a mobile-forward Neopets experience: a shared design
- * system, a polished theme picker, a custom theme builder, a global search
- * overlay, and a daily-timer hub for timed dailies.
+ * NEOUI: UNIFIED SUITE  —  ext1nct
+ * ============================================================================
+ * A single-install, mobile-forward overhaul of the Neopets experience.
+ * All modules share one design system, theme engine, and topbar.
  *
- * v1.1.22
- *   - Neopian Times: dropped the internal-scroll-container approach
- *     entirely. v1.1.21's diagnostic overlay (confirmed on Android Firefox)
- *     showed touchstart/touchmove events reaching contentArea just fine —
- *     the touch gesture wasn't being intercepted by anything — so the
- *     problem was the nested overflow-y:auto scroll region itself not
- *     translating those events into an actual scroll on that engine,
- *     regardless of how contentArea got its height (flex-basis, then
- *     absolute positioning — both landed with zero change). Rather than
- *     try a third sizing strategy for the same nested-scroll pattern,
- *     removed it: appWrapper is now a normal in-flow block (no more
- *     position:fixed shell), contentArea sizes to its content with no
- *     overflow-y at all, and html/body scroll normally like any other
- *     webpage. topRow (the section tab bar) uses position:sticky so it
- *     still stays parked under the global topbar while scrolling, keeping
- *     the app-like feel without an internal scroller to fight. Removed the
- *     v1.1.21 diagnostic overlay and the now-irrelevant forced
- *     touch-action:pan-y from sanitizeLegacyMarkup along with it; the on*
- *     attribute/inline-style stripping stays since it's still useful
- *     against leftover position/height rules distorting layout.
- * v1.1.21
- *   - Neopian Times: v1.1.19 (strip inline handlers/styles off scraped markup)
- *     and v1.1.20 (switch contentArea to explicit absolute sizing) both landed
- *     with no change reported — confirmed on Android Firefox, where the
- *     horizontal tab row scrolls fine via touch but the vertical article body
- *     doesn't, regardless of which of those two approaches contentArea uses.
- *     That rules out both theories (legacy markup content, and flex vs.
- *     absolute sizing) rather than fixing anything, so guessing a third
- *     variant blind isn't a good use of anyone's time. Added a temporary,
- *     non-interactive on-screen overlay (bottom-right corner) that reads
- *     contentArea's actual scrollHeight/clientHeight/scrollTop, its resolved
- *     overflow-y/touch-action/position, and live touchstart/touchmove counts
- *     straight off the affected device, so the next change can be aimed at
- *     the real cause instead of another guess.
- * v1.1.20
- *   - Neopian Times: v1.1.19's sanitizer only stripped inline CSS off the
- *     raw scraped markup, which wasn't enough — touch was still completely
- *     dead on articles/comics/editorials. Two more layers added:
- *     (1) sanitizeLegacyMarkup() now also strips inline on* event-handler
- *     attributes (onmousedown, ontouchstart, onclick, etc.) from the
- *     injected markup. Unlike <script> tags, these go live the instant
- *     they're set via innerHTML, and Neopets leaves them on comic
- *     <img>/<a> tags for old right-click protection and lightbox popups —
- *     a touchstart handler in there eating the gesture would explain dead
- *     scrolling especially well for comics, where the image is nearly the
- *     entire touchable area. touch-action: pan-y is now also force-set on
- *     every injected element as a second line of defense.
- *     (2) contentArea itself switched from flex:1/min-height:0 sizing to
- *     position:absolute with an explicit pixel `top` (measured off
- *     topRow.offsetHeight once it's actually laid out, re-measured on
- *     resize/orientation change). iOS Safari has a known history of not
- *     reliably treating an overflow-y:auto box as touch-scrollable when
- *     its height only comes from flex-basis inside a position:fixed
- *     ancestor; an explicit box removes that ambiguity entirely.
- * v1.1.19
- *   - Neopian Times: fixed scrolling being completely dead on articles,
- *     comics, and the editorial — the one thing every previous scroll fix
- *     (v1.1.15/17/18) missed. Those three views are the only ones that
- *     inject raw scraped Neopets markup (contentTd.innerHTML / bodyHtml)
- *     straight into contentArea; list/home views are hand-built from
- *     scraped text and never carry this problem. The raw markup brings
- *     its own inline overflow/height/position rules along from Neopets'
- *     old table layout (the Editorial section in particular is normally
- *     boxed into a small fixed-height scroll cell on the real site), and
- *     those nested rules were hijacking the touch-scroll gesture before it
- *     ever reached contentArea's own overflow-y:auto. Added
- *     sanitizeLegacyMarkup(), run on contentArea right after every
- *     injection, which strips overflow/height/position off anything nested
- *     inside the injected HTML and removes stray <script>/<style> tags, so
- *     contentArea is left as the only scrollable region again.
- * v1.1.18
- *   - Neopian Times: v1.1.17's fix was half right and introduced a new bug.
- *     Forcing html/body to height:100% via JS post-load is what caused the
- *     page to render "zoomed in" — that kind of post-load height change is
- *     a known trigger for mobile Safari's automatic text-size inflation
- *     heuristic. Replaced that approach entirely: appWrapper is now
- *     position:fixed; inset:0 instead of height:100vh/100dvh, which sizes
- *     directly against the real visual viewport (tracks the address bar
- *     live, no vh-unit guessing needed) and removes appWrapper from
- *     document flow altogether, so body never has anything in flow to
- *     create a second scroll region from in the first place — no need to
- *     force a height on it at all. html/body keep overflow:hidden as a
- *     backstop and now also get -webkit-text-size-adjust/text-size-adjust:
- *     100% to shut off the auto-inflation heuristic outright rather than
- *     tiptoe around what triggers it.
- * v1.1.17
- *   - Neopian Times: actually fixed mobile scrolling this time. v1.1.15 only
- *     removed overflow:hidden from appWrapper (an inner box); the real
- *     problem was that html/body were left with no defined height/overflow
- *     of their own, so on mobile they could open a second, independent
- *     scroll region alongside contentArea's overflow-y:auto — a touch-drag
- *     could get claimed by that outer region, which barely moves and then
- *     stops handing off to the inner one, reading as scrolling being stuck
- *     partway into an article or comic. html/body are now pinned to
- *     100%/hidden so contentArea is the only scrollable region, and
- *     appWrapper uses 100dvh (with 100vh fallback) instead of 100vh,
- *     which on mobile is measured against the layout viewport (address bar
- *     collapsed) and renders taller than what's actually visible — the
- *     extra bit at the bottom of the list/article had nothing able to
- *     scroll to it. Also added overscroll-behavior:contain on contentArea
- *     and safe-area-aware bottom padding so the last item in a list has
- *     clearance instead of sitting flush against the edge.
- * v1.1.16
- *   - Character counters on all four message composers: Neomail compose
- *     (2000 limit), Neomail inline reply (2000), Neoboards quick reply (500),
- *     Neoboards new topic (500). Counter goes warning colour at 85%, danger at
- *     100%. maxlength attributes added where missing as a hard browser cap.
- *   - Theme editor — Advanced section: collapsible <details> below the 4 basic
- *     color pickers exposing 7 additional tokens (surface-2, border, text,
- *     text-muted, success, warning, danger). seedFromBase() now seeds all 11
- *     tokens; base-change handler repaints all swatches including advanced.
- *   - Theme editor — Texture picker replaced: TEXTURE_PRESETS rebuilt as 18
- *     SVG data URI patterns (polka dots, stars, waves, pebbles, sparkles,
- *     honeycomb, hearts, diamonds, triangles, bubbles, argyle, crosshatch,
- *     cobblestone, motes, herringbone, pinstripe, scales, grid). Picker now
- *     renders as a 2-col visual card grid inside the Advanced section instead
- *     of unlabelled pill buttons; active state uses border highlight.
+ * MODULES
+ *   Core Framework   — design tokens (12 themes + custom), topbar, drawer nav,
+ *                      global search (Ctrl+K / /), SSW modal, daily-timer hub,
+ *                      theme editor (basic + advanced tokens, 18 SVG textures),
+ *                      VibeRater, NickNames, settings panel, custom site nav
+ *   Home             — pet card, live training pills (all 3 schools), dailies +
+ *                      wheels accordions, NST clock, Snowager alert, quick links
+ *   Neomail          — threaded inbox SPA, bulk select, avatar fetch, vibe tints,
+ *                      nicknames, reply/compose composers, char counter
+ *   Neoboards        — tabbed multi-thread SPA, quick reply, Neoboards index
+ *                      (collapsible categories, board favourites), vibe tints,
+ *                      nicknames, history push/pop state, board URL persistence
+ *   Neopian Times    — article/comic/editorial reader, home/list view, pagination
+ *   Food Club        — pirates, bet, my-bets, collect, history tabs; NeoFoodClub
+ *                      bet-string importer; odds calc; max-bet enforced
+ *   Buried Treasure  — mobile-friendly pick-a-spot map (scaled clicks), cooldown
+ *                      synced to daily timer hub
+ *   Fruit Machine    — headless SPA wrapper for the daily spin (ready/cooldown/
+ *                      result states scraped, spin submitted via fetch), cooldown
+ *                      synced to daily timer hub
+ *   Stock Market     — portfolio view with chart, buy/sell
+ *   Training         — status across all 3 schools (MI, Ninja, Pirate Academy)
+ *   Quickref         — reformatted pet stats page
+ *   Dailies Hub      — modal countdown dashboard for all timed dailies
+ *   Games            — games room card grid (fetches category page, live filter);
+ *                      Ruffle player wrapper with submit-score form
  *
- * v1.1.15
- *   - Neoboards My Boards: tiles now use minmax(130px, 1fr) grid columns (was
- *     88px) giving board names room to breathe; title clamped to 2 lines with
- *     -webkit-line-clamp so long names truncate cleanly.
- *   - VibeRater pop (Neoboards + Neomail): switched from position:absolute
- *     anchored to vibeBtn to position:fixed anchored via getBoundingClientRect.
- *     Pop now auto-flips above/below based on available viewport space, so it
- *     is never clipped by short messages or messages near the top of the page.
- *   - Neopian Times: removed overflow:hidden from the appWrapper. The wrapper's
- *     contentArea already handles scroll via overflow-y:auto; the hidden on the
- *     outer container was trapping touch scroll on mobile.
+ * CHANGELOG  (last 5 versions)
  *
- * v1.1.14
- *   - Texture overhaul (6 themes): replaced all CSS-gradient textures with SVG
- *     data URI patterns for Maractite (rune glyphs w/ gold accents), Haunted
- *     Woods (sparse floating motes), Faerieland (sparkle glints), Maraqua
- *     (compressed wave swells), Tyrannia (rotated pebble shore), and Krawk
- *     Island (skull & crossbones at very low opacity). SVG patterns are
- *     rendered via background-image url() and flow through the existing
- *     --nui-texture token + applyThemeVars pipeline unchanged.
+ * v1.1.38
+ *   - New module: Fruit Machine (headless SPA wrapper), mirroring the Buried
+ *     Treasure module's approach — scrapes whichever server-rendered state
+ *     the page is in (ready to spin / already spun today / spin result),
+ *     rebuilds it inside the shared NeoUI chrome, and submits the real spin
+ *     via fetch() using whatever hidden fields (spin, ck, etc.) the form
+ *     actually contains, so the underlying game logic and single-use ck
+ *     token are untouched. Cooldown and result screens weren't available to
+ *     sample, so both use best-effort scrapers with a raw-content fallback —
+ *     same safety-net pattern Buried Treasure uses for its result screen.
+ *     Cooldown countdown uses the page's own NST clock globals (nh/nm/ns) to
+ *     estimate time to daily reset when no explicit wait time is given.
+ *     Timer synced to the Daily Timer Hub under the existing 'fruit-machine'
+ *     id (24h interval).
  *
- * v1.1.13
- *   - New module: Buried Treasure. Rebuilds all four legacy server states
- *     (the intro/story screen, the pick-a-spot map, the post-dig cooldown,
- *     and whatever the win/lose result screen turns out to contain) into
- *     one mobile-forward card, matching the rest of the suite. The map
- *     click now scales to the rendered image size instead of the fixed
- *     540x550 the legacy ISMAP assumed, so it's tappable at any width. The
- *     server's reported cooldown minutes are also synced into the shared
- *     Daily Timer Hub entry, so that countdown stays accurate without
- *     needing a manual "done" tap there too.
- * v1.1.12
- *   - Texture: cut scope further — down from "cards/items/bubbles at 28%
- *     opacity, everything else off" to "off everywhere except the outer app
- *     chrome." Only the top bar, header, the drawer's own shell background,
- *     and the theme-swatch preview still render the pattern. Cards, list
- *     rows, chat bubbles, and the drawer's profile box/stat rows — the
- *     elements that repeat many times on any given screen — are now flat.
- *     Dimming their opacity previously wasn't enough; with that many
- *     instances on screen at once it still read as constant texture.
- * v1.1.11
- *   - Neoboards: fixed the Board tab failing to load after replying or
- *     creating a topic. currentBoardUrl (what the Board tab fetches) is only
- *     ever set by loadBoardList() — if the SPA's *first* page load was a
- *     thread or the create-topic page (i.e. you arrived via a direct link
- *     rather than browsing in from the board list, the normal way to land on
- *     a topic you're about to reply to or the board you're about to post
- *     in), currentBoardUrl was left pointing at that thread/create-topic URL
- *     for the rest of the session. Clicking Board after posting then fetched
- *     that same non-board page and tried to render it as one. Now resolved
- *     from the page's breadcrumb (or its ?board= param) at load time.
- * v1.1.10
- *   - Neoboards: fixed Reply and Create Topic both posting to the wrong URL,
- *     independent of whether the other feature had ever been opened (the
- *     v1.1.9 fix addressed a real but separate bug). The real Neopets form's
- *     action is a bare relative path ("process_topic.phtml"), which browsers
- *     resolve against the current page's directory (/neoboards/). Both
- *     submit handlers instead naively prepended '/' when there was no
- *     leading slash, sending every post to /process_topic.phtml at the site
- *     root — which doesn't exist — instead of /neoboards/process_topic.phtml.
- *     Now resolved with new URL(action, pageUrl) against the thread's/form's
- *     actual URL.
- * v1.1.9
- *   - Neoboards: fixed "Error: form missing" when posting a reply after New
- *     Topic had been opened. Both features scrape a form literally named
- *     message_form (Neopets reuses the name for both reply and create-topic
- *     forms) and mount it as a hidden form on document.body for FormData to
- *     read on submit — but they shared the same class, and each one's mount
- *     step started by deleting every element with that class. Opening New
- *     Topic while a thread's reply form was mounted deleted the reply form
- *     out from under it. Create Topic now uses its own class
- *     (nui-hidden-ct-form) instead of Reply's (nui-hidden-native-form), so
- *     the two no longer clobber each other.
- * v1.1.8
- *   - Neoboards index: added favoriting for whole boards (Avatar Chat, Site
- *     Games, etc), separate from starred threads. A star toggle sits on every
- *     board card; favorited boards pin to a "⭐ Your Boards" grid at the very
- *     top of the index.
- *   - Neoboards index: redesigned so it doesn't just read as Neopets' stock
- *     flat list. Each category is now a collapsible <details> section with a
- *     board count, and boards within a category lay out in a responsive tile
- *     grid instead of one long vertical stack.
-  * ============================================================================
+ * v1.1.29
+ *   - Neoboards crash fix: escapeHTML was only defined in Neomail's IIFE scope;
+ *     calling it from renderThreadUI threw ReferenceError, aborting renders and
+ *     silently corrupting tab state so threads appeared non-clickable.
+ *     escapeHTML is now defined locally in the Neoboards module.
+ *   - Nickname vibe-pop: setting a nick from inside a thread no longer navigates
+ *     back to the board list. loadBoardList is only called when activeTabId is
+ *     'board'.
+ *   - Games module: was scraping /games/ (showcase, no game cards); now fetches
+ *     /games/category.phtml and scrapes div.ctp-med correctly. Module guard
+ *     extended to cover /games/category.phtml directly. Games split into Flash
+ *     (Ruffle), HTML5, and Other (custom-path games like Cellblock, Cheat!).
+ *
+ * v1.1.28
+ *   - SSW: openGlobalSSW() now lives in Core (single implementation). Modules
+ *     use window.NeoUI.openSSW(). Premium auto-detected from .sswdrop presence,
+ *     persisted in neoui_is_premium. SSW now in SEARCH_CATALOG and nav drawer;
+ *     topbar SSW button removed (drawer is the right home for it).
+ *   - SSW modal: added Contains/Exact match select, Price Only toggle, Shop/
+ *     Gallery area select. Result links open in new tab.
+ *   - Site nav overhauled: 8 sections (My Account, Shops & Economy, Games &
+ *     Battling, Customise, Explore, Community, News & Info, Premium). All 3
+ *     training schools, Lab Ray, Petpet Lab added. NC Mall removed.
+ *   - Custom nav editor in Settings: add/remove items and sections per-section,
+ *     reset to default. Stored in neoui_custom_nav_v1.
+ *   - Games module (Module 16): Ruffle wrapper + games room card grid.
+ *
+ * v1.1.27
+ *   - NickNames system (window.NickNames): getNick / setNick / clearNick /
+ *     display / displayWithFallback / onChange. Stored in neoui_nicknames_v1.
+ *     Nicknames shown in Neomail sidebar (raw username as muted badge), thread
+ *     viewer header (with inline edit button), Neoboards post headers, and both
+ *     vibe pops (✏️ Set/Edit nickname option). Nicknames settings section in
+ *     drawer lists all assigned nicks with edit + delete.
+ *   - Neomail inbox counter: tab pill updates to "Inbox (N unread / N total)"
+ *     after every sidebar render.
+ *   - Training: all three schools fetched in parallel (Promise.allSettled).
+ *     Pirate Academy uses Dubloon detection alongside Codestone. Each pet pill
+ *     links to the correct school. School icon (⚔️/🥷/⚓) shown in detail rows.
+ *   - VibeRater settings: details open state preserved across re-renders in both
+ *     Neomail and Neoboards. All interactive buttons have e.stopPropagation().
+ *
+ * v1.1.26
+ *   - Training pill row: starts hidden (display:none), only shown after fetch
+ *     succeeds with active pets. "Checking training…" placeholder eliminated.
+ *     Fetch IIFE uses captured variable references rather than getElementById,
+ *     removing the timing dependency on the element being in the live DOM.
+ *
+ * v1.1.25
+ *   - Drawer double-nesting fixed: renderSettings() was wrapping each section
+ *     in a div.nui-drawer-section then each render() wrote another
+ *     details.nui-drawer-section inside — two collapsibles with the same title.
+ *     Now uses a throwaway tmp div; children appended directly to settingsContainer.
+ *   - Training card eliminated: training info now lives entirely in the hero
+ *     banner as pills + expandable detail rows. No separate card.
+ *   - Neoboards board URL persistence: currentBoardUrl written to
+ *     nui_last_board_url on every loadBoardList call and all four resolvedBoard
+ *     assignments at startup. Restored on next load.
+ * ============================================================================
  */
 
 // MODULE 1: NEOUI CORE FRAMEWORK
@@ -1445,7 +1346,7 @@
     // ---- Real Neopets site navigation (desktop #template_nav, mirrored) ----
     // Each section matches the live site's dropdown groupings so the drawer
     // stays a trustworthy map of "the rest of Neopia," not a reinvention of it.
-    const SITE_NAV = [
+    const DEFAULT_SITE_NAV = [
         {
             title: 'My Account',
             items: [
@@ -1454,8 +1355,33 @@
                 { label: 'Edit Profile', href: '/userinfo.phtml' },
                 { label: 'Neomail', href: '/neomessages.phtml' },
                 { label: 'Neofriends', href: '/neofriends.phtml' },
+                { label: 'Quickref', href: '/quickref.phtml' },
                 { label: 'Create a Neopet', href: '/addpet.phtml' },
-                { label: 'Redeem Code', href: '/space/warehouse/prizecodes.phtml' },
+            ],
+        },
+        {
+            title: 'Shops & Economy',
+            items: [
+                { label: 'Shop Wizard', href: '/market.phtml?type=wizard' },
+                { label: 'Super Shop Wizard ⚡', href: null, action: 'open-ssw' },
+                { label: 'Neopia Central', href: '/objects.phtml' },
+                { label: 'Your Shop', href: '/market.phtml?type=your' },
+                { label: 'Auctions', href: '/auctions.phtml' },
+                { label: 'Trading Post', href: '/island/tradingpost.phtml' },
+                { label: 'Bank', href: '/bank.phtml' },
+            ],
+        },
+        {
+            title: 'Games & Battling',
+            items: [
+                { label: 'Games Room', href: '/games/' },
+                { label: 'Battledome', href: '/dome/' },
+                { label: 'Mystery Island Training', href: '/island/training.phtml' },
+                { label: 'Ninja Training School', href: '/island/fight_training.phtml' },
+                { label: 'Swashbuckling Academy', href: '/pirates/academy.phtml' },
+                { label: 'Lab Ray', href: '/lab2.phtml' },
+                { label: 'Petpet Lab Ray', href: '/petpetlab.phtml' },
+                { label: 'High Scores', href: '/games/hiscores.phtml' },
             ],
         },
         {
@@ -1469,66 +1395,67 @@
             ],
         },
         {
-            title: 'Games',
-            items: [
-                { label: 'Games Room', href: '/games/' },
-                { label: 'High Scores', href: '/games/hiscores.phtml' },
-                { label: 'Favourites', href: '/games/favourites.phtml' },
-                { label: 'Battledome', href: '/dome/' },
-            ],
-        },
-        {
             title: 'Explore',
             items: [
                 { label: 'Map of Neopia', href: '/explore.phtml' },
                 { label: 'Neopedia', href: '/neopedia.phtml' },
                 { label: 'Pet Central', href: '/petcentral.phtml' },
                 { label: 'Calendar', href: '/calendar.phtml' },
-            ],
-        },
-        {
-            title: 'News',
-            items: [
-                { label: 'New Features', href: '/nf.phtml' },
-                { label: 'Neopian Times', href: '/ntimes/index.phtml' },
-                { label: 'Coming Soon', href: '/comingsoon.phtml' },
+                { label: 'Faerie Quests', href: '/quests.phtml' },
             ],
         },
         {
             title: 'Community',
             items: [
-                { label: 'Hub', href: '/community/index.phtml' },
                 { label: 'Neoboards', href: '/neoboards/index.phtml' },
-                { label: 'Spotlights', href: '/contests.phtml' },
                 { label: 'Guilds', href: '/guilds/index.phtml' },
+                { label: 'Community Hub', href: '/community/index.phtml' },
+                { label: 'Spotlights', href: '/contests.phtml' },
             ],
         },
         {
-            title: 'Shops',
+            title: 'News & Info',
             items: [
-                { label: 'Neopia Central', href: '/objects.phtml' },
-                { label: 'Shop Wizard', href: '/market.phtml?type=wizard' },
-                { label: 'Your Shop', href: '/market.phtml?type=your' },
-                { label: 'Auctions', href: '/auctions.phtml' },
-                { label: 'Trading Post', href: '/island/tradingpost.phtml' },
-                { label: 'Bank', href: '/bank.phtml' },
-            ],
-        },
-        {
-            title: 'NC Mall',
-            items: [
-                { label: 'Shop', href: 'https://ncmall.neopets.com/mall/shop.phtml' },
-                { label: 'Get Neocash', href: 'https://nc.neopets.com/get-neocash' },
-                { label: 'Redeem Neocash Cards', href: 'https://nc.neopets.com/redeemnc' },
+                { label: 'New Features', href: '/nf.phtml' },
+                { label: 'Neopian Times', href: '/ntimes/index.phtml' },
+                { label: 'Daily Puzzle', href: '/daily.phtml' },
+                { label: 'Coming Soon', href: '/comingsoon.phtml' },
             ],
         },
         {
             title: 'Premium',
             items: [
-                { label: 'Manage Membership', href: 'http://nc.neopets.com/managemembership/' },
+                { label: 'Super Shop Wizard ⚡', href: null, action: 'open-ssw' },
+                { label: 'Wheel of Starlight', href: '/premium/wheel.phtml' },
+                { label: 'Premium Features', href: '/premium/index.phtml' },
+                { label: 'Manage Membership', href: 'https://nc.neopets.com/managemembership/' },
             ],
         },
     ];
+
+    const CUSTOM_NAV_KEY = 'neoui_custom_nav_v1';
+
+    function loadSiteNav() {
+        try {
+            const raw = localStorage.getItem(CUSTOM_NAV_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+        } catch (e) {}
+        return DEFAULT_SITE_NAV;
+    }
+
+    function saveSiteNav(nav) {
+        try { localStorage.setItem(CUSTOM_NAV_KEY, JSON.stringify(nav)); } catch (e) {}
+    }
+
+    function resetSiteNav() {
+        try { localStorage.removeItem(CUSTOM_NAV_KEY); } catch (e) {}
+    }
+
+    // Keep SITE_NAV as a computed alias for backward compat
+    const SITE_NAV = DEFAULT_SITE_NAV;
 
     function getStoredTheme() {
         try {
@@ -1833,26 +1760,38 @@
 
 
     const SEARCH_CATALOG = [
+        { label: 'Super Shop Wizard', icon: '⚡', action: 'open-ssw', category: 'Premium' },
         { label: 'Wishing Well', icon: '💧', href: '/wishing.phtml', category: 'Dailies' },
         { label: 'Item Transfer Log', icon: '📦', href: '/items/transfer_list.phtml', category: 'Inventory' },
         { label: 'Quickref', icon: '🗺️', href: '/quickref.phtml', category: 'Reference' },
         { label: 'Daily Puzzle', icon: '🧩', href: '/daily.phtml', category: 'Dailies' },
-        { label: 'Wheel of Monotony', icon: '🎡', href: '/wheel.phtml', category: 'Dailies' },
-        { label: 'Neopets Dailies', icon: '🗓️', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'Wheel of Monotony', icon: '🎡', href: '/prehistoric/monotony/monotony.phtml', category: 'Dailies' },
         { label: 'Bank Interest', icon: '🏦', href: '/bank.phtml', category: 'Banking' },
-        { label: 'Buried Treasure', icon: '🏴‍☠️', href: '/dailies.phtml', category: 'Dailies' },
-        { label: 'The Snowager', icon: '❄️', href: '/dailies.phtml', category: 'Dailies' },
-        { label: 'The Lab Ray', icon: '🧪', href: '/dailies.phtml', category: 'Dailies' },
-        { label: 'Giant Jelly', icon: '🫧', href: '/dailies.phtml', category: 'Dailies' },
-        { label: 'Fruit Machine', icon: '🎰', href: '/dailies.phtml', category: 'Timed' },
-        { label: 'Tombola', icon: '🎟️', href: '/dailies.phtml', category: 'Timed' },
-        { label: 'Fairground', icon: '🎠', href: '/dailies.phtml', category: 'Timed' },
-        { label: 'Coltzan’s Shrine', icon: '⛏️', href: '/dailies.phtml', category: 'Dailies' },
-        { label: 'Soup Faerie', icon: '🍲', href: '/dailies.phtml', category: 'Dailies' },
-        { label: 'Mystery Island', icon: '🏝️', href: '/dailies.phtml', category: 'Dailies' },
+        { label: 'Buried Treasure', icon: '🗺️', href: '/pirates/buriedtreasure/index.phtml', category: 'Dailies' },
+        { label: 'The Snowager', icon: '❄️', href: '/winter/snowager.phtml', category: 'Dailies' },
+        { label: 'The Lab Ray', icon: '🧪', href: '/lab2.phtml', category: 'Dailies' },
+        { label: 'Giant Jelly', icon: '🫧', href: '/jelly/jelly.phtml', category: 'Dailies' },
+        { label: 'Fruit Machine', icon: '🎰', href: '/desert/fruitmachine.phtml', category: 'Dailies' },
+        { label: 'Tombola', icon: '🎟️', href: '/island/tombola.phtml', category: 'Dailies' },
+        { label: "Coltzan's Shrine", icon: '⛏️', href: '/desert/shrine.phtml', category: 'Dailies' },
+        { label: 'Games Room', icon: '🕹️', href: '/games/', category: 'Games' },
         { label: 'Daily Tracker', icon: '⏰', action: 'daily-hub', category: 'NeoUI' },
         { label: 'NeoUI Settings', icon: '⚙️', action: 'open-settings', category: 'NeoUI' },
+        { label: 'Theme Editor', icon: '🎨', action: 'theme-editor', category: 'NeoUI' },
     ];
+
+    // ---- Premium detection ----
+    // Runs before any DOM nuke. Sets a persisted flag so the SSW button shows
+    // on every module, not just pages that expose the premium toolbar.
+    (function detectPremium() {
+        if (document.querySelector('.sswdrop, #premium_bar, .premium-toolbar, .nav-premium-container')) {
+            try { localStorage.setItem('neoui_is_premium', '1'); } catch (e) {}
+        }
+    })();
+
+    function isPremiumUser() {
+        try { return localStorage.getItem('neoui_is_premium') === '1'; } catch (e) { return false; }
+    }
 
     const DAILY_TIMERS_KEY = 'neoui_daily_timers_v1';
 
@@ -2294,9 +2233,11 @@
                 btn.addEventListener('click', function () {
                     if (item.action === 'theme-editor') { openThemeEditorModal(); }
                     else if (item.action === 'daily-hub') { openDayTimerHub(); }
+                    else if (item.action === 'open-ssw') { backdrop.remove(); openGlobalSSW(input.value.trim()); }
                     else if (item.action === 'open-settings') { openDrawer(); setTimeout(function () { var settingBtn = document.querySelector('[data-action="open-settings"]'); if (settingBtn) settingBtn.click(); }, 80); }
                     else if (item.href) { window.location.assign(item.href); }
-                    backdrop.remove();
+                    else backdrop.remove();
+                    if (item.action !== 'open-ssw') backdrop.remove();
                 });
                 results.appendChild(btn);
             });
@@ -2308,6 +2249,116 @@
         backdrop.addEventListener('click', function (e) { if (e.target === backdrop) { backdrop.remove(); } });
         input.addEventListener('keydown', function (e) { if (e.key === 'Escape') backdrop.remove(); });
         input.focus();
+    }
+
+    // ---- Global Super Shop Wizard ----
+    // Single implementation in Core — modules reference window.NeoUI.openSSW
+    // so we don't have three copies of the same 80-line function.
+    function openGlobalSSW(itemName) {
+        itemName = (itemName || '').trim();
+        const backdrop = document.createElement('div');
+        backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
+        backdrop.style.cssText = 'position:fixed;inset:0;z-index:100000;background:var(--nui-overlay);display:flex;align-items:center;justify-content:center;padding:var(--nui-space-4);';
+
+        const modal = document.createElement('div');
+        modal.className = 'nui-surface';
+        modal.style.cssText = 'width:100%;max-width:520px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);box-shadow:0 10px 40px rgba(0,0,0,0.5);display:flex;flex-direction:column;overflow:hidden;transform:scale(0.95);opacity:0;transition:all var(--nui-dur-fast) var(--nui-ease-snap);';
+
+        function closeModal() {
+            modal.style.transform = 'scale(0.95)'; modal.style.opacity = '0';
+            backdrop.style.opacity = '0';
+            setTimeout(() => backdrop.remove(), 200);
+        }
+        backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
+        document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { closeModal(); document.removeEventListener('keydown', esc); } });
+
+        const header = document.createElement('div');
+        header.style.cssText = 'padding:var(--nui-space-4);border-bottom:1px solid var(--nui-border);background:var(--nui-surface-2);display:flex;flex-direction:column;gap:10px;';
+        header.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:18px;">⚡</span>
+                    <div style="font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-text);">Super Shop Wizard</div>
+                </div>
+                <button type="button" id="nui-ssw-close" class="nui-reset" style="font-size:24px;cursor:pointer;color:var(--nui-text-muted);line-height:1;">&times;</button>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <input id="nui-ssw-input" type="text" value="${itemName.replace(/"/g, '&quot;')}" placeholder="Item name…" class="nui-input" style="flex:1;padding:8px 10px;">
+                <button type="button" id="nui-ssw-go" class="nui-btn nui-btn-primary nui-btn-sm">Search</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--nui-text-muted);cursor:pointer;">
+                    <select id="nui-ssw-criteria" class="nui-input" style="padding:3px 6px;font-size:12px;">
+                        <option value="containing">Contains phrase</option>
+                        <option value="exact">Exact match</option>
+                    </select>
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--nui-text-muted);cursor:pointer;user-select:none;">
+                    <input type="checkbox" id="nui-ssw-priceonly" style="width:14px;height:14px;cursor:pointer;">
+                    Price only
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--nui-text-muted);cursor:pointer;">
+                    <select id="nui-ssw-area" class="nui-input" style="padding:3px 6px;font-size:12px;">
+                        <option value="0">Shop</option>
+                        <option value="1">Gallery</option>
+                    </select>
+                </label>
+            </div>
+        `;
+        header.querySelector('#nui-ssw-close').addEventListener('click', closeModal);
+
+        const content = document.createElement('div');
+        content.style.cssText = 'padding:var(--nui-space-4);max-height:55vh;overflow-y:auto;font-size:14px;';
+
+        modal.appendChild(header); modal.appendChild(content);
+        backdrop.appendChild(modal); document.body.appendChild(backdrop);
+        requestAnimationFrame(() => { modal.style.transform = 'scale(1)'; modal.style.opacity = '1'; });
+
+        async function doSearch(query) {
+            if (!query) return;
+            const criteriaEl = header.querySelector('#nui-ssw-criteria');
+            const priceOnlyEl = header.querySelector('#nui-ssw-priceonly');
+            const areaEl = header.querySelector('#nui-ssw-area');
+            const criteria = criteriaEl ? criteriaEl.value : 'containing';
+            const priceOnly = priceOnlyEl && priceOnlyEl.checked ? 1 : 0;
+            const partial = criteria === 'containing' ? 1 : 0;
+            const context = areaEl ? parseInt(areaEl.value) : 0;
+
+            content.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:var(--nui-space-5) 0;color:var(--nui-text-muted);"><div style="width:24px;height:24px;border:3px solid var(--nui-border);border-top-color:var(--nui-accent);border-radius:50%;animation:spin 1s linear infinite;"></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style><div>Searching for <b>${query}</b>…</div></div>`;
+            try {
+                const fetchParams = new URLSearchParams({ q: query, priceOnly: priceOnly, context: context, partial: partial, min_price: 0, max_price: 0, lang: 'en', json: 1, cb: Date.now() });
+                const res = await fetch(`/shops/ssw/ssw_query.php?${fetchParams}`);
+                const data = await res.json();
+                if (data.data && data.data.error) {
+                    content.innerHTML = `<div style="padding:var(--nui-space-4);text-align:center;"><div style="font-size:32px;">⚠️</div><div style="color:var(--nui-danger);font-weight:800;margin-top:8px;">${data.data.error}</div><div style="font-size:12px;color:var(--nui-text-muted);margin-top:6px;">SSW requires a Premium membership.</div></div>`;
+                    try { localStorage.removeItem('neoui_is_premium'); } catch (e) {}
+                } else if (data.html) {
+                    try { localStorage.setItem('neoui_is_premium', '1'); } catch (e) {}
+                    content.innerHTML = data.html;
+                    const table = content.querySelector('table');
+                    if (table) {
+                        table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+                        table.querySelectorAll('tr').forEach((tr, i) => {
+                            tr.style.background = i % 2 === 0 ? 'var(--nui-surface-2)' : 'var(--nui-surface)';
+                            tr.querySelectorAll('td').forEach(td => { td.style.padding = '6px 8px'; td.style.borderBottom = '1px solid var(--nui-border)'; });
+                        });
+                        // Make shop links open in new tab
+                        content.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
+                    }
+                } else {
+                    content.innerHTML = `<div style="padding:16px;color:var(--nui-text-muted);text-align:center;">No results found.</div>`;
+                }
+            } catch (e) {
+                content.innerHTML = `<div style="padding:16px;color:var(--nui-danger);text-align:center;">Search failed. Are you logged in?</div>`;
+            }
+        }
+
+        const sswInput = header.querySelector('#nui-ssw-input');
+        const sswGo = header.querySelector('#nui-ssw-go');
+        sswGo.addEventListener('click', () => doSearch(sswInput.value.trim()));
+        sswInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(sswInput.value.trim()); });
+        if (itemName) doSearch(itemName);
+        else setTimeout(() => sswInput.focus(), 80);
     }
 
     document.addEventListener('keydown', function (e) {
@@ -3022,35 +3073,115 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         }
     }
 
+    // ---- Nav Editor settings section ----
+    registerSettingsSection({
+        id: 'nav_editor',
+        title: 'Site Nav',
+        render: function (container) {
+            function renderNavEditor() {
+                const nav = loadSiteNav();
+                const isCustom = !!localStorage.getItem(CUSTOM_NAV_KEY);
+                const existingDetails = container.querySelector('details.nui-drawer-section');
+                const wasOpen = existingDetails ? existingDetails.open : false;
+
+                const sectionsHtml = nav.map((section, si) => {
+                    const itemRows = section.items.map((item, ii) => `
+                        <div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--nui-border);">
+                            <span style="flex:1;font-size:12px;color:var(--nui-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.label}</span>
+                            <button type="button" data-nav-del-item="${si}-${ii}" style="font-size:10px;padding:1px 6px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-danger);cursor:pointer;">✕</button>
+                        </div>`).join('');
+
+                    return `<div style="border:1px solid var(--nui-border);border-radius:var(--nui-radius-sm);overflow:hidden;margin-bottom:6px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--nui-surface-2);border-bottom:1px solid var(--nui-border);">
+                            <span style="font-size:12px;font-weight:800;color:var(--nui-text);">${section.title}</span>
+                            <button type="button" data-nav-del-section="${si}" style="font-size:10px;padding:1px 6px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-danger);cursor:pointer;">Remove</button>
+                        </div>
+                        <div style="padding:4px 8px;">${itemRows || '<div style="font-size:11px;color:var(--nui-text-muted);padding:4px 0;">No items yet.</div>'}</div>
+                        <div style="padding:4px 8px 8px;display:flex;gap:4px;">
+                            <input type="text" data-nav-new-label="${si}" placeholder="Link label" class="nui-input" style="flex:1;padding:3px 6px;font-size:11px;">
+                            <input type="text" data-nav-new-href="${si}" placeholder="/path" class="nui-input" style="flex:1;padding:3px 6px;font-size:11px;">
+                            <button type="button" data-nav-add-item="${si}" style="font-size:11px;padding:3px 8px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-accent);cursor:pointer;white-space:nowrap;">+ Add</button>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                container.innerHTML = `
+                    <details class="nui-drawer-section"${wasOpen ? ' open' : ''}>
+                        <summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+                            Site Nav <span style="font-size:10px;opacity:0.5;">▼</span>
+                        </summary>
+                        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px;">
+                            <div style="font-size:12px;color:var(--nui-text-muted);line-height:1.5;">${isCustom ? '✏️ Using your custom nav.' : 'Using default nav. Edit below to customize.'} Changes apply on next page load.</div>
+                            ${sectionsHtml}
+                            <div style="display:flex;gap:6px;padding-top:4px;border-top:1px solid var(--nui-border);">
+                                <input type="text" id="nui-nav-new-section-title" placeholder="New section title…" class="nui-input" style="flex:1;padding:4px 8px;font-size:12px;">
+                                <button type="button" id="nui-nav-add-section" class="nui-btn nui-btn-secondary nui-btn-sm" style="white-space:nowrap;">+ Section</button>
+                            </div>
+                            ${isCustom ? '<button type="button" id="nui-nav-reset" class="nui-btn nui-btn-danger nui-btn-block" style="margin-top:4px;">Reset to Default Nav</button>' : ''}
+                        </div>
+                    </details>
+                `;
+
+                container.querySelectorAll('[data-nav-del-section]').forEach(btn => {
+                    btn.addEventListener('click', e => { e.stopPropagation(); const si = parseInt(btn.getAttribute('data-nav-del-section')); const n = loadSiteNav(); n.splice(si, 1); saveSiteNav(n); renderNavEditor(); });
+                });
+                container.querySelectorAll('[data-nav-del-item]').forEach(btn => {
+                    btn.addEventListener('click', e => { e.stopPropagation(); const [si, ii] = btn.getAttribute('data-nav-del-item').split('-').map(Number); const n = loadSiteNav(); n[si].items.splice(ii, 1); saveSiteNav(n); renderNavEditor(); });
+                });
+                container.querySelectorAll('[data-nav-add-item]').forEach(btn => {
+                    btn.addEventListener('click', e => {
+                        e.stopPropagation();
+                        const si = parseInt(btn.getAttribute('data-nav-add-item'));
+                        const labelInput = container.querySelector(`[data-nav-new-label="${si}"]`);
+                        const hrefInput = container.querySelector(`[data-nav-new-href="${si}"]`);
+                        const label = labelInput.value.trim(); const href = hrefInput.value.trim();
+                        if (!label) return;
+                        const n = loadSiteNav(); n[si].items.push({ label, href: href || null }); saveSiteNav(n); renderNavEditor();
+                    });
+                });
+                const addSectionBtn = container.querySelector('#nui-nav-add-section');
+                if (addSectionBtn) addSectionBtn.addEventListener('click', e => { e.stopPropagation(); const titleInput = container.querySelector('#nui-nav-new-section-title'); const title = titleInput.value.trim(); if (!title) return; const n = loadSiteNav(); n.push({ title, items: [] }); saveSiteNav(n); renderNavEditor(); });
+                const resetBtn = container.querySelector('#nui-nav-reset');
+                if (resetBtn) resetBtn.addEventListener('click', e => { e.stopPropagation(); resetSiteNav(); renderNavEditor(); });
+            }
+            renderNavEditor();
+        }
+    });
+
     // ---- Drawer (NeoGo nav + nested settings) ----
     let drawerBuilt = false;
     let drawerEl = null;
     let listeners = [];
 
+    function buildNavHtml(nav) {
+        return nav.map(function (section) {
+            const itemsHtml = section.items.map(function (item) {
+                if (item.action === 'open-ssw') {
+                    return '<div class="nui-drawer-item" data-nui-action="open-ssw">' + item.label + '</div>';
+                }
+                return '<a class="nui-drawer-item" href="' + (item.href || '#') + '">' + item.label + '</a>';
+            }).join('');
+            return (
+                '<details class="nui-drawer-section">' +
+                    '<summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">' +
+                        section.title + '<span style="font-size:10px;opacity:0.5;">▼</span>' +
+                    '</summary>' +
+                    '<div style="margin-top:8px;">' + itemsHtml + '</div>' +
+                '</details>'
+            );
+        }).join('');
+    }
+
     function buildDrawer() {
         if (drawerBuilt) return;
         drawerBuilt = true;
 
-        const navHtml = SITE_NAV.map(function (section) {
-    const itemsHtml = section.items.map(function (item) {
-        return '<a class="nui-drawer-item" href="' + item.href + '">' + item.label + '</a>';
-    }).join('');
+        const nav = loadSiteNav();
+        const navHtml = buildNavHtml(nav);
 
-    return (
-        '<details class="nui-drawer-section">' +
-            '<summary class="nui-drawer-section-title" style="cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;">' +
-                section.title +
-                '<span style="font-size: 10px; opacity: 0.5;">▼</span>' +
-            '</summary>' +
-            '<div style="margin-top: 8px;">' + itemsHtml + '</div>' +
-        '</details>'
-    );
-}).join('');
-
-                const backdrop = h('div', { class: 'nui-drawer-backdrop nui-reset' },
+        const backdrop = h('div', { class: 'nui-drawer-backdrop nui-reset' },
             '<div class="nui-drawer" data-active-view="nav"><div class="nui-drawer-views"><div class="nui-drawer-view" data-view="nav">' +
 
-                // Profile section: active pet image + username/petname
                 '<div class="nui-drawer-profile">' +
                     '<img class="nui-drawer-avatar" data-slot="petImage" src="https://images.neopets.com/themes/h5/basic/images/mystery-icon.png" alt="Pet">' +
                     '<div>' +
@@ -3059,23 +3190,25 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     '</div>' +
                 '</div>' +
 
-                // (The redundant stats block has been deleted from here)
+                navHtml +
 
-                '<a class="nui-drawer-item is-action" href="/quickref.phtml">Quickref</a>' + navHtml +
-                '<div class="nui-drawer-section"><div class="nui-drawer-item" data-action="open-daily-hub">📅 Dailies Hub</div><div class="nui-drawer-item" data-action="open-global-search">🔎 Search</div><a class="nui-drawer-item" href="/ntimes/index.phtml?">📰 Neopian Times</a><div class="nui-drawer-item" data-action="open-settings">⚙️ NeoUI Settings</div><a class="nui-drawer-item is-danger" href="/logout.phtml">Logout</a></div>' +
+                '<div class="nui-drawer-section">' +
+                    '<div class="nui-drawer-item" data-action="open-daily-hub">📅 Dailies Hub</div>' +
+                    '<div class="nui-drawer-item" data-action="open-global-search">🔎 Search</div>' +
+                    '<div class="nui-drawer-item" data-action="open-settings">⚙️ NeoUI Settings</div>' +
+                    '<a class="nui-drawer-item is-danger" href="/logout.phtml">Logout</a>' +
+                '</div>' +
+
             '</div><div class="nui-drawer-view" data-view="settings"><div class="nui-drawer-back" data-action="back-to-nav">&larr; Back</div><div data-slot="settings-sections"></div></div></div></div>'
         );
 
-
         const drawer = backdrop.querySelector('.nui-drawer');
+        const navView = backdrop.querySelector('[data-view="nav"]');
         const settingsContainer = backdrop.querySelector('[data-slot="settings-sections"]');
 
         function renderSettings() {
             settingsContainer.innerHTML = '';
             settingsSections.forEach(function (section) {
-                // Each render() sets container.innerHTML to a <details> — use a
-                // throwaway div so we can pull the element out and append it directly,
-                // avoiding the double-nested nui-drawer-section wrapping.
                 const tmp = document.createElement('div');
                 section.render(tmp);
                 while (tmp.firstChild) settingsContainer.appendChild(tmp.firstChild);
@@ -3088,20 +3221,17 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             drawer.setAttribute('data-active-view', 'nav');
         }
 
-        backdrop.addEventListener('click', function (e) {
-            if (e.target === backdrop) closeDrawer();
-        });
-        const globalSearchAction = backdrop.querySelector('[data-action="open-global-search"]');
-        if (globalSearchAction) globalSearchAction.addEventListener('click', function () { openGlobalSearchModal(); closeDrawer(); });
-        const dailyHubAction = backdrop.querySelector('[data-action="open-daily-hub"]');
-        if (dailyHubAction) dailyHubAction.addEventListener('click', function () { openDayTimerHub(); closeDrawer(); });
-        const settingsAction = backdrop.querySelector('[data-action="open-settings"]');
-        if (settingsAction) settingsAction.addEventListener('click', function () {
-            renderSettings();
-            drawer.setAttribute('data-active-view', 'settings');
-        });
-        backdrop.querySelector('[data-action="back-to-nav"]').addEventListener('click', function () {
-            drawer.setAttribute('data-active-view', 'nav');
+        backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeDrawer(); });
+
+        // Action wiring
+        backdrop.querySelector('[data-action="open-global-search"]').addEventListener('click', () => { openGlobalSearchModal(); closeDrawer(); });
+        backdrop.querySelector('[data-action="open-daily-hub"]').addEventListener('click', () => { openDayTimerHub(); closeDrawer(); });
+        backdrop.querySelector('[data-action="open-settings"]').addEventListener('click', () => { renderSettings(); drawer.setAttribute('data-active-view', 'settings'); });
+        backdrop.querySelector('[data-action="back-to-nav"]').addEventListener('click', () => { drawer.setAttribute('data-active-view', 'nav'); });
+
+        // SSW action items inside nav sections
+        backdrop.querySelectorAll('[data-nui-action="open-ssw"]').forEach(el => {
+            el.addEventListener('click', () => { closeDrawer(); openGlobalSSW(''); });
         });
 
         document.body.appendChild(backdrop);
@@ -3181,6 +3311,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         scrapeLegacyProfile: scrapeLegacyProfile,
         buildTopbar: buildTopbar,
         registerSettingsSection: registerSettingsSection,
+        openSSW: openGlobalSSW,
+        isPremium: isPremiumUser,
         get isInitialized() { return initialized; },
         openNotificationDrawer: openNotificationDrawer,
         openThemeEditor: openThemeEditorModal,
@@ -3277,9 +3409,66 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 })(window);
 
 
-// ==============================================================================
-// MODULE 2: NEOUI NEOMAIL
-// ==============================================================================
+// NICK NAMES — window.NickNames
+// =============================================================================
+(function (global) {
+    'use strict';
+
+    const NICK_KEY = 'neoui_nicknames_v1';
+    const listeners = [];
+
+    function load() {
+        try { return JSON.parse(localStorage.getItem(NICK_KEY) || '{}'); } catch (e) { return {}; }
+    }
+    function save(data) {
+        try { localStorage.setItem(NICK_KEY, JSON.stringify(data)); } catch (e) {}
+        listeners.forEach(fn => { try { fn(); } catch (e) {} });
+    }
+
+    global.NickNames = {
+        // Returns the nickname string, or null if none set
+        getNick: function (username) {
+            if (!username) return null;
+            return load()[username.toLowerCase().trim()] || null;
+        },
+        // Returns nickname if set, otherwise the raw username
+        display: function (username) {
+            if (!username) return username;
+            return global.NickNames.getNick(username) || username;
+        },
+        // Returns "Nickname (username)" if nick set, otherwise just username
+        displayWithFallback: function (username) {
+            if (!username) return username;
+            const nick = global.NickNames.getNick(username);
+            return nick ? `${nick} (${username})` : username;
+        },
+        setNick: function (username, nick) {
+            if (!username) return;
+            const key = username.toLowerCase().trim();
+            const data = load();
+            if (nick && nick.trim()) {
+                data[key] = nick.trim();
+            } else {
+                delete data[key];
+            }
+            save(data);
+        },
+        clearNick: function (username) {
+            if (!username) return;
+            const data = load();
+            delete data[username.toLowerCase().trim()];
+            save(data);
+        },
+        getAll: function () { return load(); },
+        clearAll: function () { save({}); },
+        onChange: function (fn) {
+            if (typeof fn === 'function') listeners.push(fn);
+        },
+    };
+})(window);
+
+
+
 
 (function () {
     'use strict';
@@ -3663,6 +3852,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
 
         let allThreads = [];
+        let serverInboxCount = 0; // raw individual message count from the server
         let bulkSelectMode = false;
         const selectedThreadKeys = new Set();
         const urlParams = new URLSearchParams(window.location.search);
@@ -3725,7 +3915,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                         // Preserve open state of the details wrapper if it already exists
                         const existingDetails = settingsContainer.querySelector('details.nui-drawer-section');
-                        const wasOpen = existingDetails ? existingDetails.open : true;
+                        const wasOpen = existingDetails ? existingDetails.open : false;
 
                         const rows = keys.length === 0
                             ? '<div style="font-size:13px; color:var(--nui-text-muted); padding:8px 0;">No vibes assigned yet.</div>'
@@ -3800,6 +3990,13 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                             window.VibeRater.saveCustomPresets(current);
                             renderVibeSettings();
                         });
+                        settingsContainer.querySelector('#nui-add-preset').addEventListener('touchend', (e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            const current = window.VibeRater.PRESETS;
+                            current.push({ id: `new_${Date.now()}`, label: 'New Vibe', color: '#888888' });
+                            window.VibeRater.saveCustomPresets(current);
+                            renderVibeSettings();
+                        });
 
                         settingsContainer.querySelectorAll('[data-vr]').forEach(btn => {
                             btn.addEventListener('click', (e) => {
@@ -3820,7 +4017,69 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 }
             });
 
-            // 2. Append the sidebar and viewer to the strictly named container
+            NeoUI.registerSettingsSection({
+                id: 'neomail_nicknames',
+                title: 'Nicknames',
+                render: function (container) {
+                    function renderNickSettings() {
+                        const nicks = window.NickNames ? window.NickNames.getAll() : {};
+                        const keys = Object.keys(nicks);
+                        const existingDetails = container.querySelector('details.nui-drawer-section');
+                        const wasOpen = existingDetails ? existingDetails.open : true;
+
+                        const rows = keys.length === 0
+                            ? '<div style="font-size:13px;color:var(--nui-text-muted);padding:8px 0;">No nicknames set yet.</div>'
+                            : keys.map(u => `
+                                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--nui-border);">
+                                    <div style="flex:1;min-width:0;">
+                                        <div style="font-size:13px;font-weight:700;color:var(--nui-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHTML(nicks[u])}</div>
+                                        <div style="font-size:11px;color:var(--nui-text-muted);">${escapeHTML(u)}</div>
+                                    </div>
+                                    <button type="button" data-nick-edit="${escapeHTML(u)}" style="font-size:11px;padding:2px 8px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-text-muted);cursor:pointer;">✏️</button>
+                                    <button type="button" data-nick-del="${escapeHTML(u)}" style="font-size:11px;padding:2px 8px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-danger);cursor:pointer;">✕</button>
+                                </div>`).join('');
+
+                        container.innerHTML = `
+                            <details class="nui-drawer-section"${wasOpen ? ' open' : ''}>
+                                <summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+                                    Nicknames <span style="font-size:10px;opacity:0.5;">▼</span>
+                                </summary>
+                                <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px;">
+                                    <div style="font-size:12px;color:var(--nui-text-muted);line-height:1.5;">Set display names for other users. Shown in Neomail and Neoboards instead of their actual username.</div>
+                                    <div>${rows}</div>
+                                    ${keys.length > 0 ? '<button type="button" id="nui-nick-clear-all" class="nui-btn nui-btn-danger nui-btn-block">Clear All Nicknames</button>' : ''}
+                                </div>
+                            </details>
+                        `;
+
+                        container.querySelectorAll('[data-nick-edit]').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                const u = btn.getAttribute('data-nick-edit');
+                                const current = nicks[u] || '';
+                                const input = prompt(`New nickname for "${u}" (blank to clear):`, current);
+                                if (input === null) return;
+                                if (input.trim()) { window.NickNames.setNick(u, input.trim()); }
+                                else { window.NickNames.clearNick(u); }
+                                renderNickSettings();
+                            });
+                        });
+
+                        container.querySelectorAll('[data-nick-del]').forEach(btn => {
+                            btn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                window.NickNames.clearNick(btn.getAttribute('data-nick-del'));
+                                renderNickSettings();
+                            });
+                        });
+
+                        const clearAll = container.querySelector('#nui-nick-clear-all');
+                        if (clearAll) clearAll.addEventListener('click', (e) => { e.stopPropagation(); window.NickNames.clearAll(); renderNickSettings(); });
+                    }
+                    renderNickSettings();
+                    if (window.NickNames) window.NickNames.onChange(() => renderNickSettings());
+                }
+            });
             const sidebar = document.createElement('div');
             sidebar.className = 'neomail-pane';
             sidebar.innerHTML = `<div class="neomail-message-list" id="neomail-message-list"><div class="nui-empty"><span class="nui-text-muted">Loading inbox...</span></div></div>`;
@@ -3911,6 +4170,10 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             syncStatus.style.opacity = '0';
             setTimeout(() => syncStatus.remove(), 300);
 
+            // Store the raw server message count — used by updateTabCounts for the
+            // "N messages on Neopets" display (distinct from thread count)
+            serverInboxCount = liveMessages.length;
+
             allThreads = syncAndProcessThreads(liveMessages);
             renderSidebarList('inbox');
 
@@ -3992,21 +4255,51 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             return allThreads;
         }
 
+        function updateTabCounts() {
+            const hnav = document.querySelector('.nui-hnav');
+            if (!hnav) return;
+            const inboxThreads = filterThreadsForTab('inbox');
+            const unread = inboxThreads.filter(t => !t.isRead).length;
+            const inboxPill = hnav.querySelector('[data-tab="inbox"]');
+            if (inboxPill) {
+                // serverInboxCount is the real count of individual messages in the
+                // Neopets inbox (what the counter in the old nav would show).
+                // unread is derived from our local thread state.
+                let countStr = 'Inbox';
+                if (serverInboxCount > 0) {
+                    countStr = unread > 0
+                        ? `Inbox (${unread} unread · ${serverInboxCount} msgs)`
+                        : `Inbox (${serverInboxCount} msgs)`;
+                } else if (unread > 0) {
+                    countStr = `Inbox (${unread} unread)`;
+                }
+                inboxPill.textContent = countStr;
+                inboxPill.style.color = unread > 0 ? 'var(--nui-accent)' : '';
+                inboxPill.style.fontWeight = unread > 0 ? '800' : '';
+            }
+        }
+
         function renderSidebarList(tab) {
             const listContainer = document.getElementById('neomail-message-list'); listContainer.innerHTML = '';
             const filteredThreads = filterThreadsForTab(tab);
+            updateTabCounts();
             if (filteredThreads.length === 0) { listContainer.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">\u{1F4ED}</span>No conversations found.</div>`; return; }
 
             filteredThreads.forEach(thread => {
                 const item = document.createElement('div'); item.className = `nui-item nui-reset ${thread.isRead ? '' : 'is-unread'}`;
                 if (!thread.isSent) applyVibeTint(item, thread.sender);
 
+                // Display name: nickname if set, otherwise raw username
+                const displayName = window.NickNames ? window.NickNames.display(thread.sender) : thread.sender;
+                const hasNick = displayName !== thread.sender;
+
                 let badges = '';
                 if (thread.isFullyLocal) badges += `<span class="nui-badge nui-badge-warning">Local Archive</span> `;
                 if (thread.messages.length > 1) badges += `<span class="nui-badge">${thread.messages.length} msgs</span>`;
+                if (hasNick) badges += `<span class="nui-badge" style="opacity:0.6;">${escapeHTML(thread.sender)}</span>`;
 
                 const avatarUrl = getAvatar(thread.sender);
-                const avatarHTML = avatarUrl ? `<img class="nui-avatar" data-sender="${escapeHTML(thread.sender)}" src="${avatarUrl}" alt="" loading="lazy">` : `<div class="nui-avatar-fallback" data-sender="${escapeHTML(thread.sender)}">${escapeHTML(thread.sender.charAt(0).toUpperCase())}</div>`;
+                const avatarHTML = avatarUrl ? `<img class="nui-avatar" data-sender="${escapeHTML(thread.sender)}" src="${avatarUrl}" alt="" loading="lazy">` : `<div class="nui-avatar-fallback" data-sender="${escapeHTML(thread.sender)}">${escapeHTML(displayName.charAt(0).toUpperCase())}</div>`;
 
                 if (bulkSelectMode) {
                     const isChecked = selectedThreadKeys.has(thread.key);
@@ -4020,7 +4313,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     item.innerHTML = `
                         <div class="nui-avatar-wrapper">${avatarHTML}<div class="nui-dot"></div></div>
                         <div class="nui-item-main">
-                            <div class="nui-item-top"><span class="nui-item-title">${escapeHTML(thread.sender)}</span><span class="nui-item-meta">${thread.latestDateStr}</span></div>
+                            <div class="nui-item-top"><span class="nui-item-title">${escapeHTML(displayName)}</span><span class="nui-item-meta">${thread.latestDateStr}</span></div>
                             <div class="nui-item-bottom"><span class="nui-item-subtitle">${thread.baseSubject}</span><div>${badges}</div></div>
                         </div>
                         <div style="display:flex; align-items:center; justify-content:center; padding: 0 4px; flex-shrink:0;">
@@ -4040,7 +4333,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     item.innerHTML = `
                         <div class="nui-avatar-wrapper">${avatarHTML}<div class="nui-dot"></div></div>
                         <div class="nui-item-main">
-                            <div class="nui-item-top"><span class="nui-item-title">${userLink(thread.sender)}</span><span class="nui-item-meta">${thread.latestDateStr}</span></div>
+                            <div class="nui-item-top"><span class="nui-item-title">${escapeHTML(displayName)}</span><span class="nui-item-meta">${thread.latestDateStr}</span></div>
                             <div class="nui-item-bottom"><span class="nui-item-subtitle">${thread.baseSubject}</span><div>${badges}</div></div>
                         </div>
                     `;
@@ -4248,6 +4541,27 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     clearOpt.addEventListener('click', () => { window.VibeRater.clearVibe(p); pop.remove(); });
                     pop.appendChild(clearOpt);
 
+                    if (window.NickNames) {
+                        const nickOpt = document.createElement('button');
+                        nickOpt.type = 'button';
+                        const currentNick = window.NickNames.getNick(p);
+                        nickOpt.style.cssText = 'display:flex; align-items:center; gap:8px; width:100%; padding:5px 8px; border:none; border-radius:6px; background:none; cursor:pointer; font-size:12px; font-weight:700; color:var(--nui-text-muted); text-align:left; border-top:1px solid var(--nui-border); margin-top:2px; padding-top:7px; transition:background 0.1s;';
+                        nickOpt.textContent = currentNick ? `✏️  Edit nick (${currentNick})` : '✏️  Set nickname';
+                        nickOpt.addEventListener('mouseenter', () => { nickOpt.style.background = 'var(--nui-surface-2)'; });
+                        nickOpt.addEventListener('mouseleave', () => { nickOpt.style.background = 'none'; });
+                        nickOpt.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            pop.remove();
+                            const input = prompt(`Nickname for "${p}" (leave blank to clear):`, currentNick || '');
+                            if (input === null) return;
+                            if (input.trim()) { window.NickNames.setNick(p, input.trim()); }
+                            else { window.NickNames.clearNick(p); }
+                            const activeTab = document.querySelector('.nui-pill.is-active[data-tab]');
+                            if (activeTab) renderSidebarList(activeTab.getAttribute('data-tab'));
+                        });
+                        pop.appendChild(nickOpt);
+                    }
+
                     document.body.appendChild(pop);
                     const btnRect = vibeBtn.getBoundingClientRect();
                     const popH = pop.offsetHeight || 200;
@@ -4273,15 +4587,42 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
 
         async function loadThreadIntoViewer(thread, container) {
+            const displayName = window.NickNames ? window.NickNames.display(thread.sender) : thread.sender;
+            const hasNick = displayName !== thread.sender;
+            const nickLabel = hasNick ? `${escapeHTML(displayName)} <span style="font-size:11px;opacity:0.6;">(${escapeHTML(thread.sender)})</span>` : escapeHTML(thread.sender);
+
             container.innerHTML = `
                 <div class="neomail-viewer-header">
                     <button type="button" class="neomail-back-btn" id="neomail-back-btn"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>Back</button>
                     <div class="neomail-viewer-subject">${thread.baseSubject}</div>
-                    <div class="neomail-viewer-meta">Thread with ${userLink(thread.sender)}</div>
+                    <div class="neomail-viewer-meta" style="display:flex;align-items:center;gap:8px;">
+                        Thread with <a href="/userlookup.phtml?user=${encodeURIComponent(thread.sender)}" target="_blank" rel="noopener noreferrer" style="color:var(--nui-accent);font-weight:700;">${nickLabel}</a>
+                        <button type="button" id="neomail-nick-btn" title="Set nickname" style="font-size:11px;padding:2px 7px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-text-muted);cursor:pointer;">✏️ ${hasNick ? 'Edit nick' : 'Nickname'}</button>
+                    </div>
                 </div>
                 <div class="neomail-thread-list" id="neomail-thread-list"></div>
                 <div id="neomail-reply-container"></div>
             `;
+
+            // Nickname button handler
+            const nickBtn = container.querySelector('#neomail-nick-btn');
+            if (nickBtn && window.NickNames) {
+                nickBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const current = window.NickNames.getNick(thread.sender) || '';
+                    const input = prompt(`Nickname for "${thread.sender}" (leave blank to clear):`, current);
+                    if (input === null) return; // cancelled
+                    if (input.trim()) {
+                        window.NickNames.setNick(thread.sender, input.trim());
+                    } else {
+                        window.NickNames.clearNick(thread.sender);
+                    }
+                    // Re-render thread + sidebar to reflect change
+                    loadThreadIntoViewer(thread, container);
+                    const activeTab = document.querySelector('.nui-pill.is-active[data-tab]');
+                    if (activeTab) renderSidebarList(activeTab.getAttribute('data-tab'));
+                });
+            }
 
             const backBtn = container.querySelector('#neomail-back-btn');
             if (backBtn) { backBtn.addEventListener('click', () => { const app = document.getElementById('neomail-app'); if (app) app.classList.remove('thread-open'); }); }
@@ -5221,120 +5562,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     let _cachedProfile = null;
 
     // --- Custom SSW Modal ---
-    function openCustomSSW(itemName) {
-        const backdrop = document.createElement('div');
-        backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
-        backdrop.style.cssText = 'position: fixed; inset: 0; z-index: 100000; background: var(--nui-overlay); display: flex; align-items: center; justify-content: center; padding: var(--nui-space-4); transition: opacity var(--nui-dur-fast) var(--nui-ease);';
-
-        const modal = document.createElement('div');
-        modal.className = 'nui-surface';
-        modal.style.cssText = 'width: 100%; max-width: 450px; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95); opacity: 0; transition: all var(--nui-dur-fast) var(--nui-ease-snap);';
-
-        const header = document.createElement('div');
-        header.style.cssText = 'padding: var(--nui-space-4); border-bottom: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: space-between; align-items: center;';
-        header.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <div style="width: 24px; height: 24px; background: var(--nui-accent-soft); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--nui-accent);"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg></div>
-                <div style="font-family: var(--nui-font-display); font-size: 18px; font-weight: 800; color: var(--nui-text);">Super Shop Wizard</div>
-            </div>
-            <button type="button" class="nui-reset" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--nui-text-muted); line-height: 1;">&times;</button>
-        `;
-
-        header.querySelector('button').addEventListener('click', closeModal);
-        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
-
-        function closeModal() {
-            modal.style.transform = 'scale(0.95)';
-            modal.style.opacity = '0';
-            backdrop.style.opacity = '0';
-            setTimeout(() => backdrop.remove(), 200);
-        }
-
-        const content = document.createElement('div');
-        content.style.cssText = 'padding: var(--nui-space-4); max-height: 55vh; overflow-y: auto; font-size: 14px; -webkit-overflow-scrolling: touch;';
-
-        const footer = document.createElement('div');
-        footer.style.cssText = 'padding: var(--nui-space-3) var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: flex-end;';
-
-        const resubmitBtn = document.createElement('button');
-        resubmitBtn.className = 'nui-btn nui-btn-primary nui-btn-sm';
-        resubmitBtn.textContent = 'Resubmit Search';
-        footer.appendChild(resubmitBtn);
-
-        modal.appendChild(header);
-        modal.appendChild(content);
-        modal.appendChild(footer);
-        backdrop.appendChild(modal);
-        document.body.appendChild(backdrop);
-
-        requestAnimationFrame(() => {
-            modal.style.transform = 'scale(1)';
-            modal.style.opacity = '1';
-        });
-
-        async function doSearch() {
-            resubmitBtn.disabled = true;
-            content.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: var(--nui-space-5) 0; color: var(--nui-text-muted);">
-                    <div style="width: 24px; height: 24px; border: 3px solid var(--nui-border); border-top-color: var(--nui-accent); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
-                    <div style="font-weight: 600;">Searching for <b>${itemName}</b>...</div>
-                </div>
-            `;
-
-            try {
-                const params = new URLSearchParams({
-                    q: itemName, priceOnly: 0, context: 0, partial: 0,
-                    min_price: 0, max_price: 0, lang: 'en', json: 1, cb: Date.now()
-                });
-
-                const res = await fetch(`/shops/ssw/ssw_query.php?${params.toString()}`);
-                const data = await res.json();
-
-                if (data.data && data.data.error) {
-                    content.innerHTML = `
-                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: var(--nui-space-4); text-align: center;">
-                            <div style="font-size: 32px;">⚠️</div>
-                            <div style="color: var(--nui-danger); font-weight: 800;">${data.data.error}</div>
-                        </div>
-                    `;
-                } else if (data.html) {
-                    content.innerHTML = data.html;
-                    const table = content.querySelector('table');
-                    if (table) {
-                        table.style.width = '100%';
-                        table.style.borderCollapse = 'collapse';
-                        table.style.marginTop = 'var(--nui-space-2)';
-                        table.querySelectorAll('tr').forEach((row, idx) => {
-                            if (idx === 0) row.style.background = 'var(--nui-surface-2)';
-                            row.querySelectorAll('td, th').forEach(cell => {
-                                cell.style.padding = '10px var(--nui-space-2)';
-                                cell.style.borderBottom = '1px solid var(--nui-border)';
-                                cell.style.color = 'var(--nui-text)';
-                                cell.style.fontSize = '13.5px';
-                                cell.removeAttribute('bgcolor');
-                                cell.removeAttribute('class');
-                            });
-                        });
-                        table.querySelectorAll('a').forEach(a => {
-                            a.style.color = 'var(--nui-accent)';
-                            a.style.fontWeight = '800';
-                            a.style.textDecoration = 'none';
-                            a.setAttribute('target', '_blank');
-                        });
-                    }
-                } else {
-                    content.innerHTML = `<div style="text-align: center; color: var(--nui-text-muted); font-weight: 600; padding: var(--nui-space-4);">No results found.</div>`;
-                }
-            } catch (err) {
-                content.innerHTML = `<div style="color: var(--nui-danger); text-align: center; font-weight: 700; padding: var(--nui-space-4);">Connection failed. Are you Premium?</div>`;
-            }
-            resubmitBtn.disabled = false;
-        }
-
-        resubmitBtn.addEventListener('click', doSearch);
-        doSearch();
-    }
+    function openCustomSSW(itemName) { if (window.NeoUI && window.NeoUI.openSSW) window.NeoUI.openSSW(itemName); }
 
     // --- Dynamic RE Catcher (For AJAX injected events) ---
     function observeInjectedREs() {
@@ -6277,6 +6505,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         } catch (e2) { }
     }
 
+    function escapeHTML(str) { const div = document.createElement('div'); div.textContent = String(str || ''); return div.innerHTML; }
+
     const NeoUI = window.NeoUI;
 
     // --- State Management ---
@@ -6477,7 +6707,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                     // Preserve open state of the details wrapper if it already exists
                     const existingDetails = container.querySelector('details.nui-drawer-section');
-                    const wasOpen = existingDetails ? existingDetails.open : true;
+                    const wasOpen = existingDetails ? existingDetails.open : false;
 
                     // Assigned Users List
                     const rows = keys.length === 0
@@ -6551,6 +6781,13 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                     container.querySelector('#nui-add-preset').addEventListener('click', (e) => {
                         e.stopPropagation();
+                        const current = window.VibeRater.PRESETS;
+                        current.push({ id: `new_${Date.now()}`, label: 'New Vibe', color: '#888888' });
+                        window.VibeRater.saveCustomPresets(current);
+                        renderVibeSettings();
+                    });
+                    container.querySelector('#nui-add-preset').addEventListener('touchend', (e) => {
+                        e.preventDefault(); e.stopPropagation();
                         const current = window.VibeRater.PRESETS;
                         current.push({ id: `new_${Date.now()}`, label: 'New Vibe', color: '#888888' });
                         window.VibeRater.saveCustomPresets(current);
@@ -6922,13 +7159,19 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 ? `<img src="${post.petIconUrl}" alt="pet" style="width:50px; height:50px; object-fit:contain; flex-shrink:0; filter:drop-shadow(0 1px 3px var(--nui-shadow));">`
                 : '';
 
+            const postDisplayName = window.NickNames ? window.NickNames.display(post.authorName) : post.authorName;
+            const postHasNick = postDisplayName !== post.authorName;
+            const postNameHtml = postHasNick
+                ? `${escapeHTML(postDisplayName)} <span style="font-size:11px;opacity:0.5;font-weight:600;">(${escapeHTML(post.authorName)})</span>`
+                : escapeHTML(post.authorName);
+
             postCard.innerHTML = `
                 <div data-post-header style="display: flex; flex-wrap: wrap; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border); border-radius: calc(var(--nui-radius-md) - 1px) calc(var(--nui-radius-md) - 1px) 0 0;">
                     <div style="padding: 12px 16px; display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
                         <a href="/userlookup.phtml?user=${encodeURIComponent(post.authorName)}" target="_blank" rel="noopener" style="display: block; width: 50px; height: 50px; background: var(--nui-surface) url('${post.avatarUrl}') center/cover no-repeat; flex-shrink: 0; text-decoration: none;"></a>
                         <div style="display: flex; flex-direction: column; justify-content: center; flex: 1; min-width: 0;">
                             <a href="/userlookup.phtml?user=${encodeURIComponent(post.authorName)}" target="_blank" rel="noopener" style="font-weight: 800; font-size: 16px; color: var(--nui-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none;">
-                                ${post.authorName}
+                                ${postNameHtml}
                             </a>
                             <div style="font-size: 12px; color: var(--nui-text-muted); font-weight: 600; line-height: 1.4; margin-top: 2px;">
                                 ${post.authorMetaStr}
@@ -7048,6 +7291,30 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 clearOpt.addEventListener('mouseleave', () => { clearOpt.style.background = 'none'; });
                 clearOpt.addEventListener('click', () => { window.VibeRater.clearVibe(p); pop.remove(); });
                 pop.appendChild(clearOpt);
+
+                if (window.NickNames) {
+                    const nickOpt = document.createElement('button');
+                    nickOpt.type = 'button';
+                    const currentNick = window.NickNames.getNick(p);
+                    nickOpt.style.cssText = 'display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 8px; border: none; border-radius: 6px; background: none; cursor: pointer; font-size: 12px; font-weight: 700; color: var(--nui-text-muted); text-align: left; border-top: 1px solid var(--nui-border); margin-top: 2px; padding-top: 7px; transition: background 0.1s;';
+                    nickOpt.textContent = currentNick ? `✏️  Edit nick (${currentNick})` : '✏️  Set nickname';
+                    nickOpt.addEventListener('mouseenter', () => { nickOpt.style.background = 'var(--nui-surface-2)'; });
+                    nickOpt.addEventListener('mouseleave', () => { nickOpt.style.background = 'none'; });
+                    nickOpt.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        pop.remove();
+                        const input = prompt(`Nickname for "${p}" (leave blank to clear):`, currentNick || '');
+                        if (input === null) return;
+                        if (input.trim()) { window.NickNames.setNick(p, input.trim()); }
+                        else { window.NickNames.clearNick(p); }
+                        // Only reload the board list if we're actually in board view — never from a thread
+                        if (activeTabId === 'board') {
+                            const contentArea = document.getElementById('nui-content-area');
+                            if (contentArea && currentBoardUrl) loadBoardList(currentBoardUrl, contentArea);
+                        }
+                    });
+                    pop.appendChild(nickOpt);
+                }
 
                 document.body.appendChild(pop);
                 const btnRect = vibeBtn.getBoundingClientRect();
@@ -8170,118 +8437,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     }
 
     // --- Custom SSW Modal (Ported from Coincidence) ---
-    function openCustomSSW(itemName) {
-        const backdrop = document.createElement('div');
-        backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
-        backdrop.style.cssText = 'position: fixed; inset: 0; z-index: 100000; background: var(--nui-overlay); display: flex; align-items: center; justify-content: center; padding: var(--nui-space-4); transition: opacity var(--nui-dur-fast) var(--nui-ease);';
-
-        const modal = document.createElement('div');
-        modal.className = 'nui-surface';
-        modal.style.cssText = 'width: 100%; max-width: 450px; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95); opacity: 0; transition: all var(--nui-dur-fast) var(--nui-ease-snap);';
-
-        const header = document.createElement('div');
-        header.style.cssText = 'padding: var(--nui-space-4); border-bottom: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: space-between; align-items: center;';
-        header.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <div style="width: 24px; height: 24px; background: var(--nui-accent-soft); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--nui-accent);"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg></div>
-                <div style="font-family: var(--nui-font-display); font-size: 18px; font-weight: 800; color: var(--nui-text);">Super Shop Wizard</div>
-            </div>
-            <button type="button" class="nui-reset" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--nui-text-muted); line-height: 1;">&times;</button>
-        `;
-
-        header.querySelector('button').addEventListener('click', closeModal);
-        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
-
-        function closeModal() {
-            modal.style.transform = 'scale(0.95)';
-            modal.style.opacity = '0';
-            backdrop.style.opacity = '0';
-            setTimeout(() => backdrop.remove(), 200);
-        }
-
-        const content = document.createElement('div');
-        content.style.cssText = 'padding: var(--nui-space-4); max-height: 55vh; overflow-y: auto; font-size: 14px; -webkit-overflow-scrolling: touch;';
-
-        const footer = document.createElement('div');
-        footer.style.cssText = 'padding: var(--nui-space-3) var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: flex-end;';
-
-        const resubmitBtn = document.createElement('button');
-        resubmitBtn.className = 'nui-btn nui-btn-primary nui-btn-sm';
-        resubmitBtn.textContent = 'Resubmit Search';
-        footer.appendChild(resubmitBtn);
-
-        modal.appendChild(header);
-        modal.appendChild(content);
-        modal.appendChild(footer);
-        backdrop.appendChild(modal);
-        document.body.appendChild(backdrop);
-
-        requestAnimationFrame(() => {
-            modal.style.transform = 'scale(1)';
-            modal.style.opacity = '1';
-        });
-
-        async function doSearch() {
-            resubmitBtn.disabled = true;
-            content.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: var(--nui-space-5) 0; color: var(--nui-text-muted);">
-                    <div style="font-weight: 600;">Searching for <b>${itemName}</b>...</div>
-                </div>
-            `;
-
-            try {
-                const params = new URLSearchParams({
-                    q: itemName, priceOnly: 0, context: 0, partial: 0,
-                    min_price: 0, max_price: 0, lang: 'en', json: 1, cb: Date.now()
-                });
-
-                const res = await fetch(`/shops/ssw/ssw_query.php?${params.toString()}`);
-                const data = await res.json();
-
-                if (data.data && data.data.error) {
-                    content.innerHTML = `
-                        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: var(--nui-space-4); text-align: center;">
-                            <div style="font-size: 32px;">⚠️</div>
-                            <div style="color: var(--nui-danger); font-weight: 800;">${data.data.error}</div>
-                        </div>
-                    `;
-                } else if (data.html) {
-                    content.innerHTML = data.html;
-                    const table = content.querySelector('table');
-                    if (table) {
-                        table.style.width = '100%';
-                        table.style.borderCollapse = 'collapse';
-                        table.style.marginTop = 'var(--nui-space-2)';
-                        table.querySelectorAll('tr').forEach((row, idx) => {
-                            if (idx === 0) row.style.background = 'var(--nui-surface-2)';
-                            row.querySelectorAll('td, th').forEach(cell => {
-                                cell.style.padding = '10px var(--nui-space-2)';
-                                cell.style.borderBottom = '1px solid var(--nui-border)';
-                                cell.style.color = 'var(--nui-text)';
-                                cell.style.fontSize = '13.5px';
-                                cell.removeAttribute('bgcolor');
-                                cell.removeAttribute('class');
-                            });
-                        });
-                        table.querySelectorAll('a').forEach(a => {
-                            a.style.color = 'var(--nui-accent)';
-                            a.style.fontWeight = '800';
-                            a.style.textDecoration = 'none';
-                            a.setAttribute('target', '_blank');
-                        });
-                    }
-                } else {
-                    content.innerHTML = `<div style="text-align: center; color: var(--nui-text-muted); font-weight: 600; padding: var(--nui-space-4);">No results found.</div>`;
-                }
-            } catch (err) {
-                content.innerHTML = `<div style="color: var(--nui-danger); text-align: center; font-weight: 700; padding: var(--nui-space-4);">Connection failed. Are you Premium?</div>`;
-            }
-            resubmitBtn.disabled = false;
-        }
-
-        resubmitBtn.addEventListener('click', doSearch);
-        doSearch();
-    }
+    function openCustomSSW(itemName) { if (window.NeoUI && window.NeoUI.openSSW) window.NeoUI.openSSW(itemName); }
 
 
     function scrapeStatus(doc) {
@@ -8588,6 +8744,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                             <div style="display:flex; gap:6px;">
                                 <button type="button" class="nui-btn nui-btn-secondary nui-btn-sm btn-ssw" style="padding:4px 8px; font-size:11px;">SSW</button>
                                 <a href="/market.phtml?type=wizard&string=${encodeURIComponent(stoneName)}" target="_blank" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:4px 8px; font-size:11px; text-decoration:none;">SW</a>
+                                <a href="/safetydeposit.phtml?obj_name=${encodeURIComponent(stoneName)}&category=0" target="_blank" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:4px 8px; font-size:11px; text-decoration:none;">SDB</a>
                             </div>
                         `;
                         row.querySelector('.btn-ssw').addEventListener('click', () => openCustomSSW(stoneName));
@@ -8963,12 +9120,32 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         });
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, 'text/html');
-        const content = doc.querySelector('td.content');
-        if (!content) return { ok: true, message: 'Bet placed!' };
 
-        const text = content.textContent.replace(/\s+/g, ' ').trim();
-        const isError = /error|invalid|cannot|already|not enough|too many|please/i.test(text);
-        return { ok: !isError, message: text.slice(0, 200) };
+        // Neopets shows actual errors in .errorMessage / #errorMessage / p.error elements.
+        // A successful bet redirects to the current-bets page — which is a normal FC page
+        // with pirate tables in it. Don't scan the whole page text for keywords since
+        // words like "please" and "already" appear in navigation and bet tables on success.
+        const errorEl = doc.querySelector('.errorMessage, #errorMessage, .error_msg, p.error, .neopets-error');
+        if (errorEl) {
+            const msg = errorEl.textContent.replace(/\s+/g, ' ').trim();
+            return { ok: false, message: msg.slice(0, 200) };
+        }
+
+        // Also catch the specific "you cannot bet" / "oops" patterns that appear
+        // as plain paragraphs rather than in error-classed elements
+        const content = doc.querySelector('td.content');
+        if (content) {
+            const text = content.textContent.replace(/\s+/g, ' ').trim();
+            // Only flag as error if the page starts with or prominently features
+            // a hard error phrase — not just contains common words
+            if (/^(oops|sorry|error|you cannot|you can't|you do not|you don't|unable to|invalid)/i.test(text) ||
+                /you (cannot|can't|do not have enough|already (have|placed)|have reached the maximum)/i.test(text)) {
+                return { ok: false, message: text.slice(0, 200) };
+            }
+        }
+
+        // No error found — the response is the updated current-bets page, which is correct
+        return { ok: true, message: 'Bet placed!' };
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -11760,6 +11937,14 @@ return {
 
     if (!/\/home\/(index\.phtml)?$/.test(location.pathname)) return;
 
+    // Don't run if user is not logged in — let them see the normal login page
+    const isLoggedIn = !!(
+        document.getElementById('npanchor') ||
+        document.querySelector('a[href^="/userlookup.phtml?user="]') ||
+        document.querySelector('[id^="navprofiledropdown__"]')
+    );
+    if (!isLoggedIn) return;
+
     function showFatalError(err) {
         try {
             const box = document.createElement('div');
@@ -12050,7 +12235,7 @@ return {
     }
 
     // ── Training scraper (inline, no module dependency) ──────────────────────
-    function scrapeTrainingStatus(doc) {
+    function scrapeTrainingStatus(doc, school) {
         const pets = [];
         const rows = doc.querySelectorAll('table[align="center"] tr');
         let i = 0;
@@ -12073,12 +12258,14 @@ return {
                     if (txt.includes('Course Finished')) courseFinished = true;
                     const tm = txt.match(/(\d+)\s*hrs?,?\s*(\d+)\s*minutes?,?\s*(\d+)\s*seconds?/i);
                     if (tm) totalSeconds = (parseInt(tm[1]) * 3600) + (parseInt(tm[2]) * 60) + parseInt(tm[3]);
+                    // Codestones OR dubloons (pirate academy uses dubloon coins)
                     actionTd.querySelectorAll('b').forEach(b => {
-                        if (b.textContent.includes('Codestone')) codestonesNeeded.push(b.textContent.trim());
+                        const t = b.textContent.trim();
+                        if (t.includes('Codestone') || t.includes('Dubloon')) codestonesNeeded.push(t);
                     });
                 }
             }
-            pets.push({ name, onCourse, courseSubject, courseFinished, totalSeconds, codestonesNeeded });
+            pets.push({ name, onCourse, courseSubject, courseFinished, totalSeconds, codestonesNeeded, school: school || 'Mystery Island' });
             i += 2;
         }
         return pets;
@@ -12108,36 +12295,45 @@ return {
             throw new Error('NeoUI Core Framework was not found.');
         }
 
-        // 1. DATA SCRAPING
-        const usernameEl = document.querySelector('a[href^="/userlookup.phtml?user="].text-muted');
-        const username = usernameEl ? usernameEl.textContent.trim() : 'Player';
-
-        const npEl = document.getElementById('npanchor');
-        const ncEl = document.getElementById('ncanchor');
-        const activeStats = {
-            np: npEl ? npEl.textContent.replace(/,/g, '') : 0,
-            nc: ncEl ? ncEl.textContent.replace(/,/g, '') : 0
-        };
+        // 1. DATA SCRAPING — must happen before the DOM nuke
+        // The home page is H5-converted; use scrapeLegacyProfile for user/NP/NC
+        // (it reads navprofiledropdown__ and npanchor/ncanchor which H5 always has),
+        // then scrape pet data from the H5 carousel data attributes.
+        const profile = NeoUI.scrapeLegacyProfile();
+        const username = profile.username || 'Neopian';
+        const activeStats = { np: profile.np || '0', nc: profile.nc || '0' };
 
         const pets = [];
-        document.querySelectorAll('.hp-carousel-pet').forEach(el => {
+        // Try H5 carousel first (data-* attributes)
+        document.querySelectorAll('.hp-carousel-pet, [data-name][data-species], [class*="carousel"] [data-petimage]').forEach(el => {
+            const name = el.getAttribute('data-name');
+            if (!name || pets.find(p => p.name === name)) return;
             pets.push({
-                name: el.getAttribute('data-name'),
-                species: el.getAttribute('data-species'),
-                color: el.getAttribute('data-color'),
-                level: el.getAttribute('data-level'),
-                health: el.getAttribute('data-health'),
-                maxhealth: el.getAttribute('data-maxhealth'),
-                image: el.getAttribute('data-petimage'),
+                name,
+                species: el.getAttribute('data-species') || '',
+                color: el.getAttribute('data-color') || '',
+                level: el.getAttribute('data-level') || '?',
+                health: el.getAttribute('data-health') || '?',
+                maxhealth: el.getAttribute('data-maxhealth') || '?',
+                image: el.getAttribute('data-petimage') || profile.petImage,
                 active: el.getAttribute('data-active') === 'true',
                 petpet: el.getAttribute('data-petpet') || null,
                 petpetimg: el.getAttribute('data-petpetimg') || null
             });
         });
 
-        const fallbackEl = document.querySelector('.profile-dropdown-link');
-        const fallbackName = fallbackEl ? fallbackEl.textContent.trim() : null;
-        let activePet = pets.find(p => p.active) || pets.find(p => p.name === fallbackName) || pets[0];
+        // Fallback: build a stub from the profile cache when carousel yields nothing
+        if (!pets.length && profile.petname) {
+            pets.push({
+                name: profile.petname,
+                species: '', color: '', level: '?', health: '?', maxhealth: '?',
+                image: profile.petImage, active: true, petpet: null, petpetimg: null
+            });
+        }
+
+        const activeNameEl = document.querySelector('[id^="navProfilePet__"] a, .profile-dropdown-link');
+        const activePetName = activeNameEl ? activeNameEl.textContent.trim() : profile.petname;
+        let activePet = pets.find(p => p.active) || pets.find(p => p.name === activePetName) || pets[0];
         const inactivePets = pets.filter(p => p.name !== (activePet ? activePet.name : ''));
 
         // Load stored data
@@ -12162,7 +12358,7 @@ return {
             const rawLinks = localStorage.getItem('neoui_home_quicklinks');
             if (rawLinks) quickLinks = JSON.parse(rawLinks);
             else quickLinks = [
-                { name: 'Inventory', url: '/inventory.phtml', icon: '🎒' },
+                { name: 'Quest Log', url: '/questlog/', icon: '📋' },
                 { name: 'Bank', url: '/bank.phtml', icon: '🏦' },
                 { name: 'Shop Wizard', url: '/market.phtml?type=wizard', icon: '🪄' },
                 { name: 'Neoboards', url: '/neoboards/index.phtml', icon: '💬' },
@@ -12179,7 +12375,8 @@ return {
 
         // 3. INIT TOPBAR
         NeoUI.init();
-        NeoUI.buildTopbar({ stats: activeStats, username: username, hasNotification: false });
+        NeoUI.buildTopbar({ stats: activeStats, username: username, hasNotification: profile.hasNotification || false });
+        NeoUI.setProfileInfo(profile);
 
         // 4. BUILD LAYOUT
         const pageWrapper = document.createElement('div');
@@ -12225,22 +12422,39 @@ return {
             clockEl.textContent = formatNST(getNSTDate());
         }, 1000);
 
-        // ── Training status card (live fetch) ────────────────────────────────
-        // Training is shown as pills in the hero banner above.
-        // We also build a hidden detail row per pet that expands from the hero.
-        const trainingDetailContainer = document.createElement('div');
-        trainingDetailContainer.id = 'nui-training-detail';
-        trainingDetailContainer.style.cssText = 'display:none;flex-direction:column;gap:6px;margin-top:4px;';
-        heroBannerAlerts.before(trainingDetailContainer);
-
         // Kick off live training fetch — use captured references, never getElementById
         (async () => {
             try {
-                const res = await fetch('/island/training.phtml?type=status', { credentials: 'include' });
-                const html = await res.text();
-                const doc = new DOMParser().parseFromString(html, 'text/html');
-                const trainingPets = scrapeTrainingStatus(doc);
-                const activePets = trainingPets.filter(p => p.onCourse || p.courseFinished || p.codestonesNeeded.length > 0);
+                // Fetch all three schools in parallel
+                const schools = [
+                    { url: '/island/training.phtml?type=status',  label: 'Mystery Island', icon: '⚔️',  link: '/island/training.phtml' },
+                    { url: '/island/fight_training.phtml?type=status', label: 'Ninja',    icon: '🥷',  link: '/island/fight_training.phtml' },
+                    { url: '/pirates/academy.phtml?type=status',  label: 'Pirate Academy', icon: '⚓', link: '/pirates/academy.phtml' },
+                ];
+
+                const results = await Promise.allSettled(
+                    schools.map(s => fetch(s.url, { credentials: 'include' })
+                        .then(r => r.text())
+                        .then(html => ({ school: s, pets: scrapeTrainingStatus(new DOMParser().parseFromString(html, 'text/html'), s.label) }))
+                    )
+                );
+
+                // Merge, deduplicating by pet name (a pet is only at one school at a time)
+                const seenNames = new Set();
+                const allPets = [];
+                results.forEach(r => {
+                    if (r.status !== 'fulfilled') return;
+                    r.value.pets.forEach(pet => {
+                        if (!seenNames.has(pet.name.toLowerCase())) {
+                            seenNames.add(pet.name.toLowerCase());
+                            pet._schoolLink = r.value.school.link;
+                            pet._schoolIcon = r.value.school.icon;
+                            allPets.push(pet);
+                        }
+                    });
+                });
+
+                const activePets = allPets.filter(p => p.onCourse || p.courseFinished || p.codestonesNeeded.length > 0);
 
                 // Nothing in training — leave pill row hidden
                 if (!activePets.length) return;
@@ -12248,6 +12462,8 @@ return {
                 // Build pills
                 const timerIds = [];
                 trainingPillRow.innerHTML = activePets.map(pet => {
+                    const link = pet._schoolLink || '/island/training.phtml';
+                    const icon = pet._schoolIcon || '⚔️';
                     let pillStyle = 'display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--nui-radius-pill);font-size:12px;font-weight:700;border:1px solid;cursor:pointer;text-decoration:none;';
                     let label;
                     if (pet.courseFinished) {
@@ -12259,11 +12475,11 @@ return {
                     } else {
                         const timerId = 'nui-pill-timer-' + pet.name.replace(/\W/g, '');
                         const h = Math.floor(pet.totalSeconds / 3600), m = Math.floor((pet.totalSeconds % 3600) / 60);
-                        label = `⚔️ ${pet.name} — <span id="${timerId}">${h ? `${h}h ${m}m` : `${m}m`}</span>`;
+                        label = `${icon} ${pet.name} — <span id="${timerId}">${h ? `${h}h ${m}m` : `${m}m`}</span>`;
                         timerIds.push({ id: timerId, seconds: pet.totalSeconds });
                         pillStyle += `background:var(--nui-accent-soft);color:var(--nui-accent);border-color:var(--nui-accent);`;
                     }
-                    return `<a href="/island/training.phtml" style="${pillStyle}">${label}</a>`;
+                    return `<a href="${link}" style="${pillStyle}">${label}</a>`;
                 }).join('');
                 trainingPillRow.style.display = 'flex';
 
@@ -12281,46 +12497,6 @@ return {
                     }, 1000);
                 });
 
-                // Expandable detail rows
-                if (trainingDetailContainer) {
-                    trainingDetailContainer.innerHTML = activePets.map(pet => {
-                        let statusHtml, actionHtml;
-                        if (pet.courseFinished) {
-                            statusHtml = `<span style="font-size:11px;color:var(--nui-success);font-weight:700;">✅ Course Finished!</span>`;
-                            actionHtml = `<a href="/island/training.phtml" class="nui-btn nui-btn-primary nui-btn-sm" style="text-decoration:none;padding:4px 10px;font-size:11px;flex-shrink:0;">Complete!</a>`;
-                        } else if (pet.codestonesNeeded.length > 0) {
-                            statusHtml = `<span style="font-size:11px;color:var(--nui-warning);">Needs: ${pet.codestonesNeeded.join(', ')}</span>`;
-                            actionHtml = `<a href="/island/training.phtml" class="nui-btn nui-btn-primary nui-btn-sm" style="text-decoration:none;padding:4px 10px;font-size:11px;flex-shrink:0;">Pay</a>`;
-                        } else {
-                            const timerId = 'nui-detail-timer-' + pet.name.replace(/\W/g, '');
-                            const fmt2 = s => s <= 0 ? 'Done!' : (Math.floor(s/3600) ? `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m ${s%60}s` : Math.floor(s/60) ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`);
-                            statusHtml = `<span style="font-size:11px;color:var(--nui-text-muted);">${pet.courseSubject} · <span id="${timerId}">${fmt2(pet.totalSeconds)}</span></span>`;
-                            actionHtml = `<a href="/island/training.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;padding:4px 10px;font-size:11px;flex-shrink:0;">View</a>`;
-                            let secs2 = pet.totalSeconds;
-                            setTimeout(() => {
-                                const sp = trainingDetailContainer.querySelector('#' + timerId);
-                                if (!sp) return;
-                                const iv2 = setInterval(() => {
-                                    secs2--;
-                                    if (!trainingDetailContainer.isConnected) { clearInterval(iv2); return; }
-                                    sp.textContent = fmt2(secs2);
-                                    if (secs2 <= 0) clearInterval(iv2);
-                                }, 1000);
-                            }, 0);
-                        }
-                        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:var(--nui-radius-sm);background:var(--nui-surface);border:1px solid var(--nui-border);gap:8px;">
-                            <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-                                <span style="font-size:16px;flex-shrink:0;">⚔️</span>
-                                <div style="display:flex;flex-direction:column;gap:1px;min-width:0;">
-                                    <span style="font-weight:700;font-size:13px;color:var(--nui-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pet.name}</span>
-                                    ${statusHtml}
-                                </div>
-                            </div>
-                            ${actionHtml}
-                        </div>`;
-                    }).join('');
-                    trainingDetailContainer.style.display = 'flex';
-                }
             } catch (e) {
                 // Fetch failed silently — pill row stays hidden, no placeholder shown
             }
@@ -12448,4 +12624,1305 @@ return {
     }
 
     run().catch(err => showFatalError(err));
+})();
+
+// ==============================================================================
+// MODULE 17: SECRET NINJA TRAINING SCHOOL
+// ==============================================================================
+// Activates on: /island/fight_training.phtml
+// Mirrors the Mystery Island Training SPA. Uses Red Codestones. Level cap: 250.
+// ==============================================================================
+(function () {
+    'use strict';
+
+    if (!/\/island\/fight_training\.phtml/.test(location.pathname)) return;
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI || !NeoUI.__ready) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Ninja Training SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    function openCustomSSW(itemName) { if (window.NeoUI && window.NeoUI.openSSW) window.NeoUI.openSSW(itemName); }
+
+    // ── SCRAPERS ─────────────────────────────────────────────────────────────────
+    function scrapeStatus(doc) {
+        const pets = [];
+        const rows = doc.querySelectorAll('table[align="center"] tr');
+        let i = 0;
+        while (i < rows.length) {
+            const headerTd = rows[i] && rows[i].querySelector('td[bgcolor="#efefef"]');
+            if (!headerTd) { i++; continue; }
+            const headerText = headerTd.textContent.trim();
+            const m = headerText.match(/^(.+?)\s+is at Level\s+(\d+)/i) ||
+                      headerText.match(/^(.+?)\s+\(Level\s+(\d+)\)/i);
+            if (!m) { i++; continue; }
+            const name = m[1].trim();
+            const level = parseInt(m[2]) || 0;
+
+            // Try to get pet image from a nearby img
+            let imgSrc = `https://pets.neopets.com/cpn/${name.toLowerCase()}/1/1.png`;
+            const imgEl = rows[i].querySelector('img[src*="neopets"]');
+            if (imgEl) imgSrc = imgEl.src;
+
+            // Scrape stats from the row — format: Str: N  Def: N  Mov: N  HP: N/N
+            const statsText = headerText;
+            const strMatch = statsText.match(/Str(?:ength)?[:\s]+(\d+)/i);
+            const defMatch = statsText.match(/Def(?:ence)?[:\s]+(\d+)/i);
+            const movMatch = statsText.match(/(?:Mov|Agility|Spd)[:\s]+(\d+)/i);
+            const hpMatch  = statsText.match(/(?:HP|Endurance)[:\s]+(\d+)/i);
+
+            let onCourse = false, courseSubject = null, courseFinished = false;
+            let totalSeconds = 0, codestonesNeeded = [];
+
+            const statusText = headerText;
+            if (/is currently studying/i.test(statusText)) {
+                onCourse = true;
+                const subMatch = statusText.match(/studying\s+(.+?)(?:\s+and\s+will|\.|\s*$)/i);
+                if (subMatch) courseSubject = subMatch[1].trim();
+            }
+
+            const dataRow = rows[i + 1];
+            if (dataRow) {
+                const actionTd = dataRow.querySelectorAll('td')[1] || dataRow.querySelector('td');
+                if (actionTd) {
+                    const txt = actionTd.textContent.trim();
+                    if (/Course Finished/i.test(txt)) courseFinished = true;
+                    const tm = txt.match(/(\d+)\s*hrs?,?\s*(\d+)\s*min(?:utes?)?,?\s*(\d+)\s*sec(?:onds?)?/i);
+                    if (tm) totalSeconds = parseInt(tm[1]) * 3600 + parseInt(tm[2]) * 60 + parseInt(tm[3]);
+                    actionTd.querySelectorAll('b').forEach(b => {
+                        const t = b.textContent.trim();
+                        if (/Codestone/i.test(t)) codestonesNeeded.push(t);
+                    });
+                }
+            }
+
+            pets.push({ name, level, str: strMatch ? strMatch[1] : '?', def: defMatch ? defMatch[1] : '?',
+                mov: movMatch ? movMatch[1] : '?', hp: hpMatch ? hpMatch[1] : '?', imgSrc,
+                onCourse, courseSubject, courseFinished, totalSeconds, codestonesNeeded });
+            i += 2;
+        }
+        pets.sort((a, b) => {
+            const score = p => p.courseFinished ? 4 : (p.codestonesNeeded.length > 0 ? 3 : (p.onCourse ? 2 : 1));
+            return score(b) - score(a);
+        });
+        return pets;
+    }
+
+    async function fetchSchool(type) {
+        const res = await fetch(`/island/fight_training.phtml?type=${type}`, { credentials: 'include' });
+        const html = await res.text();
+        return { doc: new DOMParser().parseFromString(html, 'text/html'), raw: html };
+    }
+
+    async function processSchool(type, petName, courseType) {
+        const fd = new FormData();
+        fd.append('type', type);
+        fd.append('pet_name', petName);
+        if (courseType) fd.append('course_type', courseType);
+        const res = await fetch('/island/process_fight_training.phtml', { method: 'POST', credentials: 'include', body: fd });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const contentTd = doc.querySelector('td.content');
+        if (!contentTd) return { ok: true, message: 'Done!' };
+        const text = contentTd.textContent.replace(/\s+/g, ' ').trim();
+        const isError = /error|invalid|cannot|already|not enough|too many/i.test(text);
+        return { ok: !isError, message: text.substring(0, 300) };
+    }
+
+    // ── INIT ─────────────────────────────────────────────────────────────────────
+    async function init() {
+        const profile = NeoUI.scrapeLegacyProfile();
+
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'nui-reset';
+        wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5); max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--nui-space-4);';
+
+        wrapper.innerHTML = `
+            <div style="display:flex;align-items:center;gap:12px;">
+                <img src="//images.neopets.com/items/nin_smoke_bomb.gif" style="width:52px;height:52px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);object-fit:cover;flex-shrink:0;">
+                <div>
+                    <div style="font-family:var(--nui-font-display);font-weight:800;font-size:22px;color:var(--nui-text);">Secret Ninja Training School</div>
+                    <div style="font-size:13px;color:var(--nui-text-muted);font-weight:600;">Red Codestones · Level 250 cap</div>
+                </div>
+            </div>
+        `;
+
+        const tabs = document.createElement('div');
+        tabs.style.cssText = 'display:flex;gap:6px;border-bottom:2px solid var(--nui-border);padding-bottom:0;';
+        const TABS = [{ id: 'status', label: '📋 Status' }, { id: 'courses', label: '📚 Courses' }];
+        const startTab = new URLSearchParams(location.search).get('type') || 'status';
+        let activeTab = TABS.find(t => t.id === startTab) ? startTab : 'status';
+        const tabEls = {};
+        TABS.forEach(t => {
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.textContent = t.label;
+            btn.style.cssText = 'padding:8px 14px;border:none;cursor:pointer;font-weight:700;font-size:13px;border-radius:var(--nui-radius-sm) var(--nui-radius-sm) 0 0;background:transparent;color:var(--nui-text-muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all 0.15s;';
+            tabEls[t.id] = btn; tabs.appendChild(btn);
+        });
+
+        const content = document.createElement('div');
+        content.className = 'nui-surface';
+        content.style.cssText = 'border-radius:var(--nui-radius-lg);overflow:hidden;min-height:200px;box-shadow:0 4px 12px var(--nui-shadow);border:1px solid var(--nui-border);';
+        const contentInner = document.createElement('div');
+        contentInner.style.cssText = 'padding:var(--nui-space-4);';
+        content.appendChild(contentInner);
+        wrapper.appendChild(tabs);
+        wrapper.appendChild(content);
+        document.body.appendChild(wrapper);
+
+        let timerIntervals = [];
+        function clearAllTimers() { timerIntervals.forEach(clearInterval); timerIntervals = []; }
+        function showToast(msg, isError) {
+            const t = document.createElement('div');
+            t.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 18px;border-radius:var(--nui-radius-md);font-size:14px;font-weight:700;max-width:90vw;text-align:center;box-shadow:0 4px 16px var(--nui-shadow);background:${isError ? 'var(--nui-danger)' : 'var(--nui-success)'};color:#fff;transition:opacity 0.3s;`;
+            t.textContent = msg; document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+        }
+
+        async function switchTab(id) {
+            activeTab = id; clearAllTimers();
+            Object.entries(tabEls).forEach(([tid, btn]) => {
+                const active = tid === id;
+                btn.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                btn.style.borderBottomColor = active ? 'var(--nui-accent)' : 'transparent';
+                btn.style.background = active ? 'var(--nui-surface-2)' : 'transparent';
+            });
+            contentInner.innerHTML = '<div style="text-align:center;padding:40px;color:var(--nui-text-faint);">Loading...</div>';
+            try {
+                if (id === 'status') await renderStatus();
+                else if (id === 'courses') await renderCourses();
+            } catch (err) {
+                contentInner.innerHTML = `<div style="color:var(--nui-danger);font-weight:600;text-align:center;">Failed to load: ${err.message}</div>`;
+            }
+        }
+
+        TABS.forEach(t => { tabEls[t.id].addEventListener('click', () => switchTab(t.id)); });
+
+        async function renderStatus() {
+            const { doc } = await fetchSchool('status');
+            const pets = scrapeStatus(doc);
+            if (!pets.length) { contentInner.innerHTML = '<div style="color:var(--nui-text-muted);text-align:center;padding:40px;">No pets found.</div>'; return; }
+            contentInner.innerHTML = '';
+
+            pets.forEach((pet, i) => {
+                const card = document.createElement('div');
+                card.style.cssText = `margin-bottom:12px;border-radius:var(--nui-radius-md);overflow:hidden;border:${pet.courseFinished || pet.codestonesNeeded.length > 0 ? '2px solid var(--nui-accent)' : '1px solid var(--nui-border)'};background:var(--nui-surface-2);`;
+
+                let statusBadge = '';
+                if (pet.courseFinished) statusBadge = '<span class="nui-badge nui-badge-success">Course Finished!</span>';
+                else if (pet.codestonesNeeded.length > 0) statusBadge = '<span class="nui-badge nui-badge-warning">Awaiting Payment</span>';
+                else if (pet.onCourse) statusBadge = `<span class="nui-badge">📚 ${pet.courseSubject || 'Training'} · <span id="nui-ntimer-${i}">Loading...</span></span>`;
+                else statusBadge = '<span class="nui-badge" style="opacity:0.5;">Not enrolled</span>';
+
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;">
+                        <img src="${pet.imgSrc}" style="width:48px;height:48px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);object-fit:cover;flex-shrink:0;" onerror="this.src='https://images.neopets.com/themes/h5/basic/images/mystery-icon.png'">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-family:var(--nui-font-display);font-weight:800;font-size:16px;color:var(--nui-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pet.name}</div>
+                            <div style="font-size:12px;color:var(--nui-text-muted);margin-top:2px;">${statusBadge}</div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;flex-shrink:0;">
+                            ${[['Lvl',pet.level,'var(--nui-text)'],['Str',pet.str,'var(--nui-danger)'],['Def',pet.def,'var(--nui-accent-2)'],['Spd',pet.mov,'var(--nui-text)'],['HP',pet.hp,'var(--nui-success)']].map(([l,v,c])=>`<div style="display:flex;flex-direction:column;gap:1px;"><span style="font-size:9px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">${l}</span><span style="font-size:12px;font-weight:700;color:${c};">${v}</span></div>`).join('')}
+                        </div>
+                    </div>
+                `;
+
+                if (pet.onCourse && pet.totalSeconds > 0) {
+                    let secs = pet.totalSeconds;
+                    const fmt = s => { const h = String(Math.floor(s/3600)).padStart(2,'0'), mi = String(Math.floor((s%3600)/60)).padStart(2,'0'), sc = String(s%60).padStart(2,'0'); return `${h}:${mi}:${sc}`; };
+                    const el = card.querySelector(`#nui-ntimer-${i}`);
+                    if (el) el.textContent = fmt(secs);
+                    const iv = setInterval(() => { secs--; const e2 = card.querySelector(`#nui-ntimer-${i}`); if (!e2 || !card.isConnected) { clearInterval(iv); return; } e2.textContent = secs > 0 ? fmt(secs) : 'Ready!'; }, 1000);
+                    timerIntervals.push(iv);
+                }
+
+                if (pet.courseFinished) {
+                    const footer = document.createElement('div');
+                    footer.style.cssText = 'padding:8px 12px;border-top:1px solid var(--nui-border);background:var(--nui-success-soft);';
+                    footer.innerHTML = `<button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-complete" data-pet="${pet.name}" style="width:100%;padding:8px;background:var(--nui-success);color:var(--nui-surface);">✓ Complete Course</button>`;
+                    card.appendChild(footer);
+                } else if (pet.codestonesNeeded.length > 0) {
+                    const footer = document.createElement('div');
+                    footer.style.cssText = 'padding:12px;border-top:1px solid var(--nui-border);background:var(--nui-warning-soft);display:flex;flex-direction:column;gap:8px;';
+                    const payRow = document.createElement('div');
+                    payRow.style.cssText = 'display:flex;gap:8px;justify-content:space-between;align-items:center;';
+                    payRow.innerHTML = `<div style="font-size:12px;font-weight:800;color:var(--nui-warning);text-transform:uppercase;">Red Codestones Required</div><div style="display:flex;gap:6px;"><button type="button" class="nui-btn nui-btn-danger nui-btn-sm btn-cancel" data-pet="${pet.name}" style="padding:6px 12px;font-size:11px;">Cancel</button><button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-pay" data-pet="${pet.name}" style="padding:6px 12px;font-size:11px;">Pay All</button></div>`;
+                    footer.appendChild(payRow);
+                    const stonesList = document.createElement('div');
+                    stonesList.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+                    pet.codestonesNeeded.forEach(stoneName => {
+                        const row = document.createElement('div');
+                        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;background:var(--nui-surface);border:1px solid var(--nui-border);padding:6px 10px;border-radius:var(--nui-radius-sm);';
+                        row.innerHTML = `<span style="font-size:13px;font-weight:700;color:var(--nui-text);">${stoneName}</span><div style="display:flex;gap:6px;"><button type="button" class="nui-btn nui-btn-secondary nui-btn-sm btn-ssw" style="padding:4px 8px;font-size:11px;">SSW</button><a href="/market.phtml?type=wizard&string=${encodeURIComponent(stoneName)}" target="_blank" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:4px 8px;font-size:11px;text-decoration:none;">SW</a><a href="/safetydeposit.phtml?obj_name=${encodeURIComponent(stoneName)}&category=0" target="_blank" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:4px 8px;font-size:11px;text-decoration:none;">SDB</a></div>`;
+                        row.querySelector('.btn-ssw').addEventListener('click', () => openCustomSSW(stoneName));
+                        stonesList.appendChild(row);
+                    });
+                    footer.appendChild(stonesList);
+                    card.appendChild(footer);
+                }
+
+                contentInner.appendChild(card);
+            });
+
+            contentInner.querySelectorAll('.btn-complete').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const pn = btn.getAttribute('data-pet'); btn.textContent = 'Processing...'; btn.disabled = true;
+                    const r = await processSchool('complete', pn); showToast(r.ok ? `${pn}'s course complete! 🎉` : r.message, !r.ok);
+                    if (r.ok) await renderStatus();
+                });
+            });
+            contentInner.querySelectorAll('.btn-pay').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const pn = btn.getAttribute('data-pet'); btn.textContent = 'Paying...'; btn.disabled = true;
+                    const r = await processSchool('pay', pn); showToast(r.ok ? `Paid for ${pn}'s course!` : r.message, !r.ok);
+                    if (r.ok) await renderStatus(); else { btn.textContent = 'Pay All'; btn.disabled = false; }
+                });
+            });
+            contentInner.querySelectorAll('.btn-cancel').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const pn = btn.getAttribute('data-pet'); btn.textContent = '...'; btn.disabled = true;
+                    const r = await processSchool('cancel', pn); showToast(r.ok ? `Cancelled ${pn}'s course.` : r.message, !r.ok);
+                    if (r.ok) await renderStatus(); else { btn.textContent = 'Cancel'; btn.disabled = false; }
+                });
+            });
+        }
+
+        async function renderCourses() {
+            const { doc } = await fetchSchool('status');
+            const pets = scrapeStatus(doc);
+            contentInner.innerHTML = '';
+            const eligible = pets.filter(p => !p.onCourse && !p.courseFinished && p.codestonesNeeded.length === 0 && p.level < 250);
+            if (!eligible.length) { contentInner.innerHTML = '<div style="text-align:center;padding:40px;color:var(--nui-text-muted);">All pets are currently training or awaiting payment.</div>'; return; }
+
+            const courseTypes = ['Strength', 'Defence', 'Agility', 'Endurance', 'Level'];
+            const ctrlRow = document.createElement('div');
+            ctrlRow.style.cssText = 'display:flex;gap:8px;margin-bottom:var(--nui-space-4);align-items:center;flex-wrap:wrap;';
+            ctrlRow.innerHTML = `<span style="font-size:12px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">Course Type</span><select class="nui-select" id="nui-ncourse-type" style="flex:1;min-width:120px;max-width:200px;font-weight:700;">${courseTypes.map(c => `<option value="${c}">${c}</option>`).join('')}</select>`;
+            contentInner.appendChild(ctrlRow);
+
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:var(--nui-space-3);';
+            eligible.forEach(pet => {
+                const card = document.createElement('div');
+                card.style.cssText = 'display:flex;flex-direction:column;align-items:center;text-align:center;padding:12px;border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);background:var(--nui-surface-2);';
+                card.innerHTML = `<img src="${pet.imgSrc}" style="width:54px;height:54px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);object-fit:cover;margin-bottom:8px;" onerror="this.src='https://images.neopets.com/themes/h5/basic/images/mystery-icon.png'"><div style="font-weight:800;font-size:15px;color:var(--nui-text);width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pet.name}</div><div style="font-size:12px;color:var(--nui-text-muted);margin-top:2px;margin-bottom:12px;">Lvl ${pet.level} · Red Codestone</div><button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-start" data-pet="${pet.name}" style="width:100%;">Start Course</button>`;
+                grid.appendChild(card);
+            });
+            contentInner.appendChild(grid);
+
+            contentInner.querySelectorAll('.btn-start').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const pn = btn.getAttribute('data-pet'), ct = document.getElementById('nui-ncourse-type').value;
+                    btn.textContent = '...'; btn.disabled = true;
+                    const r = await processSchool('start', pn, ct); showToast(r.ok ? `${pn} started ${ct}!` : r.message, !r.ok);
+                    if (r.ok) await switchTab('status'); else { btn.textContent = 'Start'; btn.disabled = false; }
+                });
+            });
+        }
+
+        switchTab(activeTab);
+    }
+
+    let booted = false;
+    function boot() { if (booted) return; booted = true; init().catch(showFatalError); }
+    if (document.readyState === 'complete' || document.readyState === 'interactive') boot();
+    else document.addEventListener('DOMContentLoaded', boot);
+})();
+
+// ==============================================================================
+// MODULE 18: SWASHBUCKLING ACADEMY (PIRATE TRAINING)
+// ==============================================================================
+// Activates on: /pirates/academy.phtml
+// Uses Dubloons instead of Codestones. Level cap: 40.
+// ==============================================================================
+(function () {
+    'use strict';
+
+    if (!/\/pirates\/academy\.phtml/.test(location.pathname)) return;
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI || !NeoUI.__ready) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Swashbuckling Academy SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    function openCustomSSW(itemName) { if (window.NeoUI && window.NeoUI.openSSW) window.NeoUI.openSSW(itemName); }
+
+    // ── SCRAPERS ─────────────────────────────────────────────────────────────────
+    function scrapeStatus(doc) {
+        const pets = [];
+        const rows = doc.querySelectorAll('table[align="center"] tr');
+        let i = 0;
+        while (i < rows.length) {
+            const headerTd = rows[i] && rows[i].querySelector('td[bgcolor="#efefef"]');
+            if (!headerTd) { i++; continue; }
+            const headerText = headerTd.textContent.trim();
+            const m = headerText.match(/^(.+?)\s+is at Level\s+(\d+)/i) ||
+                      headerText.match(/^(.+?)\s+\(Level\s+(\d+)\)/i);
+            if (!m) { i++; continue; }
+            const name = m[1].trim();
+            const level = parseInt(m[2]) || 0;
+            let imgSrc = `https://pets.neopets.com/cpn/${name.toLowerCase()}/1/1.png`;
+            const imgEl = rows[i].querySelector('img[src*="neopets"]');
+            if (imgEl) imgSrc = imgEl.src;
+
+            const strMatch = headerText.match(/Str(?:ength)?[:\s]+(\d+)/i);
+            const defMatch = headerText.match(/Def(?:ence)?[:\s]+(\d+)/i);
+            const movMatch = headerText.match(/(?:Mov|Agility|Spd)[:\s]+(\d+)/i);
+            const hpMatch  = headerText.match(/(?:HP|Endurance)[:\s]+(\d+)/i);
+
+            let onCourse = false, courseSubject = null, courseFinished = false;
+            let totalSeconds = 0, dubloonsNeeded = [];
+
+            if (/is currently studying/i.test(headerText)) {
+                onCourse = true;
+                const subMatch = headerText.match(/studying\s+(.+?)(?:\s+and\s+will|\.|\s*$)/i);
+                if (subMatch) courseSubject = subMatch[1].trim();
+            }
+
+            const dataRow = rows[i + 1];
+            if (dataRow) {
+                const actionTd = dataRow.querySelectorAll('td')[1] || dataRow.querySelector('td');
+                if (actionTd) {
+                    const txt = actionTd.textContent.trim();
+                    if (/Course Finished/i.test(txt)) courseFinished = true;
+                    const tm = txt.match(/(\d+)\s*hrs?,?\s*(\d+)\s*min(?:utes?)?,?\s*(\d+)\s*sec(?:onds?)?/i);
+                    if (tm) totalSeconds = parseInt(tm[1]) * 3600 + parseInt(tm[2]) * 60 + parseInt(tm[3]);
+                    // Pirate Academy uses Dubloons
+                    actionTd.querySelectorAll('b').forEach(b => {
+                        const t = b.textContent.trim();
+                        if (/dubloon/i.test(t)) dubloonsNeeded.push(t);
+                    });
+                    // Also check for "X Dubloon Coin" text patterns
+                    const dubMatch = txt.match(/(\d+-?\w*\s*Dubloon\s*Coin(?:s)?)/gi);
+                    if (dubMatch) dubMatch.forEach(d => { if (!dubloonsNeeded.includes(d)) dubloonsNeeded.push(d); });
+                }
+            }
+
+            pets.push({ name, level, str: strMatch ? strMatch[1] : '?', def: defMatch ? defMatch[1] : '?',
+                mov: movMatch ? movMatch[1] : '?', hp: hpMatch ? hpMatch[1] : '?', imgSrc,
+                onCourse, courseSubject, courseFinished, totalSeconds, dubloonsNeeded });
+            i += 2;
+        }
+        pets.sort((a, b) => {
+            const score = p => p.courseFinished ? 4 : (p.dubloonsNeeded.length > 0 ? 3 : (p.onCourse ? 2 : 1));
+            return score(b) - score(a);
+        });
+        return pets;
+    }
+
+    async function fetchAcademy(type) {
+        const res = await fetch(`/pirates/academy.phtml?type=${type}`, { credentials: 'include' });
+        const html = await res.text();
+        return { doc: new DOMParser().parseFromString(html, 'text/html'), raw: html };
+    }
+
+    async function processAcademy(type, petName, courseType) {
+        const fd = new FormData();
+        fd.append('type', type);
+        fd.append('pet_name', petName);
+        if (courseType) fd.append('course_type', courseType);
+        const res = await fetch('/pirates/process_academy.phtml', { method: 'POST', credentials: 'include', body: fd });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const contentTd = doc.querySelector('td.content');
+        if (!contentTd) return { ok: true, message: 'Done!' };
+        const text = contentTd.textContent.replace(/\s+/g, ' ').trim();
+        const isError = /error|invalid|cannot|already|not enough|too many/i.test(text);
+        return { ok: !isError, message: text.substring(0, 300) };
+    }
+
+    // ── INIT ─────────────────────────────────────────────────────────────────────
+    async function init() {
+        const profile = NeoUI.scrapeLegacyProfile();
+
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'nui-reset';
+        wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5); max-width: 700px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--nui-space-4);';
+
+        wrapper.innerHTML = `
+            <div style="display:flex;align-items:center;gap:12px;">
+                <img src="//images.neopets.com/items/toy_pirate_cutlass.gif" style="width:52px;height:52px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);object-fit:cover;flex-shrink:0;">
+                <div>
+                    <div style="font-family:var(--nui-font-display);font-weight:800;font-size:22px;color:var(--nui-text);">Swashbuckling Academy</div>
+                    <div style="font-size:13px;color:var(--nui-text-muted);font-weight:600;">Dubloons accepted · Level 40 cap</div>
+                </div>
+            </div>
+        `;
+
+        const tabs = document.createElement('div');
+        tabs.style.cssText = 'display:flex;gap:6px;border-bottom:2px solid var(--nui-border);padding-bottom:0;';
+        const TABS = [{ id: 'status', label: '📋 Status' }, { id: 'courses', label: '📚 Courses' }];
+        const startTab = new URLSearchParams(location.search).get('type') || 'status';
+        let activeTab = TABS.find(t => t.id === startTab) ? startTab : 'status';
+        const tabEls = {};
+        TABS.forEach(t => {
+            const btn = document.createElement('button');
+            btn.type = 'button'; btn.textContent = t.label;
+            btn.style.cssText = 'padding:8px 14px;border:none;cursor:pointer;font-weight:700;font-size:13px;border-radius:var(--nui-radius-sm) var(--nui-radius-sm) 0 0;background:transparent;color:var(--nui-text-muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all 0.15s;';
+            tabEls[t.id] = btn; tabs.appendChild(btn);
+        });
+
+        const content = document.createElement('div');
+        content.className = 'nui-surface';
+        content.style.cssText = 'border-radius:var(--nui-radius-lg);overflow:hidden;min-height:200px;box-shadow:0 4px 12px var(--nui-shadow);border:1px solid var(--nui-border);';
+        const contentInner = document.createElement('div');
+        contentInner.style.cssText = 'padding:var(--nui-space-4);';
+        content.appendChild(contentInner);
+        wrapper.appendChild(tabs);
+        wrapper.appendChild(content);
+        document.body.appendChild(wrapper);
+
+        let timerIntervals = [];
+        function clearAllTimers() { timerIntervals.forEach(clearInterval); timerIntervals = []; }
+        function showToast(msg, isError) {
+            const t = document.createElement('div');
+            t.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 18px;border-radius:var(--nui-radius-md);font-size:14px;font-weight:700;max-width:90vw;text-align:center;box-shadow:0 4px 16px var(--nui-shadow);background:${isError ? 'var(--nui-danger)' : 'var(--nui-success)'};color:#fff;transition:opacity 0.3s;`;
+            t.textContent = msg; document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 3000);
+        }
+
+        async function switchTab(id) {
+            activeTab = id; clearAllTimers();
+            Object.entries(tabEls).forEach(([tid, btn]) => {
+                const active = tid === id;
+                btn.style.color = active ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                btn.style.borderBottomColor = active ? 'var(--nui-accent)' : 'transparent';
+                btn.style.background = active ? 'var(--nui-surface-2)' : 'transparent';
+            });
+            contentInner.innerHTML = '<div style="text-align:center;padding:40px;color:var(--nui-text-faint);">Loading...</div>';
+            try {
+                if (id === 'status') await renderStatus();
+                else if (id === 'courses') await renderCourses();
+            } catch (err) {
+                contentInner.innerHTML = `<div style="color:var(--nui-danger);font-weight:600;text-align:center;">Failed to load: ${err.message}</div>`;
+            }
+        }
+
+        TABS.forEach(t => { tabEls[t.id].addEventListener('click', () => switchTab(t.id)); });
+
+        async function renderStatus() {
+            const { doc } = await fetchAcademy('status');
+            const pets = scrapeStatus(doc);
+            if (!pets.length) { contentInner.innerHTML = '<div style="color:var(--nui-text-muted);text-align:center;padding:40px;">No pets found.</div>'; return; }
+            contentInner.innerHTML = '';
+
+            pets.forEach((pet, i) => {
+                const card = document.createElement('div');
+                card.style.cssText = `margin-bottom:12px;border-radius:var(--nui-radius-md);overflow:hidden;border:${pet.courseFinished || pet.dubloonsNeeded.length > 0 ? '2px solid var(--nui-accent)' : '1px solid var(--nui-border)'};background:var(--nui-surface-2);`;
+
+                let statusBadge = '';
+                if (pet.courseFinished) statusBadge = '<span class="nui-badge nui-badge-success">Course Finished!</span>';
+                else if (pet.dubloonsNeeded.length > 0) statusBadge = '<span class="nui-badge nui-badge-warning">Awaiting Payment</span>';
+                else if (pet.onCourse) statusBadge = `<span class="nui-badge">⚓ ${pet.courseSubject || 'Training'} · <span id="nui-atimer-${i}">Loading...</span></span>`;
+                else statusBadge = '<span class="nui-badge" style="opacity:0.5;">Not enrolled</span>';
+
+                card.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;">
+                        <img src="${pet.imgSrc}" style="width:48px;height:48px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);object-fit:cover;flex-shrink:0;" onerror="this.src='https://images.neopets.com/themes/h5/basic/images/mystery-icon.png'">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-family:var(--nui-font-display);font-weight:800;font-size:16px;color:var(--nui-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pet.name}</div>
+                            <div style="font-size:12px;color:var(--nui-text-muted);margin-top:2px;">${statusBadge}</div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;flex-shrink:0;">
+                            ${[['Lvl',pet.level,'var(--nui-text)'],['Str',pet.str,'var(--nui-danger)'],['Def',pet.def,'var(--nui-accent-2)'],['Spd',pet.mov,'var(--nui-text)'],['HP',pet.hp,'var(--nui-success)']].map(([l,v,c])=>`<div style="display:flex;flex-direction:column;gap:1px;"><span style="font-size:9px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">${l}</span><span style="font-size:12px;font-weight:700;color:${c};">${v}</span></div>`).join('')}
+                        </div>
+                    </div>
+                `;
+
+                if (pet.onCourse && pet.totalSeconds > 0) {
+                    let secs = pet.totalSeconds;
+                    const fmt = s => { const h = String(Math.floor(s/3600)).padStart(2,'0'), mi = String(Math.floor((s%3600)/60)).padStart(2,'0'), sc = String(s%60).padStart(2,'0'); return `${h}:${mi}:${sc}`; };
+                    const el = card.querySelector(`#nui-atimer-${i}`);
+                    if (el) el.textContent = fmt(secs);
+                    const iv = setInterval(() => { secs--; const e2 = card.querySelector(`#nui-atimer-${i}`); if (!e2 || !card.isConnected) { clearInterval(iv); return; } e2.textContent = secs > 0 ? fmt(secs) : 'Ready!'; }, 1000);
+                    timerIntervals.push(iv);
+                }
+
+                if (pet.courseFinished) {
+                    const footer = document.createElement('div');
+                    footer.style.cssText = 'padding:8px 12px;border-top:1px solid var(--nui-border);background:var(--nui-success-soft);';
+                    footer.innerHTML = `<button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-complete" data-pet="${pet.name}" style="width:100%;padding:8px;background:var(--nui-success);color:var(--nui-surface);">✓ Complete Course</button>`;
+                    card.appendChild(footer);
+                } else if (pet.dubloonsNeeded.length > 0) {
+                    const footer = document.createElement('div');
+                    footer.style.cssText = 'padding:12px;border-top:1px solid var(--nui-border);background:var(--nui-warning-soft);display:flex;flex-direction:column;gap:8px;';
+                    const payRow = document.createElement('div');
+                    payRow.style.cssText = 'display:flex;gap:8px;justify-content:space-between;align-items:center;';
+                    payRow.innerHTML = `<div style="font-size:12px;font-weight:800;color:var(--nui-warning);text-transform:uppercase;">Dubloons Required</div><div style="display:flex;gap:6px;"><button type="button" class="nui-btn nui-btn-danger nui-btn-sm btn-cancel" data-pet="${pet.name}" style="padding:6px 12px;font-size:11px;">Cancel</button><button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-pay" data-pet="${pet.name}" style="padding:6px 12px;font-size:11px;">Pay All</button></div>`;
+                    footer.appendChild(payRow);
+                    const dubList = document.createElement('div');
+                    dubList.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+                    pet.dubloonsNeeded.forEach(dub => {
+                        const row = document.createElement('div');
+                        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;background:var(--nui-surface);border:1px solid var(--nui-border);padding:6px 10px;border-radius:var(--nui-radius-sm);';
+                        row.innerHTML = `<span style="font-size:13px;font-weight:700;color:var(--nui-text);">${dub}</span><div style="display:flex;gap:6px;"><button type="button" class="nui-btn nui-btn-secondary nui-btn-sm btn-ssw" style="padding:4px 8px;font-size:11px;">SSW</button><a href="/market.phtml?type=wizard&string=${encodeURIComponent(dub)}" target="_blank" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:4px 8px;font-size:11px;text-decoration:none;">SW</a><a href="/safetydeposit.phtml?obj_name=${encodeURIComponent(dub)}&category=0" target="_blank" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:4px 8px;font-size:11px;text-decoration:none;">SDB</a></div>`;
+                        row.querySelector('.btn-ssw').addEventListener('click', () => openCustomSSW(dub));
+                        dubList.appendChild(row);
+                    });
+                    footer.appendChild(dubList);
+                    card.appendChild(footer);
+                }
+
+                contentInner.appendChild(card);
+            });
+
+            contentInner.querySelectorAll('.btn-complete').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const pn = btn.getAttribute('data-pet'); btn.textContent = 'Processing...'; btn.disabled = true;
+                    const r = await processAcademy('complete', pn); showToast(r.ok ? `${pn}'s course complete! 🎉` : r.message, !r.ok);
+                    if (r.ok) await renderStatus();
+                });
+            });
+            contentInner.querySelectorAll('.btn-pay').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const pn = btn.getAttribute('data-pet'); btn.textContent = 'Paying...'; btn.disabled = true;
+                    const r = await processAcademy('pay', pn); showToast(r.ok ? `Paid for ${pn}'s course!` : r.message, !r.ok);
+                    if (r.ok) await renderStatus(); else { btn.textContent = 'Pay All'; btn.disabled = false; }
+                });
+            });
+            contentInner.querySelectorAll('.btn-cancel').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const pn = btn.getAttribute('data-pet'); btn.textContent = '...'; btn.disabled = true;
+                    const r = await processAcademy('cancel', pn); showToast(r.ok ? `Cancelled ${pn}'s course.` : r.message, !r.ok);
+                    if (r.ok) await renderStatus(); else { btn.textContent = 'Cancel'; btn.disabled = false; }
+                });
+            });
+        }
+
+        async function renderCourses() {
+            const { doc } = await fetchAcademy('status');
+            const pets = scrapeStatus(doc);
+            contentInner.innerHTML = '';
+            const eligible = pets.filter(p => !p.onCourse && !p.courseFinished && p.dubloonsNeeded.length === 0 && p.level < 40);
+            if (!eligible.length) { contentInner.innerHTML = '<div style="text-align:center;padding:40px;color:var(--nui-text-muted);">All pets are training or awaiting payment — or level 40+ (use MI Training).</div>'; return; }
+
+            const courseTypes = ['Strength', 'Defence', 'Agility', 'Endurance', 'Level'];
+            const ctrlRow = document.createElement('div');
+            ctrlRow.style.cssText = 'display:flex;gap:8px;margin-bottom:var(--nui-space-4);align-items:center;flex-wrap:wrap;';
+            ctrlRow.innerHTML = `<span style="font-size:12px;font-weight:800;color:var(--nui-text-faint);text-transform:uppercase;">Course Type</span><select class="nui-select" id="nui-acourse-type" style="flex:1;min-width:120px;max-width:200px;font-weight:700;">${courseTypes.map(c => `<option value="${c}">${c}</option>`).join('')}</select>`;
+            contentInner.appendChild(ctrlRow);
+
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:var(--nui-space-3);';
+            eligible.forEach(pet => {
+                const card = document.createElement('div');
+                card.style.cssText = 'display:flex;flex-direction:column;align-items:center;text-align:center;padding:12px;border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);background:var(--nui-surface-2);';
+                // Dubloon cost: level 1-10 = 1 dubloon, 11-20 = 2, 21-30 = 5, 31-40 = 10
+                const dubCost = pet.level <= 10 ? '1 Dubloon' : pet.level <= 20 ? '2 Dubloons' : pet.level <= 30 ? '5 Dubloons' : '10 Dubloons';
+                card.innerHTML = `<img src="${pet.imgSrc}" style="width:54px;height:54px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);object-fit:cover;margin-bottom:8px;" onerror="this.src='https://images.neopets.com/themes/h5/basic/images/mystery-icon.png'"><div style="font-weight:800;font-size:15px;color:var(--nui-text);width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pet.name}</div><div style="font-size:12px;color:var(--nui-text-muted);margin-top:2px;margin-bottom:12px;">Lvl ${pet.level} · ${dubCost}</div><button type="button" class="nui-btn nui-btn-primary nui-btn-sm btn-start" data-pet="${pet.name}" style="width:100%;">Start Course</button>`;
+                grid.appendChild(card);
+            });
+            contentInner.appendChild(grid);
+
+            contentInner.querySelectorAll('.btn-start').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const pn = btn.getAttribute('data-pet'), ct = document.getElementById('nui-acourse-type').value;
+                    btn.textContent = '...'; btn.disabled = true;
+                    const r = await processAcademy('start', pn, ct); showToast(r.ok ? `${pn} started ${ct}!` : r.message, !r.ok);
+                    if (r.ok) await switchTab('status'); else { btn.textContent = 'Start'; btn.disabled = false; }
+                });
+            });
+        }
+
+        switchTab(activeTab);
+    }
+
+    let booted = false;
+    function boot() { if (booted) return; booted = true; init().catch(showFatalError); }
+    if (document.readyState === 'complete' || document.readyState === 'interactive') boot();
+    else document.addEventListener('DOMContentLoaded', boot);
+})();
+
+// ==============================================================================
+// MODULE 16: GAMES ROOM + RUFFLE WRAPPER
+// ==============================================================================
+(function () {
+    'use strict';
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI || !NeoUI.__ready) return;
+
+    const path = location.pathname;
+    const params = new URLSearchParams(location.search);
+
+    // ── Ruffle player wrapper ──────────────────────────────────────────────────
+    if (/^\/games\/game\.phtml$/.test(path) && params.has('game_id')) {
+        const initRuffleWrap = function () {
+            // Scrape game metadata before nuking
+            const titleEl = document.querySelector('h1, .game-title, #page_title, .content h2');
+            const gameTitle = titleEl ? titleEl.textContent.trim() : 'Game';
+            const scoreEl = document.querySelector('.game-score, #game_score, [id*="score"]');
+            const scoreText = scoreEl ? scoreEl.textContent.trim() : null;
+
+            // Preserve the Ruffle player element — it starts loading immediately
+            const rufflePlayer = document.querySelector('ruffle-player');
+            if (!rufflePlayer) return; // H5 or unknown — bail
+
+            // Detach from DOM so we can rebuild around it
+            const ruffleClone = rufflePlayer.parentNode ? rufflePlayer.parentNode.removeChild(rufflePlayer) : rufflePlayer;
+
+            // Scrape the score submit form if present (outside the SWF)
+            const submitForm = document.querySelector('form[action*="sendtoscore"], form[action*="score"], #submitForm');
+            const submitFormClone = submitForm ? submitForm.parentNode.removeChild(submitForm) : null;
+
+            // Nuke and rebuild
+            document.body.innerHTML = '';
+            document.documentElement.style.background = 'var(--nui-bg)';
+            document.body.style.cssText = 'margin:0;padding:0;background:var(--nui-bg);';
+            document.body.className = 'nui-reset';
+
+            NeoUI.init();
+            NeoUI.buildTopbar({ username: '' });
+
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:calc(var(--nui-topbar-h) + 12px) 12px 24px;box-sizing:border-box;gap:12px;';
+
+            // Game header
+            const header = document.createElement('div');
+            header.style.cssText = 'width:100%;max-width:700px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;';
+            header.innerHTML = `
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <a href="/games/" style="font-size:20px;text-decoration:none;color:var(--nui-text-muted);" title="Back to Games Room">🕹️</a>
+                    <div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">${gameTitle}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <a href="/games/hiscores.phtml?game_id=${params.get('game_id')}" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;">🏆 Hi-Scores</a>
+                </div>
+            `;
+
+            // Player container
+            const playerWrap = document.createElement('div');
+            playerWrap.style.cssText = 'width:100%;max-width:700px;border-radius:var(--nui-radius-lg);overflow:hidden;border:1px solid var(--nui-border);box-shadow:0 4px 24px var(--nui-shadow);background:#000;aspect-ratio:4/3;position:relative;';
+            ruffleClone.style.cssText = 'width:100%;height:100%;display:block;';
+            playerWrap.appendChild(ruffleClone);
+
+            wrapper.appendChild(header);
+            wrapper.appendChild(playerWrap);
+
+            // Score submission form — reskin and append below player if present
+            if (submitFormClone) {
+                const formWrap = document.createElement('div');
+                formWrap.className = 'nui-surface';
+                formWrap.style.cssText = 'width:100%;max-width:700px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);padding:var(--nui-space-4);display:flex;flex-direction:column;gap:10px;';
+                formWrap.innerHTML = `<div style="font-family:var(--nui-font-display);font-size:16px;font-weight:800;color:var(--nui-text);">Submit Score</div>`;
+                // Style the submit button inside the form
+                submitFormClone.querySelectorAll('input[type="submit"], button[type="submit"]').forEach(btn => {
+                    btn.className = 'nui-btn nui-btn-primary nui-btn-sm';
+                    btn.style.cssText = 'margin-top:6px;';
+                });
+                formWrap.appendChild(submitFormClone);
+                wrapper.appendChild(formWrap);
+            }
+
+            document.body.appendChild(wrapper);
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initRuffleWrap);
+        else initRuffleWrap();
+        return;
+    }
+
+    // ── Games room index ───────────────────────────────────────────────────────
+    // The /games/ root shows a showcase, not the full list. We fetch the
+    // /games/category.phtml (all-games A-Z) page and scrape div.ctp-med from it.
+    if (path === '/games/' || path === '/games/index.phtml' || path === '/games/category.phtml') {
+        const initGamesRoom = function () {
+            // Nuke immediately so the old page doesn't flash
+            document.body.innerHTML = '';
+            document.documentElement.style.background = 'var(--nui-bg)';
+            document.body.style.cssText = 'margin:0;padding:0;background:var(--nui-bg);';
+            document.body.className = 'nui-reset';
+            NeoUI.init();
+            NeoUI.buildTopbar({ username: '' });
+
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'min-height:100vh;padding:calc(var(--nui-topbar-h) + 16px) 16px 32px;box-sizing:border-box;max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px;';
+
+            // Header + search
+            const hdr = document.createElement('div');
+            hdr.style.cssText = 'display:flex;flex-direction:column;gap:12px;';
+            hdr.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                    <div style="font-family:var(--nui-font-display);font-size:26px;font-weight:800;color:var(--nui-text);">🕹️ Games Room</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <a href="/games/favourites.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;">⭐ Favourites</a>
+                        <a href="/games/hiscores.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;">🏆 Hi-Scores</a>
+                        <a href="/games/category.phtml?sortby=pop" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;">🔥 Popular</a>
+                    </div>
+                </div>
+                <input type="text" id="nui-games-search" placeholder="Filter games…" class="nui-input" style="max-width:340px;padding:8px 12px;font-size:14px;">
+            `;
+            wrapper.appendChild(hdr);
+
+            // Loading state
+            const loading = document.createElement('div');
+            loading.style.cssText = 'display:flex;align-items:center;gap:10px;padding:32px 0;color:var(--nui-text-muted);font-size:14px;';
+            loading.innerHTML = `<div style="width:20px;height:20px;border:3px solid var(--nui-border);border-top-color:var(--nui-accent);border-radius:50%;animation:spin 1s linear infinite;flex-shrink:0;"></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>Loading games…`;
+            wrapper.appendChild(loading);
+            document.body.appendChild(wrapper);
+
+            // Determine which page to fetch — if we're already on category.phtml use current doc
+            const fetchUrl = (path === '/games/category.phtml')
+                ? null  // already have the DOM
+                : '/games/category.phtml';
+
+            const parseGames = function (doc) {
+                const games = [];
+                const seen = new Set();
+
+                doc.querySelectorAll('div.ctp-med').forEach(el => {
+                    const link = el.querySelector('a[href]');
+                    const img = el.querySelector('img');
+                    const nameEl = el.querySelector('div.name a') || el.querySelector('a[title]');
+                    if (!link) return;
+
+                    const href = link.getAttribute('href');
+                    const title = (nameEl ? nameEl.textContent : link.getAttribute('title') || '').trim();
+                    if (!title || seen.has(href)) return;
+                    seen.add(href);
+
+                    const isRuffle = href.includes('/games/game.phtml');
+                    const isH5 = href.includes('/games/h5game.phtml');
+                    // Include all — Cellblock, Cheat!, etc. go to their own pages
+                    const isFlashCustom = !isRuffle && !isH5 && href.startsWith('/');
+
+                    games.push({
+                        href,
+                        title,
+                        img: img ? img.src : null,
+                        isRuffle,
+                        isH5,
+                        isFlashCustom,
+                    });
+                });
+
+                return games;
+            };
+
+            const renderGames = function (games) {
+                loading.remove();
+
+                if (!games.length) {
+                    const empty = document.createElement('div');
+                    empty.style.cssText = 'padding:32px;text-align:center;color:var(--nui-text-muted);font-size:14px;';
+                    empty.textContent = 'No games found — Neopets may have updated their markup.';
+                    wrapper.appendChild(empty);
+                    return;
+                }
+
+                const ruffle = games.filter(g => g.isRuffle);
+                const h5 = games.filter(g => g.isH5);
+                const other = games.filter(g => g.isFlashCustom);
+
+                const gridContainer = document.createElement('div');
+                gridContainer.style.cssText = 'display:flex;flex-direction:column;gap:28px;';
+
+                const buildSection = function (title, list) {
+                    if (!list.length) return;
+                    const sec = document.createElement('div');
+                    const secTitle = document.createElement('div');
+                    secTitle.style.cssText = 'font-family:var(--nui-font-display);font-size:16px;font-weight:800;color:var(--nui-text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--nui-border);';
+                    secTitle.textContent = title;
+                    sec.appendChild(secTitle);
+
+                    const grid = document.createElement('div');
+                    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;';
+
+                    list.forEach(g => {
+                        const card = document.createElement('a');
+                        card.href = g.href;
+                        card.className = 'nui-surface nui-games-card';
+                        card.setAttribute('data-title', g.title.toLowerCase());
+                        card.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);text-decoration:none;color:var(--nui-text);text-align:center;transition:background var(--nui-dur-fast),transform var(--nui-dur-fast);';
+
+                        const imgEl = document.createElement('div');
+                        imgEl.style.cssText = 'width:60px;height:48px;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+                        if (g.img) {
+                            const i = document.createElement('img');
+                            i.src = g.img; i.alt = ''; i.loading = 'lazy';
+                            i.style.cssText = 'width:60px;height:48px;object-fit:cover;border-radius:4px;';
+                            i.onerror = function() { this.style.display='none'; };
+                            imgEl.appendChild(i);
+                        } else {
+                            imgEl.textContent = '🎮';
+                            imgEl.style.fontSize = '24px';
+                        }
+
+                        const label = document.createElement('span');
+                        label.style.cssText = 'font-size:11px;font-weight:700;line-height:1.3;';
+                        label.textContent = g.title;
+
+                        card.appendChild(imgEl);
+                        card.appendChild(label);
+                        grid.appendChild(card);
+                    });
+
+                    sec.appendChild(grid);
+                    gridContainer.appendChild(sec);
+                };
+
+                buildSection('Flash Games (Ruffle)', ruffle);
+                buildSection('HTML5 Games', h5);
+                buildSection('Other Games', other);
+                wrapper.appendChild(gridContainer);
+
+                // Live filter
+                const searchInput = hdr.querySelector('#nui-games-search');
+                searchInput.addEventListener('input', function () {
+                    const q = this.value.toLowerCase().trim();
+                    wrapper.querySelectorAll('.nui-games-card').forEach(card => {
+                        card.style.display = (!q || card.getAttribute('data-title').includes(q)) ? '' : 'none';
+                    });
+                    // Hide empty section titles
+                    gridContainer.querySelectorAll('div > div:last-of-type').forEach(grid => {
+                        const sec = grid.parentElement;
+                        const anyVisible = [...grid.querySelectorAll('.nui-games-card')].some(c => c.style.display !== 'none');
+                        if (sec) sec.style.display = anyVisible || !q ? '' : 'none';
+                    });
+                });
+            };
+
+            if (!fetchUrl) {
+                // Already on category.phtml — parse current document
+                renderGames(parseGames(document));
+            } else {
+                fetch(fetchUrl, { credentials: 'include' })
+                    .then(r => r.text())
+                    .then(html => {
+                        const doc = new DOMParser().parseFromString(html, 'text/html');
+                        renderGames(parseGames(doc));
+                    })
+                    .catch(() => {
+                        loading.textContent = 'Failed to load games list.';
+                    });
+            }
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initGamesRoom);
+        else initGamesRoom();
+    }
+})();
+
+// MODULE 19: FRUIT MACHINE (HEADLESS SPA WRAPPER)
+// ==============================================================================
+// Activates on: /desert/fruit/index.phtml (and any sibling path under
+//               /desert/fruit/).
+//
+// Mirrors the Buried Treasure module's approach: scrape whichever server-
+// rendered state the page is currently in, rebuild it inside the shared
+// NeoUI chrome, and drive the loop — spin, see the result, come back
+// tomorrow — via fetch() instead of full page reloads.
+//
+// Only the "ready to spin" screen was available to sample, so that state is
+// handled richly (matching the real markup: a form with a hidden spin=1
+// field, a hidden ck token, and a submit button). The "already spun today"
+// and "post-spin result" screens are unsampled — those scrapers match on
+// plausible/common shapes and always keep a raw-HTML fallback, so the
+// module degrades to "look mostly like the original page, just re-skinned"
+// rather than rendering blank if Neopets' markup doesn't match what's
+// guessed here. The actual spin submission always uses whatever hidden
+// fields the live form contains (not just spin/ck), so if Neopets adds or
+// changes fields later, nothing here needs to change to keep working.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/desert\/fruit\//.test(location.pathname)) return;
+
+    const NeoUI = window.NeoUI;
+    if (!NeoUI || !NeoUI.__ready) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Fruit Machine SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
+    const DAILY_TIMERS_KEY = 'neoui_daily_timers_v1';
+    const TIMER_ID = 'fruit-machine';
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Keep the shared Daily Timer Hub in sync, same as Buried Treasure does.
+    // Fruit Machine is a once-a-day freebie rather than a fixed-minutes wait,
+    // so when the server doesn't hand us an exact cooldown we fall back to
+    // estimating time-to-reset from the page's own NST clock globals
+    // (nh/nm/ns, set by Neopets' own inline clock script) rather than
+    // fabricating a number.
+    // ─────────────────────────────────────────────────────────────────────────
+    function syncTimer(msFromNow) {
+        try {
+            const raw = localStorage.getItem(DAILY_TIMERS_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            const list = Array.isArray(parsed) ? parsed : [];
+            let entry = list.find(function (item) { return item && item.id === TIMER_ID; });
+            if (!entry) { entry = { id: TIMER_ID }; list.push(entry); }
+            entry.nextAt = Date.now() + msFromNow;
+            localStorage.setItem(DAILY_TIMERS_KEY, JSON.stringify(list));
+        } catch (e) {}
+    }
+
+    function formatClock(msLeft) {
+        const totalSec = Math.max(0, Math.ceil(msLeft / 1000));
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        const pad = function (n) { return String(n).padStart(2, '0'); };
+        return pad(h) + ':' + pad(m) + ':' + pad(s);
+    }
+
+    // Best-effort estimate of ms until the daily NST reset, using the same
+    // nh/nm/ns globals Neopets' own inline clock script sets on every page.
+    // Returns null (rather than guessing) if those globals aren't present.
+    function msUntilMidnightNST() {
+        try {
+            if (typeof window.nh === 'number' && typeof window.nm === 'number' && typeof window.ns === 'number') {
+                const secsLeft = (23 - window.nh) * 3600 + (59 - window.nm) * 60 + (60 - window.ns);
+                if (secsLeft > 0 && secsLeft < 86400) return secsLeft * 1000;
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SCRAPERS — figure out which state `doc` holds
+    // ─────────────────────────────────────────────────────────────────────────
+    function scrapeState(doc, baseUrl) {
+        const content = doc.querySelector('td.content') || doc.body;
+        const raw = content.innerHTML;
+
+        // Ready state: the sampled markup — a form holding a hidden
+        // spin=1 field, a hidden ck token, and a submit button. Every hidden
+        // field on the form is captured generically (not just spin/ck) so
+        // the real POST body always matches whatever Neopets actually sends,
+        // even if fields are added or renamed later.
+        const spinForm = Array.prototype.find.call(content.querySelectorAll('form'), function (f) {
+            return !!f.querySelector('input[name="spin"][value="1"]');
+        });
+        if (spinForm) {
+            const hidden = {};
+            spinForm.querySelectorAll('input[type="hidden"]').forEach(function (inp) {
+                const name = inp.getAttribute('name');
+                if (name) hidden[name] = inp.value;
+            });
+            const submitBtn = spinForm.querySelector('input[type="submit"]');
+            return {
+                type: 'ready',
+                action: spinForm.getAttribute('action') ? new URL(spinForm.getAttribute('action'), baseUrl).href : baseUrl,
+                method: (spinForm.getAttribute('method') || 'post').toLowerCase(),
+                hidden: hidden,
+                submitLabel: submitBtn && submitBtn.value ? submitBtn.value : 'Spin, spin, spin!',
+            };
+        }
+
+        // Cooldown state (unsampled): no spin form present, so look for
+        // common Neopets daily-limit phrasing. Falls through to the result
+        // branch — and ultimately the raw-HTML safety net — if nothing matches.
+        const cooldownMatch = raw.match(/already\s+(?:had|used|taken|spun|played)[^<]{0,60}(?:spin|turn|go)|come back tomorrow|one\s+(?:free\s+)?spin\s+per\s+day/i);
+        if (cooldownMatch) {
+            const msgEl = Array.prototype.find.call(content.querySelectorAll('b, strong, p'), function (el) {
+                return /already|tomorrow|per day/i.test(el.textContent);
+            });
+            return {
+                type: 'cooldown',
+                message: msgEl ? msgEl.textContent.replace(/\s+/g, ' ').trim() : "You've already used your free spin today.",
+            };
+        }
+
+        // Result state (unsampled): best-effort scrape of a post-spin outcome.
+        // Looks for a win/lose headline, any revealed fruit images, and any
+        // prize table — but always keeps the raw scraped HTML too, so the
+        // renderer can fall back to "the original content, re-skinned" if
+        // none of the guessed shapes actually match Neopets' markup.
+        const resultScope = content.querySelector('div.result') || content;
+        const fruitImgs = Array.prototype.map.call(
+            content.querySelectorAll('#fruitMain img[src], .fruit img[src], img[src*="/desert/fruit/"]'),
+            function (img) { return new URL(img.getAttribute('src'), baseUrl).href; }
+        );
+        const prizeTableEl = content.querySelector('table.prizeCell, td.prizeCell')
+            ? content.querySelector('table.prizeCell, td.prizeCell').closest('table')
+            : null;
+        const headlineEl = Array.prototype.find.call(content.querySelectorAll('b, strong'), function (el) {
+            return /won|nothing|sorry|congrat/i.test(el.textContent);
+        });
+
+        return {
+            type: 'result',
+            headline: headlineEl ? headlineEl.textContent.replace(/\s+/g, ' ').trim() : null,
+            fruitImgs: fruitImgs,
+            prizeTableHtml: prizeTableEl ? prizeTableEl.outerHTML : null,
+            rawHtml: resultScope ? resultScope.innerHTML : raw,
+        };
+    }
+
+    async function fetchState(url, opts) {
+        const res = await fetch(url, Object.assign({ credentials: 'include' }, opts || {}));
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        return scrapeState(doc, url);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHARED CHROME — hero banner reused across every state
+    // ─────────────────────────────────────────────────────────────────────────
+    function buildBanner() {
+        const banner = document.createElement('div');
+        banner.className = 'nui-surface';
+        banner.style.cssText = 'border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;box-shadow:0 4px 12px var(--nui-shadow);position:relative;';
+        banner.innerHTML = `
+            <div style="position:relative;width:100%;height:110px;overflow:hidden;background:linear-gradient(135deg,#5A3A1E 0%,#8C5A2A 50%,#5A3A1E 100%);display:flex;align-items:center;gap:14px;padding:0 var(--nui-space-4);">
+                <img src="https://images.neopets.com/desert/fruit/fruit.png"
+                     style="width:74px;height:56px;border-radius:var(--nui-radius-md);border:2px solid rgba(255,255,255,0.25);object-fit:contain;flex-shrink:0;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.6));background:#fff;"
+                     onerror="this.style.display='none'">
+                <div>
+                    <div style="font-family:var(--nui-font-display);font-weight:800;font-size:26px;color:#FFD060;text-shadow:0 2px 8px rgba(0,0,0,0.6);line-height:1.1;">Fruit Machine</div>
+                    <div style="font-size:12.5px;color:rgba(255,225,180,0.9);font-weight:600;margin-top:3px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">Roll up, roll up! · once a day</div>
+                </div>
+            </div>
+        `;
+        return banner;
+    }
+
+    function backToSakhmetButton() {
+        const btn = document.createElement('a');
+        btn.href = '/desert/sakhmet.phtml';
+        btn.className = 'nui-btn nui-btn-secondary nui-btn-block';
+        btn.style.cssText = 'text-decoration:none;display:block;box-sizing:border-box;';
+        btn.textContent = '← Return to Sakhmet';
+        return btn;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STATE RENDERERS
+    // ─────────────────────────────────────────────────────────────────────────
+    let clockInterval = null;
+    function clearClock() {
+        if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
+    }
+
+    function renderReady(wrapper, state) {
+        clearClock();
+        wrapper.innerHTML = '';
+        wrapper.appendChild(buildBanner());
+
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
+        card.innerHTML = `
+            <img src="https://images.neopets.com/desert/fruit/bg.jpg" style="width:100%;max-width:420px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);" onerror="this.style.display='none'">
+            <div style="font-size:15px;color:var(--nui-text-muted);line-height:1.5;max-width:420px;">
+                It's the one and only Neopets Fruit Machine. Match the first two
+                fruits for a prize, or all three for a really big prize.
+            </div>
+            <button type="button" id="fm-spin-btn" class="nui-btn nui-btn-primary" style="font-size:16px;padding:14px 28px;border-radius:30px;width:100%;max-width:300px;box-shadow:0 4px 12px var(--nui-shadow);">
+                ${state.submitLabel}
+            </button>
+        `;
+        wrapper.appendChild(card);
+        wrapper.appendChild(backToSakhmetButton());
+
+        card.querySelector('#fm-spin-btn').addEventListener('click', async function () {
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Spinning...';
+            try {
+                const body = new URLSearchParams(state.hidden);
+                const next = await fetchState(state.action, {
+                    method: state.method === 'get' ? 'GET' : 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: state.method === 'get' ? undefined : body.toString(),
+                });
+                renderState(wrapper, next);
+            } catch (err) {
+                showFatalError(err);
+                btn.disabled = false;
+                btn.textContent = state.submitLabel;
+            }
+        });
+    }
+
+    function renderCooldown(wrapper, state) {
+        clearClock();
+        wrapper.innerHTML = '';
+        wrapper.appendChild(buildBanner());
+
+        const knownMs = msUntilMidnightNST();
+        const targetAt = knownMs != null ? Date.now() + knownMs : null;
+        if (knownMs != null) syncTimer(knownMs);
+
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
+        card.innerHTML = `
+            <div style="font-size:15px;font-weight:700;color:var(--nui-text);">${state.message}</div>
+            ${targetAt != null
+                ? '<div id="fm-clock" style="font-family:var(--nui-font-display);font-size:32px;font-weight:800;color:var(--nui-accent);letter-spacing:1px;">' + formatClock(targetAt - Date.now()) + '</div><div style="font-size:12px;color:var(--nui-text-faint);">estimated time until your next free spin</div>'
+                : '<div style="font-size:12px;color:var(--nui-text-faint);">Come back tomorrow for another free spin.</div>'}
+            <button type="button" id="fm-retry-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;">Check Again</button>
+        `;
+        wrapper.appendChild(card);
+        wrapper.appendChild(backToSakhmetButton());
+
+        if (targetAt != null) {
+            const clockEl = card.querySelector('#fm-clock');
+            clockInterval = setInterval(function () {
+                const remaining = targetAt - Date.now();
+                if (remaining <= 0) {
+                    clockEl.textContent = '00:00:00';
+                    clearClock();
+                    return;
+                }
+                clockEl.textContent = formatClock(remaining);
+            }, 1000);
+        }
+
+        card.querySelector('#fm-retry-btn').addEventListener('click', async function () {
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+            try {
+                const next = await fetchState(new URL('index.phtml', location.href).href);
+                renderState(wrapper, next);
+            } catch (err) {
+                showFatalError(err);
+                btn.disabled = false;
+                btn.textContent = 'Check Again';
+            }
+        });
+    }
+
+    function renderResult(wrapper, state) {
+        clearClock();
+        wrapper.innerHTML = '';
+        wrapper.appendChild(buildBanner());
+
+        const headline = state.headline;
+        const isWin = headline ? !/nothing|sorry/i.test(headline) : null;
+        const hasStructured = !!(headline || state.fruitImgs.length || state.prizeTableHtml);
+
+        const fruitImgsHtml = state.fruitImgs.length
+            ? '<div style="display:flex;gap:var(--nui-space-3);justify-content:center;flex-wrap:wrap;">' +
+                state.fruitImgs.map(function (src) {
+                    return '<img src="' + src + '" style="width:83px;height:62px;object-fit:contain;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);background:var(--nui-surface-alt,#f4f4f4);">';
+                }).join('') +
+              '</div>'
+            : '';
+
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
+
+        if (hasStructured) {
+            card.innerHTML = `
+                ${isWin === true ? '<span class="nui-badge nui-badge-success" style="font-size:12px;padding:5px 12px;">🎉 Winner!</span>' : ''}
+                ${isWin === false ? '<span class="nui-badge" style="font-size:12px;padding:5px 12px;">🍒 No Match</span>' : ''}
+                ${fruitImgsHtml}
+                ${headline ? '<div style="font-family:var(--nui-font-display);font-size:19px;font-weight:800;color:' + (isWin ? 'var(--nui-success, #16a34a)' : 'var(--nui-text)') + ';line-height:1.4;">' + headline + '</div>' : ''}
+                ${state.prizeTableHtml ? '<div style="font-size:13px;color:var(--nui-text-muted);">' + state.prizeTableHtml + '</div>' : ''}
+                <button type="button" id="fm-refresh-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;">Refresh</button>
+            `;
+        } else {
+            // Safety net: none of the guessed shapes matched. Show the
+            // original scraped content, re-skinned into the card, rather than
+            // rendering nothing.
+            card.innerHTML = `
+                <div style="font-size:14px;color:var(--nui-text);line-height:1.6;text-align:left;width:100%;">${state.rawHtml}</div>
+                <button type="button" id="fm-refresh-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;">Refresh</button>
+            `;
+        }
+
+        wrapper.appendChild(card);
+        wrapper.appendChild(backToSakhmetButton());
+
+        card.querySelector('#fm-refresh-btn').addEventListener('click', async function () {
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Refreshing...';
+            try {
+                const next = await fetchState(new URL('index.phtml', location.href).href);
+                renderState(wrapper, next);
+            } catch (err) {
+                showFatalError(err);
+                btn.disabled = false;
+                btn.textContent = 'Refresh';
+            }
+        });
+    }
+
+    function renderState(wrapper, state) {
+        if (state.type === 'ready') return renderReady(wrapper, state);
+        if (state.type === 'cooldown') return renderCooldown(wrapper, state);
+        return renderResult(wrapper, state);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // INIT
+    // ─────────────────────────────────────────────────────────────────────────
+    async function init() {
+        const profile = NeoUI.scrapeLegacyProfile();
+        const initialState = scrapeState(document, location.href);
+
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'nui-reset';
+        wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5); max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--nui-space-4);';
+        document.body.appendChild(wrapper);
+
+        renderState(wrapper, initialState);
+    }
+
+    let booted = false;
+    function boot() {
+        if (booted) return;
+        booted = true;
+        init().catch(showFatalError);
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        boot();
+    } else {
+        document.addEventListener('DOMContentLoaded', boot);
+    }
+
 })();
