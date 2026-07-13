@@ -2106,8 +2106,8 @@
         const ready = visible.filter(function (item) { return (item.nextAt || 0) <= Date.now(); }).length;
         const upcoming = visible.length - ready;
         if (!ready) return 'Next up: ' + visible[0].label;
-        if (ready === visible.length) return 'Everything is ready now.';
-        return ready + ' ready • ' + upcoming + ' upcoming';
+        if (ready === visible.length) return 'Everything is available now.';
+        return ready + ' available • ' + upcoming + ' upcoming';
     }
 
     function openDayTimerHub() {
@@ -2164,7 +2164,7 @@
                 const summary = document.createElement('summary');
                 summary.className = 'nui-drawer-section-title';
                 summary.style.cssText = 'cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center; padding:6px 4px;';
-                summary.innerHTML = '<span style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.6px; color:var(--nui-text-faint);">' + category + ' · ' + sorted.length + (readyCount ? ' <span style="color:var(--nui-success);">· ' + readyCount + ' ready</span>' : '') + '</span><span style="font-size:10px; opacity:0.5;">▼</span>';
+                summary.innerHTML = '<span style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.6px; color:var(--nui-text-faint); display:flex; align-items:center; gap:5px;">' + category + ' · ' + sorted.length + (readyCount ? ' <span title="' + readyCount + ' available" style="width:6px; height:6px; border-radius:50%; background:var(--nui-success); display:inline-block;"></span>' : '') + '</span><span style="font-size:10px; opacity:0.5;">▼</span>';
                 details.appendChild(summary);
 
                 const list = document.createElement('div');
@@ -2180,7 +2180,7 @@
                         '<span style="font-weight:700; font-size:13px; color:var(--nui-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + item.label + '</span>',
                         '<span style="font-size:11px; color:var(--nui-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (item.note || item.sourceGroup || category) + '</span>',
                         '</div>',
-                        isReady ? '<span style="font-size:10.5px; font-weight:700; padding:3px 6px; border-radius:var(--nui-radius-pill); background:var(--nui-success-soft); color:var(--nui-success); flex-shrink:0; white-space:nowrap;">Ready</span>' : '',
+                        isReady ? '<span title="Available now" style="width:8px; height:8px; border-radius:50%; background:var(--nui-success); flex-shrink:0;"></span>' : '',
                         '<button type="button" class="nui-icon-btn" data-act="go" data-href="' + item.href + '" title="Open" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">↗</button>',
                         '<button type="button" class="nui-icon-btn" data-act="edit" data-id="' + item.id + '" title="Edit name/note" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">✏️</button>',
                         '<button type="button" class="nui-icon-btn" data-act="hide" data-id="' + item.id + '" title="' + (item.hidden ? 'Unhide' : 'Hide from list') + '" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">' + (item.hidden ? '👁️' : '🙈') + '</button>',
