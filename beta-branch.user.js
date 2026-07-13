@@ -2877,6 +2877,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         let working = {};
         let workingTexture = 'none';
         let openPopover = null;
+        let activeTab = 'basic';
 
         function seedFromBase() {
             const base = THEMES[baseKey] || THEMES[DEFAULT_THEME];
@@ -2894,6 +2895,12 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         ];
         seedFromBase();
 
+        const TABS = [
+            { id: 'basic',    label: 'Basic'    },
+            { id: 'advanced', label: 'Advanced' },
+            { id: 'texture',  label: 'Texture'  },
+        ];
+
         const backdrop = document.createElement('div');
         backdrop.id = 'nui-theme-editor-backdrop';
         backdrop.className = 'nui-drawer-backdrop nui-reset is-open';
@@ -2901,7 +2908,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
         const modal = document.createElement('div');
         modal.className = 'nui-surface';
-        modal.style.cssText = 'position: relative; z-index: 2147483647; width: 100%; max-width: 420px; max-height: 88vh; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95); opacity: 0; transition: all var(--nui-dur-fast) var(--nui-ease-snap);';
+        modal.style.cssText = 'position: relative; z-index: 2147483647; width: 100%; max-width: 640px; max-height: 90vh; border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; overflow: hidden; transform: scale(0.95); opacity: 0; transition: all var(--nui-dur-fast) var(--nui-ease-snap);';
 
         const header = document.createElement('div');
         header.style.cssText = 'padding: var(--nui-space-4); border-bottom: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;';
@@ -2909,16 +2916,34 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             '<div style="font-family: var(--nui-font-display); font-size: 18px; font-weight: 800; color: var(--nui-text);">🎨 Theme Editor</div>' +
             '<button type="button" class="nui-reset" id="nui-ct-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--nui-text-muted); line-height: 1;">&times;</button>';
 
+        // ---- Sticky zone: live preview + base theme picker (always visible, not part of the scrolling tab content) ----
+        const topZone = document.createElement('div');
+        topZone.style.cssText = 'padding: var(--nui-space-4); padding-bottom: var(--nui-space-3); display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; border-bottom: 1px solid var(--nui-border);';
+
+        // ---- Tab bar ----
+        const tabBar = document.createElement('div');
+        tabBar.style.cssText = 'display: flex; gap: 2px; padding: 0 var(--nui-space-3); flex-shrink: 0; background: var(--nui-surface-2); border-bottom: 1px solid var(--nui-border);';
+
+        // ---- Scrollable tab content (only this area scrolls) ----
         const content = document.createElement('div');
-        content.style.cssText = 'flex: 1 1 auto; min-height: 0; padding: var(--nui-space-4); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 14px;';
+        content.style.cssText = 'flex: 1 1 auto; min-height: 0; padding: var(--nui-space-4); overflow-y: auto; -webkit-overflow-scrolling: touch;';
 
         const footer = document.createElement('div');
-        footer.style.cssText = 'padding: var(--nui-space-3) var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; gap: 8px; flex-shrink: 0;';
+        footer.style.cssText = 'padding: var(--nui-space-3) var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;';
         footer.innerHTML =
-            '<button type="button" class="nui-btn nui-btn-block" id="nui-ct-cancel" style="background: var(--nui-surface); border: 1px solid var(--nui-border); color: var(--nui-text-muted);">Cancel</button>' +
-            '<button type="button" class="nui-btn nui-btn-primary nui-btn-block" id="nui-ct-save">Save &amp; Apply</button>';
+            '<div style="display:flex; gap:6px;">' +
+                '<input id="nui-ct-emoji" type="text" maxlength="2" value="🎨" placeholder="🎨" style="width:38px; text-align:center; font-size:16px; padding:6px 4px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface); color:var(--nui-text);">' +
+                '<input id="nui-ct-name" type="text" placeholder="Theme name" style="flex:1; padding:6px 8px; font-size:13px; font-weight:700; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface); color:var(--nui-text);">' +
+            '</div>' +
+            '<span id="nui-ct-status" style="font-size:12px; text-align:center; color:var(--nui-success); display:block; min-height:16px;"></span>' +
+            '<div style="display:flex; gap:8px;">' +
+                '<button type="button" class="nui-btn nui-btn-block" id="nui-ct-cancel" style="background: var(--nui-surface); border: 1px solid var(--nui-border); color: var(--nui-text-muted);">Cancel</button>' +
+                '<button type="button" class="nui-btn nui-btn-primary nui-btn-block" id="nui-ct-save">Save &amp; Apply</button>' +
+            '</div>';
 
         modal.appendChild(header);
+        modal.appendChild(topZone);
+        modal.appendChild(tabBar);
         modal.appendChild(content);
         modal.appendChild(footer);
         backdrop.appendChild(modal);
@@ -2940,8 +2965,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         ).join('');
 
         function swatchBtn(c) {
-            return '<button type="button" class="nui-ct-swatch-btn nui-reset" data-ckey="' + c.key + '" style="display:flex; align-items:center; gap:8px; padding:6px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); cursor:pointer; text-align:left;">' +
-                '<span class="nui-ct-swatch" data-ckey="' + c.key + '" style="width:28px; height:28px; border-radius:6px; border:1px solid var(--nui-border); flex-shrink:0; background:' + safeHex(working[c.key]) + ';"></span>' +
+            return '<button type="button" class="nui-ct-swatch-btn nui-reset" data-ckey="' + c.key + '" style="display:flex; align-items:center; gap:10px; padding:8px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); cursor:pointer; text-align:left;">' +
+                '<span class="nui-ct-swatch" data-ckey="' + c.key + '" style="width:32px; height:32px; border-radius:7px; border:1px solid var(--nui-border); flex-shrink:0; background:' + safeHex(working[c.key]) + ';"></span>' +
                 '<span style="font-size:12px; font-weight:700; color:var(--nui-text);">' + c.label + '</span>' +
             '</button>';
         }
@@ -2950,19 +2975,19 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             const isNone = tp.value === 'none';
             const active = workingTexture === tp.value;
             const border = active ? '2px solid var(--nui-accent)' : '1.5px solid var(--nui-border)';
-            const previewBg = isNone
-                ? 'repeating-linear-gradient(45deg, var(--nui-border) 0, var(--nui-border) 1px, transparent 1px, transparent 8px)'
-                : tp.value;
+            const bgImage = isNone
+                ? 'repeating-linear-gradient(45deg,var(--nui-border) 0,var(--nui-border) 1px,transparent 1px,transparent 8px)'
+                : tp.value.replace(/"/g, '&quot;');
             return '<button type="button" class="nui-ct-tex" data-tex="' + tp.value.replace(/"/g, '&quot;') + '" ' +
                 'style="border-radius:8px; overflow:hidden; border:' + border + '; cursor:pointer; background:none; padding:0; text-align:left; width:100%;">' +
-                '<div style="height:56px; background:var(--nui-surface); background-image:' + (isNone ? 'repeating-linear-gradient(45deg,var(--nui-border) 0,var(--nui-border) 1px,transparent 1px,transparent 8px)' : tp.value.replace(/"/g, '&quot;')) + '; background-repeat:repeat; background-size:auto;"></div>' +
-                '<div style="padding:5px 7px; background:var(--nui-surface-2); border-top:1px solid var(--nui-border);">' +
+                '<div style="height:64px; background:var(--nui-surface); background-image:' + bgImage + '; background-repeat:repeat; background-size:auto;"></div>' +
+                '<div style="padding:6px 7px; background:var(--nui-surface-2); border-top:1px solid var(--nui-border);">' +
                     '<div style="font-size:11px; font-weight:700; color:' + (active ? 'var(--nui-accent)' : 'var(--nui-text)') + ';">' + tp.label + '</div>' +
                 '</div>' +
             '</button>';
         }
 
-        content.innerHTML =
+        topZone.innerHTML =
             '<div id="nui-ct-preview" class="nui-reset" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-lg); overflow:hidden; background:var(--nui-bg);">' +
                 '<div id="nui-ct-preview-header" style="height:56px; display:flex; align-items:center; padding:0 14px; border-bottom:2px solid var(--nui-border);">' +
                     '<div style="width:28px;height:28px;border-radius:50%;background:var(--nui-accent-soft);display:flex;align-items:center;justify-content:center;color:var(--nui-accent);font-size:14px;flex-shrink:0;">🎨</div>' +
@@ -2982,42 +3007,54 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 '</div>' +
             '</div>' +
             '<div style="display:flex; align-items:center; gap:8px;">' +
-                '<span style="font-size:12px; font-weight:700; color:var(--nui-text-muted); flex-shrink:0;">Base</span>' +
+                '<span style="font-size:12px; font-weight:700; color:var(--nui-text-muted); flex-shrink:0;">Base theme</span>' +
                 '<select id="nui-ct-base" style="flex:1; padding:6px 8px; font-size:12px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' + baseOpts + '</select>' +
-            '</div>' +
-            '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+            '</div>';
+
+        tabBar.innerHTML = TABS.map(t =>
+            '<button type="button" class="nui-ct-tab nui-reset" data-tab="' + t.id + '" style="' +
+                'flex:1; padding:10px 8px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; ' +
+                'background:none; border:none; cursor:pointer; margin-bottom:-1px; ' +
+                'color:' + (t.id === activeTab ? 'var(--nui-accent)' : 'var(--nui-text-muted)') + '; ' +
+                'border-bottom:2px solid ' + (t.id === activeTab ? 'var(--nui-accent)' : 'transparent') + ';">' +
+                t.label +
+            '</button>'
+        ).join('');
+
+        content.innerHTML =
+            '<div class="nui-ct-panel" data-panel="basic" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
                 CUSTOM_EDITOR_COLORS.map(swatchBtn).join('') +
             '</div>' +
-            // ---- Advanced section ----
-            '<details id="nui-ct-advanced" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); overflow:hidden;">' +
-                '<summary style="padding:10px 12px; font-size:12px; font-weight:800; color:var(--nui-text-muted); text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center; background:var(--nui-surface-2);">' +
-                    'Advanced <span style="font-size:10px; opacity:0.5;">▼</span>' +
-                '</summary>' +
-                '<div style="padding:12px; display:flex; flex-direction:column; gap:12px;">' +
-                    // Extra color tokens
-                    '<div>' +
-                        '<div style="font-size:10px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:8px;">Additional tokens</div>' +
-                        '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">' +
-                            ADVANCED_COLORS.map(swatchBtn).join('') +
-                        '</div>' +
-                    '</div>' +
-                    // Texture browser
-                    '<div>' +
-                        '<div style="font-size:10px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px; margin-bottom:8px;">Texture</div>' +
-                        '<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;" id="nui-ct-tex-grid">' +
-                            TEXTURE_PRESETS.map(texCardHtml).join('') +
-                        '</div>' +
-                    '</div>' +
-                '</div>' +
-            '</details>' +
-            '<div style="display:flex; gap:6px;">' +
-                '<input id="nui-ct-emoji" type="text" maxlength="2" value="🎨" placeholder="🎨" style="width:38px; text-align:center; font-size:16px; padding:6px 4px; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' +
-                '<input id="nui-ct-name" type="text" placeholder="Theme name" style="flex:1; padding:6px 8px; font-size:13px; font-weight:700; border-radius:var(--nui-radius-sm); border:1px solid var(--nui-border); background:var(--nui-surface-2); color:var(--nui-text);">' +
+            '<div class="nui-ct-panel" data-panel="advanced" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">' +
+                '<div style="grid-column:1 / -1; font-size:10px; font-weight:800; text-transform:uppercase; color:var(--nui-text-faint); letter-spacing:0.5px;">Additional tokens</div>' +
+                ADVANCED_COLORS.map(swatchBtn).join('') +
             '</div>' +
-            '<span id="nui-ct-status" style="font-size:12px; text-align:center; color:var(--nui-success); display:block; min-height:16px;"></span>';
+            '<div class="nui-ct-panel" data-panel="texture" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;" id="nui-ct-tex-grid">' +
+                TEXTURE_PRESETS.map(texCardHtml).join('') +
+            '</div>';
 
-        const previewEl = content.querySelector('#nui-ct-preview');
-        const previewHeaderEl = content.querySelector('#nui-ct-preview-header');
+        content.querySelectorAll('.nui-ct-panel').forEach(p => {
+            p.style.display = p.getAttribute('data-panel') === activeTab ? 'grid' : 'none';
+        });
+
+        function setActiveTab(tabId) {
+            activeTab = tabId;
+            tabBar.querySelectorAll('.nui-ct-tab').forEach(btn => {
+                const isActive = btn.getAttribute('data-tab') === tabId;
+                btn.style.color = isActive ? 'var(--nui-accent)' : 'var(--nui-text-muted)';
+                btn.style.borderBottomColor = isActive ? 'var(--nui-accent)' : 'transparent';
+            });
+            content.querySelectorAll('.nui-ct-panel').forEach(p => {
+                p.style.display = p.getAttribute('data-panel') === tabId ? 'grid' : 'none';
+            });
+            content.scrollTop = 0;
+        }
+        tabBar.querySelectorAll('.nui-ct-tab').forEach(btn => {
+            btn.addEventListener('click', () => setActiveTab(btn.getAttribute('data-tab')));
+        });
+
+        const previewEl = topZone.querySelector('#nui-ct-preview');
+        const previewHeaderEl = topZone.querySelector('#nui-ct-preview-header');
 
         function updatePreview() {
             const tk = computeWorkingTokens(baseKey, working, workingTexture);
@@ -3026,7 +3063,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         }
         updatePreview();
 
-        content.querySelector('#nui-ct-base').addEventListener('change', function () {
+        topZone.querySelector('#nui-ct-base').addEventListener('change', function () {
             baseKey = this.value;
             seedFromBase();
             workingTexture = 'none';
@@ -3070,8 +3107,8 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         });
 
         footer.querySelector('#nui-ct-save').addEventListener('click', function () {
-            const nameInp = content.querySelector('#nui-ct-name');
-            const emojiInp = content.querySelector('#nui-ct-emoji');
+            const nameInp = footer.querySelector('#nui-ct-name');
+            const emojiInp = footer.querySelector('#nui-ct-emoji');
             const label = (nameInp && nameInp.value.trim()) || 'Custom';
             const emoji = (emojiInp && emojiInp.value.trim()) || '🎨';
             const finalTokens = computeWorkingTokens(baseKey, working, workingTexture);
@@ -3080,7 +3117,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             THEMES[key] = def;
             saveCustomTheme(key, def);
             setTheme(key);
-            const st = content.querySelector('#nui-ct-status');
+            const st = footer.querySelector('#nui-ct-status');
             if (st) st.textContent = '✓ Saved and applied!';
             setTimeout(close, 700);
         });
