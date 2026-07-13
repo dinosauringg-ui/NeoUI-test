@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.38
+// @version      1.1.46
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -21,9 +21,11 @@
  *   Core Framework   — design tokens (12 themes + custom), topbar, drawer nav,
  *                      global search (Ctrl+K / /), SSW modal, daily-timer hub,
  *                      theme editor (basic + advanced tokens, 18 SVG textures),
- *                      VibeRater, NickNames, settings panel, custom site nav
- *   Home             — pet card, live training pills (all 3 schools), dailies +
- *                      wheels accordions, NST clock, Snowager alert, quick links
+ *                      VibeRater, NickNames, settings panel, custom site nav,
+ *                      module toggle system (all modules on/off per-toggle)
+ *   Home             — smart NST greeting, pet card, live training pills (all 3
+ *                      schools), dailies + wheels accordions, NST clock,
+ *                      Snowager alert, quick links (incl. Quest Log)
  *   Neomail          — threaded inbox SPA, bulk select, avatar fetch, vibe tints,
  *                      nicknames, reply/compose composers, char counter
  *   Neoboards        — tabbed multi-thread SPA, quick reply, Neoboards index
@@ -38,13 +40,65 @@
  *                      result states scraped, spin submitted via fetch), cooldown
  *                      synced to daily timer hub
  *   Stock Market     — portfolio view with chart, buy/sell
- *   Training         — status across all 3 schools (MI, Ninja, Pirate Academy)
+ *   Training         — status across all 3 schools (MI, Ninja, Pirate Academy);
+ *                      SSW / SW / SDB buttons per codestone/dubloon
  *   Quickref         — reformatted pet stats page
  *   Dailies Hub      — modal countdown dashboard for all timed dailies
  *   Games            — games room card grid (fetches category page, live filter);
  *                      Ruffle player wrapper with submit-score form
+ *   Faerie Quests    — sitewide quest watcher + /quests.phtml enhancement
  *
  * CHANGELOG  (last 5 versions)
+ *
+ * v1.1.42
+ *   - Module toggle system: every module except Core checks
+ *     window.NeoUI.isModuleEnabled(id) at its URL guard and exits immediately
+ *     if disabled. Toggles are persisted in neoui_disabled_modules. A "Modules"
+ *     section in the Settings drawer lists all 19 toggleable modules with
+ *     on/off pill buttons. Changes take effect on next page load.
+ *   - Smart greeting: home page hero banner now uses one of 7 NST time-keyed
+ *     greetings instead of the static "Welcome back, username!": Up late (0-4),
+ *     Early bird (4-7), Good morning (7-12), Good afternoon (12-14),
+ *     Hey there (14-18), Good evening (18-21), Winding down (21-24).
+ *
+ * v1.1.41
+ *     one page at a time with Prev/page-number/Next buttons, per feedback —
+ *     the multi-page background crawl wasn't wanted, just confirmation the
+ *     SPA can fetch pages itself rather than needing every page pasted in.
+ *     Sort tabs, the premium-featured callout, and the filter box are
+ *     unchanged; filtering is scoped to whichever page is currently loaded.
+ *
+ * v1.1.40
+ *   - Games Room (step 2): since every page is just the same alphabetical
+ *     listing, the module now crawls all of them in the background on load
+ *     and presents one complete, fully-searchable list instead of making
+ *     you click through pages. Crawling follows each page's own pagination
+ *     links and stops once no new page numbers turn up, rather than trusting
+ *     any single page's pagination window to reveal the true last page (the
+ *     sample only showed links 1-7, which may or may not be the real total).
+ *     Games are de-duplicated by href and merged under their alphabetical
+ *     letter as pages come in. The old manual Prev/page-number/Next buttons
+ *     are gone, replaced with a small "N games loaded from M pages" summary
+ *     and a Refresh button; sort tabs now trigger a fresh full crawl from
+ *     that tab's URL. Filtering now searches the entire loaded list, not
+ *     just whichever page happened to be showing.
+ *
+ * v1.1.39
+ *   - Games Room module rebuilt from a real sample of /games/category.phtml
+ *     (step 1 of a multi-step redo). The old version guessed at a
+ *     Ruffle/H5/Other split that doesn't exist in the real markup; it's
+ *     replaced with what's actually there: alphabetical letter-group
+ *     headers (.gr-group-header + sibling .ctp-med cards), real pagination
+ *     via ?page=N (the page "numbers" are sprite icons with no visible
+ *     text, so numbers come from each link's href instead), the
+ *     premium-featured callout above the list, and the four server-provided
+ *     sort tabs (A-Z / Newest / Difficulty / Popularity). Also fixed a
+ *     latent bug: the old code reused the live `document` when already on
+ *     category.phtml, but by that point document.body had already been
+ *     wiped to build the NeoUI shell, so that branch was scraping nothing.
+ *     Every load — including the first — now goes through fetch() and a
+ *     fresh DOMParser document. Category/world filters, popularity sort
+ *     wiring, and richer game metadata are follow-up steps.
  *
  * v1.1.38
  *   - New module: Fruit Machine (headless SPA wrapper), mirroring the Buried
@@ -59,66 +113,11 @@
  *     Cooldown countdown uses the page's own NST clock globals (nh/nm/ns) to
  *     estimate time to daily reset when no explicit wait time is given.
  *     Timer synced to the Daily Timer Hub under the existing 'fruit-machine'
- *     id (24h interval).
- *
- * v1.1.29
- *   - Neoboards crash fix: escapeHTML was only defined in Neomail's IIFE scope;
- *     calling it from renderThreadUI threw ReferenceError, aborting renders and
- *     silently corrupting tab state so threads appeared non-clickable.
- *     escapeHTML is now defined locally in the Neoboards module.
- *   - Nickname vibe-pop: setting a nick from inside a thread no longer navigates
- *     back to the board list. loadBoardList is only called when activeTabId is
- *     'board'.
- *   - Games module: was scraping /games/ (showcase, no game cards); now fetches
- *     /games/category.phtml and scrapes div.ctp-med correctly. Module guard
- *     extended to cover /games/category.phtml directly. Games split into Flash
- *     (Ruffle), HTML5, and Other (custom-path games like Cellblock, Cheat!).
- *
- * v1.1.28
- *   - SSW: openGlobalSSW() now lives in Core (single implementation). Modules
- *     use window.NeoUI.openSSW(). Premium auto-detected from .sswdrop presence,
- *     persisted in neoui_is_premium. SSW now in SEARCH_CATALOG and nav drawer;
- *     topbar SSW button removed (drawer is the right home for it).
- *   - SSW modal: added Contains/Exact match select, Price Only toggle, Shop/
- *     Gallery area select. Result links open in new tab.
- *   - Site nav overhauled: 8 sections (My Account, Shops & Economy, Games &
- *     Battling, Customise, Explore, Community, News & Info, Premium). All 3
- *     training schools, Lab Ray, Petpet Lab added. NC Mall removed.
- *   - Custom nav editor in Settings: add/remove items and sections per-section,
- *     reset to default. Stored in neoui_custom_nav_v1.
- *   - Games module (Module 16): Ruffle wrapper + games room card grid.
- *
- * v1.1.27
- *   - NickNames system (window.NickNames): getNick / setNick / clearNick /
- *     display / displayWithFallback / onChange. Stored in neoui_nicknames_v1.
- *     Nicknames shown in Neomail sidebar (raw username as muted badge), thread
- *     viewer header (with inline edit button), Neoboards post headers, and both
- *     vibe pops (✏️ Set/Edit nickname option). Nicknames settings section in
- *     drawer lists all assigned nicks with edit + delete.
- *   - Neomail inbox counter: tab pill updates to "Inbox (N unread / N total)"
- *     after every sidebar render.
- *   - Training: all three schools fetched in parallel (Promise.allSettled).
- *     Pirate Academy uses Dubloon detection alongside Codestone. Each pet pill
- *     links to the correct school. School icon (⚔️/🥷/⚓) shown in detail rows.
- *   - VibeRater settings: details open state preserved across re-renders in both
- *     Neomail and Neoboards. All interactive buttons have e.stopPropagation().
- *
- * v1.1.26
- *   - Training pill row: starts hidden (display:none), only shown after fetch
- *     succeeds with active pets. "Checking training…" placeholder eliminated.
- *     Fetch IIFE uses captured variable references rather than getElementById,
- *     removing the timing dependency on the element being in the live DOM.
- *
- * v1.1.25
- *   - Drawer double-nesting fixed: renderSettings() was wrapping each section
- *     in a div.nui-drawer-section then each render() wrote another
- *     details.nui-drawer-section inside — two collapsibles with the same title.
- *     Now uses a throwaway tmp div; children appended directly to settingsContainer.
- *   - Training card eliminated: training info now lives entirely in the hero
- *     banner as pills + expandable detail rows. No separate card.
- *   - Neoboards board URL persistence: currentBoardUrl written to
- *     nui_last_board_url on every loadBoardList call and all four resolvedBoard
- *     assignments at startup. Restored on next load.
+ *     id (24h interval). Confirmed against a real "already spun today"
+ *     sample: div.result is the one container reused for every sub-state
+ *     (the spin form when ready, bare unwrapped text on cooldown), so the
+ *     scraper now scopes off it directly and shows that text verbatim
+ *     instead of a generic placeholder when no b/strong/p wrapper is present.
  * ============================================================================
  */
 
@@ -1793,6 +1792,100 @@
         try { return localStorage.getItem('neoui_is_premium') === '1'; } catch (e) { return false; }
     }
 
+    // ---- Module toggle system ------------------------------------------------
+    // Each toggleable module has a stable ID. Disabled IDs are stored in
+    // neoui_disabled_modules. Core, VibeRater, and NickNames are never listed.
+    const MODULE_TOGGLE_KEY = 'neoui_disabled_modules';
+
+    const TOGGLEABLE_MODULES = [
+        { id: 'neomail',        label: 'Neomail',                    desc: 'Threaded inbox SPA' },
+        { id: 'neoboards',      label: 'Neoboards',                  desc: 'Tabbed multi-thread SPA' },
+        { id: 'ntimes',         label: 'Neopian Times',              desc: 'Article/comic reader' },
+        { id: 'foodclub',       label: 'Food Club',                  desc: 'Bets, odds, history' },
+        { id: 'training-mi',    label: 'Training — Mystery Island',  desc: 'MI Training School SPA' },
+        { id: 'training-ninja', label: 'Training — Ninja School',    desc: 'Secret Ninja Training SPA' },
+        { id: 'training-pirate',label: 'Training — Pirate Academy',  desc: 'Swashbuckling Academy SPA' },
+        { id: 'quickref',       label: 'Quickref',                   desc: 'Pet stats overhaul' },
+        { id: 'stockmarket',    label: 'Stock Market',               desc: 'Portfolio dashboard' },
+        { id: 'coincidence',    label: 'The Coincidence',            desc: 'Coincidence SPA' },
+        { id: 'buried-treasure',label: 'Buried Treasure',            desc: 'Map SPA' },
+        { id: 'fruit-machine',  label: 'Fruit Machine',              desc: 'Spin SPA' },
+        { id: 'coconut-shy',    label: 'Coconut Shy',                desc: 'Coconut Shy wrapper' },
+        { id: 'faerie-quests',  label: 'Faerie Quests',              desc: 'Quest watcher + page' },
+        { id: 'games',          label: 'Games Room',                 desc: 'Games list + Ruffle wrapper' },
+        { id: 'home',           label: 'Home Dashboard',             desc: 'Homepage SPA' },
+        { id: 'wishing-well',   label: 'Wishing Well',               desc: 'Wishing Well optimizer' },
+        { id: 'item-transfer',  label: 'Item Transfer Log',          desc: 'Transfer log SPA' },
+        { id: 'allevents',      label: 'All Events',                 desc: 'Compact events UI' },
+    ];
+
+    function getDisabledModules() {
+        try {
+            const raw = localStorage.getItem(MODULE_TOGGLE_KEY);
+            return new Set(raw ? JSON.parse(raw) : []);
+        } catch (e) { return new Set(); }
+    }
+
+    function setDisabledModules(set) {
+        try { localStorage.setItem(MODULE_TOGGLE_KEY, JSON.stringify([...set])); } catch (e) {}
+    }
+
+    function isModuleEnabled(id) {
+        return !getDisabledModules().has(id);
+    }
+
+    // Each section is {id, title, render(container)}. Theme picker ships
+    // built-in; consuming apps can push more via NeoUI.registerSettingsSection.
+    const settingsSections = [];
+
+    // Register the Modules settings section in Core
+    registerSettingsSection({
+        id: 'module_toggles',
+        title: 'Modules',
+        render: function (container) {
+            function renderModuleToggles() {
+                const disabled = getDisabledModules();
+                const existingDetails = container.querySelector('details.nui-drawer-section');
+                const wasOpen = existingDetails ? existingDetails.open : false;
+
+                const rows = TOGGLEABLE_MODULES.map(mod => {
+                    const on = !disabled.has(mod.id);
+                    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--nui-border);gap:8px;">
+                        <div style="min-width:0;">
+                            <div style="font-size:13px;font-weight:700;color:var(--nui-text);">${mod.label}</div>
+                            <div style="font-size:11px;color:var(--nui-text-muted);">${mod.desc}</div>
+                        </div>
+                        <button type="button" data-mod-toggle="${mod.id}" style="flex-shrink:0;padding:4px 12px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;background:${on ? 'var(--nui-accent)' : 'var(--nui-surface-2)'};color:${on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)'};border-color:${on ? 'var(--nui-accent)' : 'var(--nui-border)'};">${on ? 'On' : 'Off'}</button>
+                    </div>`;
+                }).join('');
+
+                container.innerHTML = `
+                    <details class="nui-drawer-section"${wasOpen ? ' open' : ''}>
+                        <summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+                            Modules <span style="font-size:10px;opacity:0.5;">▼</span>
+                        </summary>
+                        <div style="margin-top:12px;display:flex;flex-direction:column;gap:0;">
+                            <div style="font-size:12px;color:var(--nui-text-muted);margin-bottom:10px;line-height:1.5;">Toggle modules on or off. Changes take effect on next page load.</div>
+                            ${rows}
+                        </div>
+                    </details>
+                `;
+
+                container.querySelectorAll('[data-mod-toggle]').forEach(btn => {
+                    btn.addEventListener('click', e => {
+                        e.stopPropagation();
+                        const id = btn.getAttribute('data-mod-toggle');
+                        const d = getDisabledModules();
+                        if (d.has(id)) { d.delete(id); } else { d.add(id); }
+                        setDisabledModules(d);
+                        renderModuleToggles();
+                    });
+                });
+            }
+            renderModuleToggles();
+        }
+    });
+
     const DAILY_TIMERS_KEY = 'neoui_daily_timers_v1';
 
     function getDefaultDailyTimers() {
@@ -2087,7 +2180,7 @@
                         '<span style="font-weight:700; font-size:13px; color:var(--nui-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + item.label + '</span>',
                         '<span style="font-size:11px; color:var(--nui-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (item.note || item.sourceGroup || category) + '</span>',
                         '</div>',
-                        '<span style="font-size:10.5px; font-weight:700; padding:3px 6px; border-radius:var(--nui-radius-pill); background:' + (isReady ? 'var(--nui-success-soft)' : 'var(--nui-accent-soft)') + '; color:' + (isReady ? 'var(--nui-success)' : 'var(--nui-accent)') + '; flex-shrink:0; white-space:nowrap;">' + formatCountdown(item.nextAt) + '</span>',
+                        isReady ? '<span style="font-size:10.5px; font-weight:700; padding:3px 6px; border-radius:var(--nui-radius-pill); background:var(--nui-success-soft); color:var(--nui-success); flex-shrink:0; white-space:nowrap;">Ready</span>' : '',
                         '<button type="button" class="nui-icon-btn" data-act="go" data-href="' + item.href + '" title="Open" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">↗</button>',
                         '<button type="button" class="nui-icon-btn" data-act="edit" data-id="' + item.id + '" title="Edit name/note" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">✏️</button>',
                         '<button type="button" class="nui-icon-btn" data-act="hide" data-id="' + item.id + '" title="' + (item.hidden ? 'Unhide' : 'Hide from list') + '" style="width:24px; height:24px; font-size:12px; flex-shrink:0;">' + (item.hidden ? '👁️' : '🙈') + '</button>',
@@ -2290,7 +2383,7 @@
                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--nui-text-muted);cursor:pointer;">
                     <select id="nui-ssw-criteria" class="nui-input" style="padding:3px 6px;font-size:12px;">
                         <option value="containing">Contains phrase</option>
-                        <option value="exact">Exact match</option>
+                        <option value="exact" selected>Exact match</option>
                     </select>
                 </label>
                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--nui-text-muted);cursor:pointer;user-select:none;">
@@ -2319,7 +2412,7 @@
             const criteriaEl = header.querySelector('#nui-ssw-criteria');
             const priceOnlyEl = header.querySelector('#nui-ssw-priceonly');
             const areaEl = header.querySelector('#nui-ssw-area');
-            const criteria = criteriaEl ? criteriaEl.value : 'containing';
+            const criteria = criteriaEl ? criteriaEl.value : 'exact';
             const priceOnly = priceOnlyEl && priceOnlyEl.checked ? 1 : 0;
             const partial = criteria === 'containing' ? 1 : 0;
             const context = areaEl ? parseInt(areaEl.value) : 0;
@@ -2374,10 +2467,6 @@
     });
 
     // ---- Settings panel sections (extensible) ----
-    // Each section is {id, title, render(container)}. Theme picker ships
-    // built-in; consuming apps can push more via NeoUI.registerSettingsSection.
-    const settingsSections = [];
-
     // ---- Custom themes (persisted to localStorage) ----
     const CUSTOM_THEMES_KEY = 'neoui_custom_themes_v1';
 
@@ -3313,11 +3402,22 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         registerSettingsSection: registerSettingsSection,
         openSSW: openGlobalSSW,
         isPremium: isPremiumUser,
+        isModuleEnabled: isModuleEnabled,
         get isInitialized() { return initialized; },
         openNotificationDrawer: openNotificationDrawer,
         openThemeEditor: openThemeEditorModal,
         openGlobalSearch: openGlobalSearchModal,
         openDailyTimerHub: openDayTimerHub,
+        syncDailyTimer: function (id, msFromNow) {
+            try {
+                const raw = localStorage.getItem(DAILY_TIMERS_KEY);
+                const list = Array.isArray(raw ? JSON.parse(raw) : []) ? (raw ? JSON.parse(raw) : []) : [];
+                let entry = list.find(function (i) { return i && i.id === id; });
+                if (!entry) { entry = { id: id }; list.push(entry); }
+                entry.nextAt = Date.now() + msFromNow;
+                localStorage.setItem(DAILY_TIMERS_KEY, JSON.stringify(list));
+            } catch (e) {}
+        },
         addCustomTheme: function(key, def) { THEMES[key] = def; saveCustomTheme(key, def); },
         deleteCustomTheme: function(key) { delete THEMES[key]; deleteCustomTheme(key); },
     };
@@ -3474,6 +3574,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     'use strict';
 
     if (/\/neomessages\.phtml/.test(location.pathname)) {
+        if (!window.NeoUI || !window.NeoUI.isModuleEnabled('neomail')) return;
         try { run(); } catch (err) { showFatalError(err); }
     }
 
@@ -4875,6 +4976,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     'use strict';
 
     if (/\/wishing\.phtml/.test(location.pathname)) {
+        if (!window.NeoUI || !window.NeoUI.isModuleEnabled('wishing-well')) return;
         try { run(); } catch (err) { showFatalError(err); }
     }
 
@@ -5074,6 +5176,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     'use strict';
 
     if (!/\/items\/transfer_list\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('item-transfer')) return;
 
     function showFatalError(err) {
         try {
@@ -5375,6 +5478,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     'use strict';
 
     if (!/\/allevents\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('allevents')) return;
 
     function run() {
         const NeoUI = window.NeoUI;
@@ -5544,6 +5648,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     'use strict';
 
     if (!/\/space\/coincidence\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('coincidence')) return;
 
     function showFatalError(err) {
         try {
@@ -5608,22 +5713,30 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     // --- SPA State Manager ---
     async function reloadSPA(actionUrl, options = {}) {
         const wrapper = document.getElementById('coincidence-app-wrapper');
-        if (wrapper) wrapper.innerHTML = `<div class="nui-empty" style="padding-top: 50px;"><span class="nui-empty-emoji">🚀</span><br>Communicating with the ship...</div>`;
+        if (wrapper) {
+            wrapper.style.opacity = '0.5';
+            wrapper.style.pointerEvents = 'none';
+        }
 
         try {
             let res;
             if (actionUrl) {
-                // If we submit an action, KEEP this response. This holds the RE!
                 res = await fetch(actionUrl, options);
             } else {
-                // Otherwise just fetch the page normally
                 res = await fetch('/space/coincidence.phtml');
             }
 
             const html = await res.text();
             const newDoc = new DOMParser().parseFromString(html, 'text/html');
+
+            if (wrapper) {
+                wrapper.style.opacity = '';
+                wrapper.style.pointerEvents = '';
+            }
+
             renderCoincidence(newDoc);
         } catch (err) {
+            if (wrapper) { wrapper.style.opacity = ''; wrapper.style.pointerEvents = ''; }
             showFatalError(err);
         }
     }
@@ -5721,21 +5834,24 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             }
         });
 
-        // 6. Safely Hide Legacy DOM
-        Array.from(document.body.children).forEach(child => {
-            const tag = child.tagName.toLowerCase();
-            if (['script', 'style', 'link'].includes(tag)) return;
-            if (['panelPopups', 'neoFade', 'colorbox', 'cboxOverlay', 'cboxWrapper'].includes(child.id)) return;
-            child.style.display = 'none';
-        });
+        // 6. Safely Hide Legacy DOM and init shell — only on first render
+        const alreadyInitialized = !!document.getElementById('coincidence-main-wrapper');
+        if (!alreadyInitialized) {
+            Array.from(document.body.children).forEach(child => {
+                const tag = child.tagName.toLowerCase();
+                if (['script', 'style', 'link'].includes(tag)) return;
+                if (['panelPopups', 'neoFade', 'colorbox', 'cboxOverlay', 'cboxWrapper'].includes(child.id)) return;
+                child.style.display = 'none';
+            });
 
-        document.body.className = 'nui-reset';
-        document.documentElement.style.background = 'var(--nui-bg)';
-        document.body.style.background = 'var(--nui-bg)';
+            document.body.className = 'nui-reset';
+            document.documentElement.style.background = 'var(--nui-bg)';
+            document.body.style.background = 'var(--nui-bg)';
 
-        if (!NeoUI.isInitialized) NeoUI.init();
-        NeoUI.setProfileInfo(profile);
-        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+            if (!NeoUI.isInitialized) NeoUI.init();
+            NeoUI.setProfileInfo(profile);
+            NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+        }
 
         // 7. Build the UI
         let pageWrapper = document.getElementById('coincidence-main-wrapper');
@@ -5968,6 +6084,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     'use strict';
 
     if (!/\/quickref\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('quickref')) return;
 
     function showFatalError(err) {
         try {
@@ -6495,6 +6612,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     const isTopic = path.startsWith('/neoboards/') && path.includes('topic.phtml') && !isCreateTopic;
 
     if (!isIndex && !isBoardList && !isTopic && !isCreateTopic) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('neoboards')) return;
 
     function showFatalError(err) {
         try {
@@ -6520,6 +6638,9 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     let favThreads = JSON.parse(localStorage.getItem('nui_fav_threads') || '[]');
     let recentThreads = JSON.parse(localStorage.getItem('nui_recent_threads') || '[]');
     let favBoards = JSON.parse(localStorage.getItem('nui_fav_boards') || '[]'); // [{id, title, url, iconUrl}] — whole boards (Avatar Chat, Site Games...), not individual topics
+
+    // Restore open tabs and active tab from this browser session (cleared on tab close)
+    restoreSessionState();
 
     // --- Per-board pen state (NES parity) ---
     // perBoardPen: when true, pen preference and mode are stored separately per
@@ -6621,12 +6742,36 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         { label: '😊 Faces',   emoji: '😊', start: 258, count: 20 },
     ];
 
+    const SESSION_STATE_KEY = 'nui_boards_session';
+
     function saveState() {
         localStorage.setItem('nui_fav_threads', JSON.stringify(favThreads));
         localStorage.setItem('nui_recent_threads', JSON.stringify(recentThreads));
         localStorage.setItem('nui_fav_boards', JSON.stringify(favBoards));
         localStorage.setItem(penKey('nui_pen_mode'), penMode);
         localStorage.setItem(penKey('nui_pen_val'), savedPenVal);
+        // Session state: open tabs and active board, cleared when browser session ends
+        try {
+            sessionStorage.setItem(SESSION_STATE_KEY, JSON.stringify({
+                openThreads: openThreads.map(t => ({ id: t.id, title: t.title, url: t.url })),
+                activeTabId: activeTabId,
+                currentBoardUrl: currentBoardUrl,
+            }));
+        } catch (e) {}
+    }
+
+    function restoreSessionState() {
+        try {
+            const raw = sessionStorage.getItem(SESSION_STATE_KEY);
+            if (!raw) return;
+            const state = JSON.parse(raw);
+            if (state.currentBoardUrl) currentBoardUrl = state.currentBoardUrl;
+            if (Array.isArray(state.openThreads)) {
+                // Restore tabs without htmlCache — content will be refetched on switch
+                openThreads = state.openThreads.map(t => ({ id: t.id, title: t.title, url: t.url, htmlCache: null }));
+            }
+            if (state.activeTabId) activeTabId = state.activeTabId;
+        } catch (e) {}
     }
 
     function getTopicId(url) {
@@ -8408,6 +8553,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     'use strict';
 
     if (!/\/island\/training\.phtml/.test(location.pathname) && !/\/island\/process_training\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('training-mi')) return;
 
     const NeoUI = window.NeoUI;
     if (!NeoUI) return;
@@ -8918,6 +9064,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     'use strict';
 
     if (!/\/pirates\/foodclub\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('foodclub')) return;
 
     const NeoUI = window.NeoUI;
     if (!NeoUI) return;
@@ -10017,6 +10164,7 @@ contentInner.appendChild(collectBtn);
     'use strict';
 
     if (!/\/ntimes\//.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('ntimes')) return;
 
     function showFatalError(err) {
         try {
@@ -10532,6 +10680,7 @@ contentInner.appendChild(collectBtn);
     'use strict';
 
     if (!/\/stockmarket\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('stockmarket')) return;
 
     const NeoUI = window.NeoUI;
     if (!NeoUI || !NeoUI.__ready) return;
@@ -11103,6 +11252,7 @@ contentInner.appendChild(collectBtn);
     'use strict';
 
     if (!/\/halloween\/coconutshy\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('coconut-shy')) return;
 
     const NeoUI = window.NeoUI;
     if (!NeoUI || !NeoUI.__ready) return;
@@ -11258,6 +11408,13 @@ contentInner.appendChild(collectBtn);
                         btnThrow.textContent = 'Out of Throws';
                         btnThrow.style.background = 'var(--nui-surface-2)';
                         btnThrow.style.color = 'var(--nui-text-muted)';
+                        // Sync timer to midnight NST (approximate: next midnight PST)
+                        try {
+                            const now = new Date();
+                            const pst = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+                            const msTilMidnight = ((23 - pst.getHours()) * 3600 + (59 - pst.getMinutes()) * 60 + (60 - pst.getSeconds())) * 1000;
+                            window.NeoUI.syncDailyTimer('coconut-shy', msTilMidnight);
+                        } catch (e) {}
                         return;
                     }
                 } else if (res.points === 10000) {
@@ -11335,6 +11492,7 @@ contentInner.appendChild(collectBtn);
     'use strict';
 
     if (!/\/pirates\/buriedtreasure\//.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('buried-treasure')) return;
 
     const NeoUI = window.NeoUI;
     if (!NeoUI || !NeoUI.__ready) return;
@@ -11750,6 +11908,8 @@ return {
 (function () {
     'use strict';
 
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('faerie-quests')) return;
+
     const STATE_KEY = 'neoui_faerie_quest_state';
 
     function saveState(state) {
@@ -11834,6 +11994,7 @@ return {
     'use strict';
 
     if (!/^\/quests\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('faerie-quests')) return;
 
     const NeoUI = window.NeoUI;
     if (!NeoUI || !NeoUI.__ready) return;
@@ -11944,6 +12105,8 @@ return {
         document.querySelector('[id^="navprofiledropdown__"]')
     );
     if (!isLoggedIn) return;
+
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('home')) return;
 
     function showFatalError(err) {
         try {
@@ -12223,6 +12386,87 @@ return {
         document.body.appendChild(overlay);
     };
 
+    // ── Smart greeting based on NST hour ─────────────────────────────────────
+    function getGreeting(name) {
+        const h = new Date().getHours();
+        const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+        // ~15% chance of a random Neopets wild card regardless of time
+        if (Math.random() < 0.15) {
+            return pick([
+                `The Snowager is watching you, ${name}. 👁️`,
+                `Fyora smiles upon you today, ${name}. 🧚`,
+                `The Lab Ray is charged and ready, ${name}. ⚡`,
+                `How about a trip to Kreludor, ${name}. 🌕`,
+                `Don't forget your omelette, ${name}. 🍳`,
+                `The Kadoaties are hungry, ${name}. 😿`,
+                `Dr. Sloth has his eye on you, ${name}. 🧪`,
+                `Coltzan's Shrine awaits, ${name}. ⛏️`,
+                `A faerie quest could strike at any moment, ${name}. 🧚‍♀️`,
+                `Today feels like a Wheel of Extravagance day, ${name}. 🎡`,
+                `The Pant Devil is lurking, ${name}. 😈`,
+                `Have you fed your Kadoatie today, ${name}? 🐱`,
+                `The Coincidence has something for you, ${name}. 🔮`,
+                `Meuka is somewhere in those woods, ${name}. 🤧`,
+            ]);
+        }
+
+        if (h >= 0 && h < 4) return pick([
+            `Up late, ${name}? 🌙`,
+            `Still going, ${name}? 🦉`,
+            `Burning the midnight oil, ${name}? 🕯️`,
+            `Graveyard shift on Neopets, ${name}? 👻`,
+        ]);
+
+        if (h >= 4 && h < 7) return pick([
+            `Early bird, ${name}! 🌅`,
+            `You're up before the Neopets servers, ${name}. 🐓`,
+            `Rise and shine, ${name}! ☀️`,
+            `Beating the dailies rush, ${name}? 🏃`,
+            `Up with the Pteris, ${name}! 🦅`,
+        ]);
+
+        if (h >= 7 && h < 12) return pick([
+            `Good morning, ${name}! ☀️`,
+            `Morning! Don't forget your dailies, ${name}. 📋`,
+            `A fresh day in Neopia, ${name}! 🌄`,
+            `The omelette's still warm, ${name}. 🍳`,
+            `Good morning! Fyora's in a good mood today, ${name}. 🧚`,
+        ]);
+
+        if (h >= 12 && h < 14) return pick([
+            `Good afternoon, ${name}! 🌤️`,
+            `Lunchtime in Neopia, ${name}! 🍜`,
+            `Halfway through the day, ${name}. Keep going! 💪`,
+            `Afternoon! The Fruit Machine awaits, ${name}. 🎰`,
+            `High noon in Neopia, ${name}! 🌞`,
+        ]);
+
+        if (h >= 14 && h < 18) return pick([
+            `Hey there, ${name}! 👋`,
+            `Afternoon slump? Neopets fixes that, ${name}. ☕`,
+            `Welcome back, ${name}! 🏠`,
+            `Good to see you, ${name}! ✨`,
+            `The Battledome calls, ${name}! ⚔️`,
+        ]);
+
+        if (h >= 18 && h < 21) return pick([
+            `Good evening, ${name}! 🌆`,
+            `Evening! Did you grab your dailies, ${name}? 📅`,
+            `The Haunted Woods are lovely this time of night, ${name}. 🎃`,
+            `Winding down with Neopets, ${name}? 🌇`,
+            `Evening in Neopia, ${name}. The best time to play. 🌙`,
+        ]);
+
+        return pick([
+            `Winding down, ${name}? 🌙`,
+            `Late night Neopets, ${name}? Classic. 🌌`,
+            `Almost midnight in Neopia, ${name}. 🕚`,
+            `Night owl energy, ${name}. 🦉`,
+            `The Wheel of Monotony is still spinning somewhere, ${name}. 🎡`,
+        ]);
+    }
+
     // ── NST Clock helpers ────────────────────────────────────────────────────
     function getNSTDate() {
         return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
@@ -12391,7 +12635,7 @@ return {
         heroBannerTop.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;';
         heroBannerTop.innerHTML = `
             <div>
-                <div style="font-family:var(--nui-font-display);font-size:22px;font-weight:800;color:var(--nui-text);line-height:1.2;">Welcome back, ${username}!</div>
+                <div style="font-family:var(--nui-font-display);font-size:22px;font-weight:800;color:var(--nui-text);line-height:1.2;">${getGreeting(username)}</div>
                 <div id="nui-nst-clock" style="font-size:13px;color:var(--nui-text-muted);font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums;">${formatNST(getNSTDate())}</div>
             </div>
         `;
@@ -12636,6 +12880,7 @@ return {
     'use strict';
 
     if (!/\/island\/fight_training\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('training-ninja')) return;
 
     const NeoUI = window.NeoUI;
     if (!NeoUI || !NeoUI.__ready) return;
@@ -12955,6 +13200,7 @@ return {
     'use strict';
 
     if (!/\/pirates\/academy\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('training-pirate')) return;
 
     const NeoUI = window.NeoUI;
     if (!NeoUI || !NeoUI.__ready) return;
@@ -13265,7 +13511,413 @@ return {
     else document.addEventListener('DOMContentLoaded', boot);
 })();
 
+// ==============================================================================
+// MODULE 16: GAMES ROOM + RUFFLE WRAPPER
+// ==============================================================================
+(function () {
+    'use strict';
 
+    const NeoUI = window.NeoUI;
+    if (!NeoUI || !NeoUI.__ready) return;
+    if (!NeoUI.isModuleEnabled('games')) return;
+
+    const path = location.pathname;
+    const params = new URLSearchParams(location.search);
+
+    // ── Ruffle player wrapper ──────────────────────────────────────────────────
+    if (/^\/games\/game\.phtml$/.test(path) && params.has('game_id')) {
+        const initRuffleWrap = function () {
+            // Scrape game metadata before nuking
+            const titleEl = document.querySelector('h1, .game-title, #page_title, .content h2');
+            const gameTitle = titleEl ? titleEl.textContent.trim() : 'Game';
+            const scoreEl = document.querySelector('.game-score, #game_score, [id*="score"]');
+            const scoreText = scoreEl ? scoreEl.textContent.trim() : null;
+
+            // Preserve the Ruffle player element — it starts loading immediately
+            const rufflePlayer = document.querySelector('ruffle-player');
+            if (!rufflePlayer) return; // H5 or unknown — bail
+
+            // Detach from DOM so we can rebuild around it
+            const ruffleClone = rufflePlayer.parentNode ? rufflePlayer.parentNode.removeChild(rufflePlayer) : rufflePlayer;
+
+            // Scrape the score submit form if present (outside the SWF)
+            const submitForm = document.querySelector('form[action*="sendtoscore"], form[action*="score"], #submitForm');
+            const submitFormClone = submitForm ? submitForm.parentNode.removeChild(submitForm) : null;
+
+            // Nuke and rebuild
+            document.body.innerHTML = '';
+            document.documentElement.style.background = 'var(--nui-bg)';
+            document.body.style.cssText = 'margin:0;padding:0;background:var(--nui-bg);';
+            document.body.className = 'nui-reset';
+
+            NeoUI.init();
+            NeoUI.buildTopbar({ username: '' });
+
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:calc(var(--nui-topbar-h) + 12px) 12px 24px;box-sizing:border-box;gap:12px;';
+
+            // Game header
+            const header = document.createElement('div');
+            header.style.cssText = 'width:100%;max-width:700px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;';
+            header.innerHTML = `
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <a href="/games/" style="font-size:20px;text-decoration:none;color:var(--nui-text-muted);" title="Back to Games Room">🕹️</a>
+                    <div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">${gameTitle}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <a href="/games/hiscores.phtml?game_id=${params.get('game_id')}" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;">🏆 Hi-Scores</a>
+                </div>
+            `;
+
+            // Player container
+            const playerWrap = document.createElement('div');
+            playerWrap.style.cssText = 'width:100%;max-width:700px;border-radius:var(--nui-radius-lg);overflow:hidden;border:1px solid var(--nui-border);box-shadow:0 4px 24px var(--nui-shadow);background:#000;aspect-ratio:4/3;position:relative;';
+            ruffleClone.style.cssText = 'width:100%;height:100%;display:block;';
+            playerWrap.appendChild(ruffleClone);
+
+            wrapper.appendChild(header);
+            wrapper.appendChild(playerWrap);
+
+            // Score submission form — reskin and append below player if present
+            if (submitFormClone) {
+                const formWrap = document.createElement('div');
+                formWrap.className = 'nui-surface';
+                formWrap.style.cssText = 'width:100%;max-width:700px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);padding:var(--nui-space-4);display:flex;flex-direction:column;gap:10px;';
+                formWrap.innerHTML = `<div style="font-family:var(--nui-font-display);font-size:16px;font-weight:800;color:var(--nui-text);">Submit Score</div>`;
+                // Style the submit button inside the form
+                submitFormClone.querySelectorAll('input[type="submit"], button[type="submit"]').forEach(btn => {
+                    btn.className = 'nui-btn nui-btn-primary nui-btn-sm';
+                    btn.style.cssText = 'margin-top:6px;';
+                });
+                formWrap.appendChild(submitFormClone);
+                wrapper.appendChild(formWrap);
+            }
+
+            document.body.appendChild(wrapper);
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initRuffleWrap);
+        else initRuffleWrap();
+        return;
+    }
+
+    // ── Games room index (all-games list) ─────────────────────────────────────
+    // The /games/ root shows a showcase, not the full list. The real list lives
+    // at /games/category.phtml: alphabetically grouped (a .gr-group-header per
+    // letter, followed by sibling .ctp-med cards), paginated via ?page=N (a
+    // windowed pagination table with no visible page-number text — just sprite
+    // icons — so page numbers are inferred from each link's href, not scraped
+    // text), with a premium-featured callout above it and four sort tabs
+    // (A-Z / Newest / Difficulty / Popularity) baked into the server markup.
+    //
+    // Step 1 of this rebuild: get the full list loading correctly with working
+    // pagination. Every page load — including the very first one — goes
+    // through fetch() and a fresh DOMParser document rather than trusting the
+    // live `document`, since by the time we'd scrape it we've already wiped
+    // document.body to build the NeoUI shell.
+    if (path === '/games/' || path === '/games/index.phtml' || path === '/games/category.phtml') {
+        const initGamesRoom = function () {
+            document.body.innerHTML = '';
+            document.documentElement.style.background = 'var(--nui-bg)';
+            document.body.style.cssText = 'margin:0;padding:0;background:var(--nui-bg);';
+            document.body.className = 'nui-reset';
+            NeoUI.init();
+            NeoUI.buildTopbar({ username: '' });
+
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'min-height:100vh;padding:calc(var(--nui-topbar-h) + 16px) 16px 32px;box-sizing:border-box;max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px;';
+
+            const hdr = document.createElement('div');
+            hdr.style.cssText = 'display:flex;flex-direction:column;gap:12px;';
+            hdr.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                    <div style="font-family:var(--nui-font-display);font-size:26px;font-weight:800;color:var(--nui-text);">🕹️ Games Room</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <a href="/games/favourites.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;">⭐ Favourites</a>
+                        <a href="/games/hiscores.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="text-decoration:none;">🏆 Hi-Scores</a>
+                    </div>
+                </div>
+                <div id="nui-games-sorttabs" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+                <input type="text" id="nui-games-search" placeholder="Filter this page…" class="nui-input" style="max-width:340px;padding:8px 12px;font-size:14px;">
+            `;
+            wrapper.appendChild(hdr);
+
+            const loading = document.createElement('div');
+            loading.style.cssText = 'display:flex;align-items:center;gap:10px;padding:32px 0;color:var(--nui-text-muted);font-size:14px;';
+            loading.innerHTML = `<div style="width:20px;height:20px;border:3px solid var(--nui-border);border-top-color:var(--nui-accent);border-radius:50%;animation:spin 1s linear infinite;flex-shrink:0;"></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>Loading games…`;
+            wrapper.appendChild(loading);
+            document.body.appendChild(wrapper);
+
+            const listBody = document.createElement('div');
+            listBody.style.cssText = 'display:flex;flex-direction:column;gap:20px;';
+
+            // ── Scraping ──────────────────────────────────────────────────────
+            function scrapeSortTabs(doc, baseUrl) {
+                const tabs = [];
+                doc.querySelectorAll('#gr-category-list-main .navigation a.game-nav').forEach(function (a) {
+                    tabs.push({
+                        id: a.id,
+                        href: new URL(a.getAttribute('href'), baseUrl).href,
+                        active: /(^|\s)hovered(\s|$)/.test(a.className),
+                    });
+                });
+                return tabs;
+            }
+
+            function scrapeFeatured(doc, baseUrl) {
+                const el = doc.querySelector('#gr-ctp-premium-featured .ctp-premium-featured');
+                if (!el) return null;
+                const link = el.querySelector('a[href]');
+                if (!link) return null;
+                const img = el.querySelector('img');
+                const titleEl = el.querySelector('.cont.title, .cont .title');
+                return {
+                    href: new URL(link.getAttribute('href'), baseUrl).href,
+                    title: (titleEl ? titleEl.textContent : link.getAttribute('title') || '').trim(),
+                    img: img ? new URL(img.getAttribute('src'), baseUrl).href : null,
+                };
+            }
+
+            // Groups games by their alphabetical .gr-group-header, walking
+            // direct children in document order (header, then its .ctp-med
+            // siblings, repeat) rather than assuming any fixed count per group.
+            function scrapeGroups(doc, baseUrl) {
+                const midContent = doc.querySelector('#gr-category-list .mid-content');
+                if (!midContent) return [];
+                const groups = [];
+                let current = null;
+                Array.prototype.forEach.call(midContent.children, function (el) {
+                    if (el.classList && el.classList.contains('gr-group-header')) {
+                        const h2 = el.querySelector('h2');
+                        current = { letter: h2 ? h2.textContent.trim() : '', games: [] };
+                        groups.push(current);
+                    } else if (el.classList && el.classList.contains('ctp-med')) {
+                        if (!current) { current = { letter: '', games: [] }; groups.push(current); }
+                        const link = el.querySelector('a[href]');
+                        if (!link) return;
+                        const img = el.querySelector('img');
+                        const nameLink = el.querySelector('.name a');
+                        current.games.push({
+                            href: new URL(link.getAttribute('href'), baseUrl).href,
+                            title: (nameLink ? nameLink.textContent : link.getAttribute('title') || '').trim(),
+                            img: img ? new URL(img.getAttribute('src'), baseUrl).href : null,
+                        });
+                    }
+                    // Anything else (br.clear, the pagination table, etc.) is
+                    // a sibling here too — deliberately ignored by this walk.
+                });
+                return groups;
+            }
+
+            // The pagination table's page "numbers" are sprite-image divs with
+            // no visible text, so page numbers come from each link's ?page=N
+            // instead. The currently-viewed page has no link at all (just an
+            // "inactive" marker div) — its number comes from the URL itself
+            // (absent ?page= means page 0, matching how the site's own links
+            // omit the param for page 0).
+            // Discovers page numbers from each link's href rather than assuming
+            // a fixed total, since the pagination window on any given page may
+            // not expose the true last page.
+            function scrapePagination(doc, baseUrl) {
+                const table = doc.querySelector('#gr-category-list-pagination');
+                const pages = new Set();
+                if (table) {
+                    table.querySelectorAll('a[href*="page="]').forEach(function (a) {
+                        const m = a.getAttribute('href').match(/[?&]page=(\d+)/);
+                        if (m) pages.add(parseInt(m[1], 10));
+                    });
+                }
+                const u = new URL(baseUrl);
+                const currentPage = u.searchParams.has('page') ? (parseInt(u.searchParams.get('page'), 10) || 0) : 0;
+                pages.add(currentPage);
+                return { currentPage: currentPage, pages: Array.from(pages).sort(function (a, b) { return a - b; }) };
+            }
+
+            function pageUrl(baseUrl, n) {
+                const u = new URL(baseUrl);
+                if (n > 0) u.searchParams.set('page', String(n));
+                else u.searchParams.delete('page');
+                return u.href;
+            }
+
+            // ── Rendering ─────────────────────────────────────────────────────
+            function renderSortTabs(tabs) {
+                const labels = { 'sort-name': 'A–Z', 'sort-newest': 'Newest', 'sort-difficulty': 'Difficulty', 'sort-popularity': 'Popularity' };
+                const container = hdr.querySelector('#nui-games-sorttabs');
+                container.innerHTML = '';
+                tabs.forEach(function (t) {
+                    const a = document.createElement('a');
+                    a.href = t.href;
+                    a.textContent = labels[t.id] || t.id;
+                    a.className = 'nui-btn nui-btn-sm ' + (t.active ? 'nui-btn-primary' : 'nui-btn-secondary');
+                    a.style.cssText = 'text-decoration:none;';
+                    a.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        loadPage(t.href);
+                    });
+                    container.appendChild(a);
+                });
+            }
+
+            function renderFeatured(featured) {
+                const existing = listBody.querySelector('#nui-games-featured');
+                if (existing) existing.remove();
+                if (!featured) return;
+                const card = document.createElement('a');
+                card.id = 'nui-games-featured';
+                card.href = featured.href;
+                card.className = 'nui-surface';
+                card.style.cssText = 'display:flex;align-items:center;gap:14px;padding:14px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);text-decoration:none;color:var(--nui-text);box-shadow:0 4px 12px var(--nui-shadow);';
+                card.innerHTML = `
+                    ${featured.img ? '<img src="' + featured.img + '" style="width:64px;height:64px;object-fit:contain;border-radius:var(--nui-radius-md);background:var(--nui-surface-alt,#f4f4f4);flex-shrink:0;">' : ''}
+                    <div>
+                        <span class="nui-badge" style="font-size:11px;padding:3px 8px;">⭐ Featured</span>
+                        <div style="font-weight:800;font-size:16px;margin-top:4px;">${featured.title}</div>
+                    </div>
+                `;
+                listBody.insertBefore(card, listBody.firstChild);
+            }
+
+            function renderGroups(groups) {
+                Array.prototype.forEach.call(listBody.querySelectorAll('.nui-games-group'), function (n) { n.remove(); });
+                if (!groups.some(function (g) { return g.games.length; })) {
+                    const empty = document.createElement('div');
+                    empty.className = 'nui-games-group';
+                    empty.style.cssText = 'padding:32px;text-align:center;color:var(--nui-text-muted);font-size:14px;';
+                    empty.textContent = 'No games found on this page — Neopets may have updated their markup.';
+                    listBody.appendChild(empty);
+                    return;
+                }
+                groups.forEach(function (group) {
+                    if (!group.games.length) return;
+                    const sec = document.createElement('div');
+                    sec.className = 'nui-games-group';
+                    const secTitle = document.createElement('div');
+                    secTitle.style.cssText = 'font-family:var(--nui-font-display);font-size:16px;font-weight:800;color:var(--nui-text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--nui-border);';
+                    secTitle.textContent = group.letter || '#';
+                    sec.appendChild(secTitle);
+
+                    const grid = document.createElement('div');
+                    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;';
+
+                    group.games.forEach(function (g) {
+                        const card = document.createElement('a');
+                        card.href = g.href;
+                        card.className = 'nui-surface nui-games-card';
+                        card.setAttribute('data-title', g.title.toLowerCase());
+                        card.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);text-decoration:none;color:var(--nui-text);text-align:center;transition:background var(--nui-dur-fast),transform var(--nui-dur-fast);';
+
+                        const imgEl = document.createElement('div');
+                        imgEl.style.cssText = 'width:60px;height:48px;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+                        if (g.img) {
+                            const i = document.createElement('img');
+                            i.src = g.img; i.alt = ''; i.loading = 'lazy';
+                            i.style.cssText = 'width:60px;height:48px;object-fit:cover;border-radius:4px;';
+                            i.onerror = function () { this.style.display = 'none'; };
+                            imgEl.appendChild(i);
+                        } else {
+                            imgEl.textContent = '🎮';
+                            imgEl.style.fontSize = '24px';
+                        }
+
+                        const label = document.createElement('span');
+                        label.style.cssText = 'font-size:11px;font-weight:700;line-height:1.3;';
+                        label.textContent = g.title;
+
+                        card.appendChild(imgEl);
+                        card.appendChild(label);
+                        grid.appendChild(card);
+                    });
+
+                    sec.appendChild(grid);
+                    listBody.appendChild(sec);
+                });
+            }
+
+            function renderPagination(pagination, baseUrl) {
+                const existing = listBody.querySelector('#nui-games-pagination');
+                if (existing) existing.remove();
+                const nav = document.createElement('div');
+                nav.id = 'nui-games-pagination';
+                nav.style.cssText = 'display:flex;justify-content:center;gap:6px;flex-wrap:wrap;padding-top:8px;';
+
+                const maxPage = pagination.pages.length ? pagination.pages[pagination.pages.length - 1] : 0;
+                const makeBtn = function (label, targetPage, disabled, primary) {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.textContent = label;
+                    b.className = 'nui-btn nui-btn-sm ' + (primary ? 'nui-btn-primary' : 'nui-btn-secondary');
+                    b.disabled = !!disabled;
+                    if (!disabled) {
+                        b.addEventListener('click', function () { loadPage(pageUrl(baseUrl, targetPage)); });
+                    }
+                    return b;
+                };
+
+                nav.appendChild(makeBtn('← Prev', pagination.currentPage - 1, pagination.currentPage <= 0, false));
+                pagination.pages.forEach(function (p) {
+                    nav.appendChild(makeBtn(String(p + 1), p, false, p === pagination.currentPage));
+                });
+                nav.appendChild(makeBtn('Next →', pagination.currentPage + 1, pagination.currentPage >= maxPage, false));
+
+                listBody.appendChild(nav);
+            }
+
+            function wireFilter() {
+                const searchInput = hdr.querySelector('#nui-games-search');
+                searchInput.value = '';
+                searchInput.oninput = function () {
+                    const q = this.value.toLowerCase().trim();
+                    listBody.querySelectorAll('.nui-games-card').forEach(function (card) {
+                        card.style.display = (!q || card.getAttribute('data-title').indexOf(q) !== -1) ? '' : 'none';
+                    });
+                    listBody.querySelectorAll('.nui-games-group').forEach(function (sec) {
+                        const anyVisible = Array.prototype.some.call(sec.querySelectorAll('.nui-games-card'), function (c) { return c.style.display !== 'none'; });
+                        sec.style.display = (anyVisible || !q) ? '' : 'none';
+                    });
+                };
+            }
+
+            function renderAll(doc, baseUrl) {
+                if (loading.parentNode) loading.remove();
+                if (!listBody.parentNode) wrapper.appendChild(listBody);
+                listBody.style.opacity = '';
+                renderSortTabs(scrapeSortTabs(doc, baseUrl));
+                renderFeatured(scrapeFeatured(doc, baseUrl));
+                renderGroups(scrapeGroups(doc, baseUrl));
+                renderPagination(scrapePagination(doc, baseUrl), baseUrl);
+                wireFilter();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
+            function loadPage(url) {
+                if (listBody.parentNode) listBody.style.opacity = '0.5';
+                else if (!loading.parentNode) wrapper.appendChild(loading);
+                fetch(url, { credentials: 'include' })
+                    .then(function (r) { return r.text(); })
+                    .then(function (html) {
+                        const doc = new DOMParser().parseFromString(html, 'text/html');
+                        renderAll(doc, url);
+                    })
+                    .catch(function () {
+                        listBody.style.opacity = '';
+                        const err = document.createElement('div');
+                        err.style.cssText = 'padding:16px;text-align:center;color:var(--nui-text-muted);';
+                        err.textContent = 'Failed to load that page.';
+                        listBody.appendChild(err);
+                    });
+            }
+
+            // One page at a time — fetch fresh on every load (including the
+            // first) since by this point document.body has already been
+            // wiped to build the NeoUI shell, so the live `document` no
+            // longer has anything to scrape even if we started out on
+            // category.phtml ourselves.
+            loadPage(path === '/games/category.phtml' ? location.href : '/games/category.phtml');
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initGamesRoom);
+        else initGamesRoom();
+    }
+})();
 
 // MODULE 19: FRUIT MACHINE (HEADLESS SPA WRAPPER)
 // ==============================================================================
@@ -13293,6 +13945,7 @@ return {
     'use strict';
 
     if (!/\/desert\/fruit\//.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('fruit-machine')) return;
 
     const NeoUI = window.NeoUI;
     if (!NeoUI || !NeoUI.__ready) return;
@@ -13356,17 +14009,24 @@ return {
     // ─────────────────────────────────────────────────────────────────────────
     function scrapeState(doc, baseUrl) {
         const content = doc.querySelector('td.content') || doc.body;
-        const raw = content.innerHTML;
+
+        // Two real samples confirm div.result is the one container reused
+        // across every sub-state: it holds the spin form when ready to
+        // play, and plain, unwrapped text (no <b>/<strong>/<p>) when the
+        // free spin's already been used for the day. We scope off it
+        // directly rather than searching loosely across the whole page, so
+        // whatever's actually inside it — including bare text — is what
+        // gets shown, instead of silently falling back to a made-up message.
+        const resultDiv = content.querySelector('div.result');
+        const spinForm = resultDiv ? resultDiv.querySelector('form') : null;
+        const hasSpinInput = spinForm && spinForm.querySelector('input[name="spin"][value="1"]');
 
         // Ready state: the sampled markup — a form holding a hidden
         // spin=1 field, a hidden ck token, and a submit button. Every hidden
         // field on the form is captured generically (not just spin/ck) so
         // the real POST body always matches whatever Neopets actually sends,
         // even if fields are added or renamed later.
-        const spinForm = Array.prototype.find.call(content.querySelectorAll('form'), function (f) {
-            return !!f.querySelector('input[name="spin"][value="1"]');
-        });
-        if (spinForm) {
+        if (hasSpinInput) {
             const hidden = {};
             spinForm.querySelectorAll('input[type="hidden"]').forEach(function (inp) {
                 const name = inp.getAttribute('name');
@@ -13382,43 +14042,60 @@ return {
             };
         }
 
-        // Cooldown state (unsampled): no spin form present, so look for
-        // common Neopets daily-limit phrasing. Falls through to the result
-        // branch — and ultimately the raw-HTML safety net — if nothing matches.
-        const cooldownMatch = raw.match(/already\s+(?:had|used|taken|spun|played)[^<]{0,60}(?:spin|turn|go)|come back tomorrow|one\s+(?:free\s+)?spin\s+per\s+day/i);
-        if (cooldownMatch) {
-            const msgEl = Array.prototype.find.call(content.querySelectorAll('b, strong, p'), function (el) {
-                return /already|tomorrow|per day/i.test(el.textContent);
+        // No form inside div.result: either the daily cooldown message
+        // (sampled — plain text, e.g. "You've already had your free spin
+        // for today. Please come back tomorrow and try again.") or a
+        // post-spin result (unsampled). The exact text is always taken
+        // straight from div.result — no generic placeholder — and a
+        // phrasing check decides which of the two this is.
+        if (resultDiv) {
+            const resultText = resultDiv.textContent.replace(/\s+/g, ' ').trim();
+            const isCooldown = /already\s+(?:had|used|taken|spun|played)[^.]{0,60}(?:spin|turn|go)|come back tomorrow|one\s+(?:free\s+)?spin\s+per\s+day/i.test(resultText);
+            if (isCooldown) {
+                return { type: 'cooldown', message: resultText };
+            }
+
+            // Result state (unsampled): best-effort scrape of a post-spin
+            // outcome. Looks for a win/lose headline, any revealed fruit
+            // images, and any prize table within div.result — but always
+            // keeps div.result's raw HTML too, so the renderer can fall
+            // back to "the original content, re-skinned" if none of the
+            // guessed shapes actually match Neopets' markup.
+            const fruitImgs = Array.prototype.map.call(
+                resultDiv.querySelectorAll('img[src]'),
+                function (img) { return new URL(img.getAttribute('src'), baseUrl).href; }
+            );
+            const prizeTableEl = resultDiv.querySelector('table.prizeCell, td.prizeCell')
+                ? resultDiv.querySelector('table.prizeCell, td.prizeCell').closest('table')
+                : null;
+            const headlineEl = Array.prototype.find.call(resultDiv.querySelectorAll('b, strong'), function (el) {
+                return /won|nothing|sorry|congrat/i.test(el.textContent);
             });
+
             return {
-                type: 'cooldown',
-                message: msgEl ? msgEl.textContent.replace(/\s+/g, ' ').trim() : "You've already used your free spin today.",
+                type: 'result',
+                headline: headlineEl ? headlineEl.textContent.replace(/\s+/g, ' ').trim() : null,
+                fruitImgs: fruitImgs,
+                prizeTableHtml: prizeTableEl ? prizeTableEl.outerHTML : null,
+                rawHtml: resultDiv.innerHTML,
             };
         }
 
-        // Result state (unsampled): best-effort scrape of a post-spin outcome.
-        // Looks for a win/lose headline, any revealed fruit images, and any
-        // prize table — but always keeps the raw scraped HTML too, so the
-        // renderer can fall back to "the original content, re-skinned" if
-        // none of the guessed shapes actually match Neopets' markup.
-        const resultScope = content.querySelector('div.result') || content;
-        const fruitImgs = Array.prototype.map.call(
+        // Completely unrecognized shape (no div.result at all): fall back
+        // to scraping the whole content area rather than rendering nothing.
+        const fruitImgsFallback = Array.prototype.map.call(
             content.querySelectorAll('#fruitMain img[src], .fruit img[src], img[src*="/desert/fruit/"]'),
             function (img) { return new URL(img.getAttribute('src'), baseUrl).href; }
         );
-        const prizeTableEl = content.querySelector('table.prizeCell, td.prizeCell')
-            ? content.querySelector('table.prizeCell, td.prizeCell').closest('table')
-            : null;
-        const headlineEl = Array.prototype.find.call(content.querySelectorAll('b, strong'), function (el) {
+        const headlineElFallback = Array.prototype.find.call(content.querySelectorAll('b, strong'), function (el) {
             return /won|nothing|sorry|congrat/i.test(el.textContent);
         });
-
         return {
             type: 'result',
-            headline: headlineEl ? headlineEl.textContent.replace(/\s+/g, ' ').trim() : null,
-            fruitImgs: fruitImgs,
-            prizeTableHtml: prizeTableEl ? prizeTableEl.outerHTML : null,
-            rawHtml: resultScope ? resultScope.innerHTML : raw,
+            headline: headlineElFallback ? headlineElFallback.textContent.replace(/\s+/g, ' ').trim() : null,
+            fruitImgs: fruitImgsFallback,
+            prizeTableHtml: null,
+            rawHtml: content.innerHTML,
         };
     }
 
