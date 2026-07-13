@@ -2910,7 +2910,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             '<button type="button" class="nui-reset" id="nui-ct-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--nui-text-muted); line-height: 1;">&times;</button>';
 
         const content = document.createElement('div');
-        content.style.cssText = 'padding: var(--nui-space-4); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 14px;';
+        content.style.cssText = 'flex: 1 1 auto; min-height: 0; padding: var(--nui-space-4); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 14px;';
 
         const footer = document.createElement('div');
         footer.style.cssText = 'padding: var(--nui-space-3) var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface-2); display: flex; gap: 8px; flex-shrink: 0;';
@@ -2955,7 +2955,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 : tp.value;
             return '<button type="button" class="nui-ct-tex" data-tex="' + tp.value.replace(/"/g, '&quot;') + '" ' +
                 'style="border-radius:8px; overflow:hidden; border:' + border + '; cursor:pointer; background:none; padding:0; text-align:left; width:100%;">' +
-                '<div style="height:56px; background:var(--nui-surface); background-image:' + (isNone ? 'repeating-linear-gradient(45deg,var(--nui-border) 0,var(--nui-border) 1px,transparent 1px,transparent 8px)' : tp.value) + '; background-repeat:repeat; background-size:auto;"></div>' +
+                '<div style="height:56px; background:var(--nui-surface); background-image:' + (isNone ? 'repeating-linear-gradient(45deg,var(--nui-border) 0,var(--nui-border) 1px,transparent 1px,transparent 8px)' : tp.value.replace(/"/g, '&quot;')) + '; background-repeat:repeat; background-size:auto;"></div>' +
                 '<div style="padding:5px 7px; background:var(--nui-surface-2); border-top:1px solid var(--nui-border);">' +
                     '<div style="font-size:11px; font-weight:700; color:' + (active ? 'var(--nui-accent)' : 'var(--nui-text)') + ';">' + tp.label + '</div>' +
                 '</div>' +
