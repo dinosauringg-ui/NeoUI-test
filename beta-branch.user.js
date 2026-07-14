@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.46
+// @version      1.1.51
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -49,6 +49,63 @@
  *   Faerie Quests    — sitewide quest watcher + /quests.phtml enhancement
  *
  * CHANGELOG  (last 5 versions)
+ *
+ * v1.1.51
+ *   - Kadoatery: hidden item auto-search flag (nui_kad_autosearch in
+ *     localStorage; not in Settings → Modules by design). When on, tapping
+ *     a hungry kad's item name opens the SSW modal already searching that
+ *     item instead of copying it to the clipboard, and a small 📦 shortcut
+ *     appears next to it that opens the Safety Deposit Box pre-filtered to
+ *     that item in a new tab. Off by default — flip it by holding down on
+ *     the "N hungry · M fed" summary line for ~0.7s; a toast confirms the
+ *     new state (reload to see it take effect on the grid).
+ *
+ * v1.1.50
+ *   - New toggle: "Kad Mode (Timer)" — a condensed KadWatch-style timer
+ *     (NeoUI.KadTimer in Core, localStorage-backed) that auto-detects a new
+ *     Kadoatery drop by diffing hungry-kad snapshots between loads, then
+ *     tracks the ~35min quiet period + ~60s-every-7min window cycle. Shows
+ *     as a panel at the bottom of the Kadoatery page and, when enabled, as
+ *     a small live countdown card on the Home dashboard.
+ *   - Kadoatery: before the SPA wipes the page, the original body text and
+ *     a cleaned copy of the scraped kads are stashed on
+ *     window.__NeoUI_KadScrapeCache, so other userscripts that read this
+ *     page's server-rendered markup (e.g. a stats/analytics tracker) still
+ *     have something to read after the rebuild — including on
+ *     feed_kadoatie.phtml's result screen, which has no kad grid and would
+ *     otherwise just be erased before anything else got a chance to see it.
+ *
+ * v1.1.49
+ *   - Core: injectViewport() now overwrites any existing viewport meta tag
+ *     (rather than skipping if one's present) and re-applies it across a
+ *     couple of animation frames, since some mobile browsers compute their
+ *     initial zoom level from the first paint — before this script ever
+ *     runs on a page shipped with no viewport meta — and don't reliably
+ *     revisit that once the tag's content changes after the fact.
+ *   - Kadoatery: fed tiles now show who fed them, vibe-tinted (border +
+ *     background) if that user has a VibeRater rating. Kads fed by the
+ *     current user are highlighted with an accent border and a "You fed
+ *     this" badge instead of the plain username, so it's obvious at a
+ *     glance which ones you've already handled.
+ *
+ * v1.1.48
+ *   - New module: Kadoatery. Scrapes the grid (name, colour/state from its
+ *     sprite, item needed) and rebuilds it as a fixed 4-column mobile grid
+ *     matching the original 4x5 table layout — hungry kads sorted first,
+ *     item name is tap-to-copy. Three action buttons pinned at the top: SSW
+ *     (our modal), classic Shop Wizard (/market.phtml?type=wizard), and
+ *     Safety Deposit Box. Feeding itself still goes through the real
+ *     feed_kadoatie.phtml page. Toggleable as "Kadoatery".
+ *
+ * v1.1.47
+ *   - New module: Sitewide Chrome (universal fallback). Runs last, after
+ *     every page-specific module has had its shot at the current URL; if
+ *     none of them built a topbar, this hides the native header/footer/ad
+ *     chrome and layers the shared topbar + drawer nav on top, leaving
+ *     whatever page content is underneath untouched. First pass — chrome
+ *     selectors cover the classic template and may need additions once
+ *     seen running across more page families. Toggleable as "Sitewide
+ *     Chrome" in Settings.
  *
  * v1.1.42
  *   - Module toggle system: every module except Core checks
@@ -1551,13 +1608,27 @@
     }
 
     function injectViewport() {
-    if (document.querySelector('meta[name="viewport"]')) return;
-    const meta = document.createElement('meta');
-    meta.name = 'viewport';
-    // Remove maximum-scale and user-scalable constraints
-    meta.content = 'width=device-width, initial-scale=1.0';
-    document.head.appendChild(meta);
-}
+        let meta = document.querySelector('meta[name="viewport"]');
+        if (!meta) {
+            meta = document.createElement('meta');
+            meta.name = 'viewport';
+            document.head.insertBefore(meta, document.head.firstChild);
+        }
+        meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes');
+        // Some mobile browsers compute their initial zoom level from the very
+        // first paint — which happens before this script ever runs on a page
+        // that shipped with no viewport meta at all — and don't reliably
+        // revisit that decision just because the meta tag's content changed
+        // after the fact. Toggling the value on the next couple of frames
+        // nudges them into recomputing the layout viewport against the
+        // corrected width instead of leaving the page looking zoomed in.
+        requestAnimationFrame(function () {
+            meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, shrink-to-fit=no');
+            requestAnimationFrame(function () {
+                meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes');
+            });
+        });
+    }
 
 
     // Tiny element-builder helper so consuming scripts don't hand-roll
@@ -1809,6 +1880,8 @@
         { id: 'stockmarket',    label: 'Stock Market',               desc: 'Portfolio dashboard' },
         { id: 'coincidence',    label: 'The Coincidence',            desc: 'Coincidence SPA' },
         { id: 'buried-treasure',label: 'Buried Treasure',            desc: 'Map SPA' },
+        { id: 'kadoatery',      label: 'Kadoatery',                  desc: 'Mobile grid + tap-to-copy items' },
+        { id: 'kad-timer',      label: 'Kad Mode (Timer)',           desc: 'Kadoatery window timer, on Kadoatery page + Home' },
         { id: 'fruit-machine',  label: 'Fruit Machine',              desc: 'Spin SPA' },
         { id: 'coconut-shy',    label: 'Coconut Shy',                desc: 'Coconut Shy wrapper' },
         { id: 'faerie-quests',  label: 'Faerie Quests',              desc: 'Quest watcher + page' },
@@ -1817,6 +1890,7 @@
         { id: 'wishing-well',   label: 'Wishing Well',               desc: 'Wishing Well optimizer' },
         { id: 'item-transfer',  label: 'Item Transfer Log',          desc: 'Transfer log SPA' },
         { id: 'allevents',      label: 'All Events',                 desc: 'Compact events UI' },
+        { id: 'sitewide-chrome',label: 'Sitewide Chrome',            desc: 'Topbar/nav on every other page' },
     ];
 
     function getDisabledModules() {
@@ -3409,6 +3483,340 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     }
 
     // ---- Public init ----
+    // ── Kad Timer engine (condensed KadWatch) ──────────────────────────────
+    // Shared by the Kadoatery module (panel at the bottom of the grid), the
+    // Home module ("Kad Mode" homepage widget), and the "🐱 Kad Timer"
+    // Settings section (manual editing, minis, board-post copy — the
+    // KadWatch feature set, just living in the sidebar instead of its own
+    // floating panel). Lives here in Core so all three can reach it via
+    // NeoUI.KadTimer without duplicating the timing math. Storage is plain
+    // localStorage (this script runs with @grant none), keyed separately
+    // from KadWatch's own GM_-backed keys so the two can coexist without
+    // clobbering each other.
+    const KT_LAST_REFRESH_KEY = 'nui_kadtimer_last_refresh';
+    const KT_MAIN_DATA_KEY = 'nui_kadtimer_main_data';   // {count, first, last}
+    const KT_MINIS_KEY = 'nui_kadtimer_minis';           // [{time, count, first, last}]
+    const KT_PENDING_DROP_KEY = 'nui_kadtimer_pending';  // {time, count, names[]}
+    const KT_PREV_STATES_KEY = 'nui_kadtimer_prev_states';
+    const KT_FIRST_RUN_KEY = 'nui_kadtimer_first_run';
+    const KT_24H_KEY = 'nui_kadtimer_24h';
+    // Same cadence as the real Kadoatery drop cycle: ~35 min quiet period,
+    // then a ~60s window every 7 minutes until the next drop.
+    const KT_MAIN_DELAY_MS = 2100000;
+    const KT_WINDOW_MS = 60000;
+    const KT_INTERVAL_MS = 420000;
+    const KT_DEBOUNCE_MS = 300000; // ignore re-detections within 5 min of the last logged refresh/pending drop
+
+    function ktGet(key, def) {
+        try {
+            const raw = localStorage.getItem(key);
+            return raw === null ? def : JSON.parse(raw);
+        } catch (e) { return def; }
+    }
+    function ktSet(key, val) {
+        try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+    }
+    function ktDel(key) {
+        try { localStorage.removeItem(key); } catch (e) {}
+    }
+
+    function ktGetTimerState(lastRefreshTime, now) {
+        if (!lastRefreshTime) return { status: 'expired' };
+        const mainStart = lastRefreshTime + KT_MAIN_DELAY_MS;
+        const sinceStart = now - mainStart;
+        if (sinceStart < 0) return { status: 'waiting', nextStart: mainStart, countdown: mainStart - now };
+        const cycle = Math.floor(sinceStart / KT_INTERVAL_MS);
+        const winStart = mainStart + cycle * KT_INTERVAL_MS;
+        const winEnd = winStart + KT_WINDOW_MS;
+        if (now >= winStart && now < winEnd) return { status: 'active', timeRemaining: winEnd - now };
+        const nextStart = mainStart + (cycle + 1) * KT_INTERVAL_MS;
+        return { status: 'waiting', nextStart: nextStart, countdown: nextStart - now };
+    }
+
+    function ktFormatCountdown(ms) {
+        const totalSec = Math.max(0, Math.floor(ms / 1000));
+        const m = Math.floor(totalSec / 60), s = totalSec % 60;
+        return (m < 10 ? '0' + m : '' + m) + ':' + (s < 10 ? '0' + s : '' + s);
+    }
+    // Kadoatery windows run on NST (America/Los_Angeles), same as the rest
+    // of the site's dailies — show that clock rather than the visitor's
+    // local time, same as KadWatch's formatWindowTime/formatLastRefresh.
+    function ktFormatClock(ms) {
+        if (!ms) return '';
+        try {
+            const is24h = ktGet(KT_24H_KEY, false);
+            const str = new Date(ms).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: !is24h });
+            return str.replace(/ /g, '').toLowerCase();
+        } catch (e) { return ''; }
+    }
+    function ktIs24h() { return ktGet(KT_24H_KEY, false); }
+    function ktSet24h(on) { ktSet(KT_24H_KEY, !!on); }
+
+    function ktFormatLabel(type, count, first, last) {
+        if (!count) return type;
+        const f = first || '', l = last || '';
+        if (count === 1) return f ? (type + ' (1) ' + f) : (type + ' (1)');
+        if (!f && !l) return type + ' (' + count + ')';
+        if (!f) return type + ' (' + count + ') › ' + l;
+        if (!l) return type + ' (' + count + ') ' + f + ' ›';
+        return type + ' (' + count + ') ' + f + ' › ' + l;
+    }
+
+    // ---- Main + Minis CRUD ----
+    function ktGetMainTime() { return ktGet(KT_LAST_REFRESH_KEY, 0); }
+    function ktGetMainData() { return ktGet(KT_MAIN_DATA_KEY, {}); }
+    function ktSetMain(timeMs, count, first, last) {
+        ktSet(KT_LAST_REFRESH_KEY, timeMs);
+        ktSet(KT_MAIN_DATA_KEY, { count: count || 0, first: first || '', last: last || '' });
+    }
+    function ktClearMain() {
+        ktDel(KT_LAST_REFRESH_KEY);
+        ktDel(KT_MAIN_DATA_KEY);
+    }
+    function ktGetMinis() {
+        const minis = ktGet(KT_MINIS_KEY, []);
+        return Array.isArray(minis) ? minis : [];
+    }
+    function ktSaveMinis(arr) { ktSet(KT_MINIS_KEY, arr); }
+    function ktAddMini(timeMs, count, first, last) {
+        const minis = ktGetMinis();
+        minis.push({ time: timeMs, count: count || 0, first: first || '', last: last || '' });
+        minis.sort(function (a, b) { return a.time - b.time; });
+        ktSaveMinis(minis);
+    }
+    function ktUpdateMini(index, patch) {
+        const minis = ktGetMinis();
+        if (!minis[index]) return;
+        minis[index] = Object.assign({}, minis[index], patch);
+        ktSaveMinis(minis);
+    }
+    function ktRemoveMini(index) {
+        const minis = ktGetMinis();
+        minis.splice(index, 1);
+        ktSaveMinis(minis);
+    }
+    function ktPromoteMini(index) {
+        const minis = ktGetMinis();
+        const mini = minis[index];
+        if (!mini) return;
+        const mainTime = ktGetMainTime();
+        minis.splice(index, 1);
+        if (mainTime) {
+            const mainData = ktGetMainData();
+            minis.push({ time: mainTime, count: mainData.count || 0, first: mainData.first || '', last: mainData.last || '' });
+        }
+        ktSaveMinis(minis);
+        ktSetMain(mini.time, mini.count, mini.first, mini.last);
+    }
+    function ktDemoteMain() {
+        const mainTime = ktGetMainTime();
+        if (!mainTime) return;
+        const data = ktGetMainData();
+        ktAddMini(mainTime, data.count, data.first, data.last);
+        ktClearMain();
+    }
+    function ktUpdateMain(patch) {
+        const time = patch.time != null ? patch.time : ktGetMainTime();
+        const data = ktGetMainData();
+        ktSetMain(time, patch.count != null ? patch.count : data.count, patch.first != null ? patch.first : data.first, patch.last != null ? patch.last : data.last);
+    }
+
+    // ---- Manual time entry ----
+    // Accepts things like "3:45", "3:45pm", "15:45:10" and resolves them
+    // against *today in NST*, same rules KadWatch used (12h without am/pm
+    // is disambiguated by proximity to the current NST hour; a value that
+    // crosses midnight relative to "now" rolls to the adjacent day).
+    function ktParseTimeInput(val) {
+        if (!val) return null;
+        const isPM = val.toLowerCase().indexOf('p') !== -1;
+        const isAM = val.toLowerCase().indexOf('a') !== -1;
+        const cleanVal = val.replace(/[a-z\s]/gi, '');
+        const parts = cleanVal.split(':');
+        if (parts.length < 2) return null;
+
+        let hour = parseInt(parts[0], 10);
+        let min = parseInt(parts[1], 10);
+        let sec = parts.length > 2 ? parseInt(parts[2], 10) : -1;
+        if (isNaN(hour) || isNaN(min)) return null;
+        if (sec === -1 || isNaN(sec)) sec = 0;
+
+        if (isPM && hour < 12) hour += 12;
+        if (isAM && hour === 12) hour = 0;
+
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+        });
+        const p = {};
+        formatter.formatToParts(now).forEach(function (part) { p[part.type] = part.value; });
+        let currentNstHour = parseInt(p.hour, 10);
+        if (currentNstHour === 24) currentNstHour = 0;
+
+        if (!isPM && !isAM && hour < 12 && currentNstHour >= 12) {
+            if (Math.abs((hour + 12) - currentNstHour) < Math.abs(hour - currentNstHour)) hour += 12;
+        }
+
+        const pad = function (n) { return String(n).padStart(2, '0'); };
+        const nstIso = p.year + '-' + p.month + '-' + p.day + 'T' + pad(currentNstHour) + ':' + p.minute + ':' + p.second;
+        const nstNow = new Date(nstIso);
+        const nstTarget = new Date(nstIso);
+        nstTarget.setHours(hour, min, sec, 0);
+
+        if (currentNstHour <= 1 && hour >= 22) nstTarget.setDate(nstTarget.getDate() - 1);
+        else if (currentNstHour >= 22 && hour <= 1) nstTarget.setDate(nstTarget.getDate() + 1);
+
+        const diffMs = nstTarget.getTime() - nstNow.getTime();
+        return new Date(now.getTime() + diffMs);
+    }
+
+    // ---- Board-post text (the "copy post" feature) ----
+    function ktGenerateBoardString(label, lastTimeMs, now) {
+        if (!lastTimeMs) return null;
+        const mainWindowStart = lastTimeMs + KT_MAIN_DELAY_MS;
+        const timesToDisplay = [];
+        let cycle = Math.floor((now - mainWindowStart) / KT_INTERVAL_MS);
+        if (cycle < 0) cycle = 0;
+        for (let i = cycle; i <= cycle + 10; i++) {
+            const windowStart = mainWindowStart + i * KT_INTERVAL_MS;
+            if (now < windowStart + KT_WINDOW_MS) timesToDisplay.push(new Date(windowStart));
+            if (timesToDisplay.length >= 6) break;
+        }
+        if (!timesToDisplay.length) return null;
+
+        const lastStr = ktFormatClock(lastTimeMs);
+        const nextStr = ktFormatClock(timesToDisplay[0].getTime());
+        const pends = [];
+        for (let i = 1; i < timesToDisplay.length; i++) {
+            const d = timesToDisplay[i];
+            const m = d.getMinutes();
+            pends.push(':' + (m < 10 ? '0' + m : m));
+        }
+        const pendsStr = pends.length ? ' / ' + pends.join(' / ') : '';
+        return label + ' @ ' + lastStr + '\nNext ' + nextStr + pendsStr;
+    }
+
+    function ktBuildBoardPost() {
+        const now = Date.now();
+        const blocks = [];
+        const mainTime = ktGetMainTime();
+        if (mainTime && ktGetTimerState(mainTime, now).status !== 'expired') {
+            const data = ktGetMainData();
+            const label = ktFormatLabel('Main', data.count, data.first, data.last);
+            const str = ktGenerateBoardString(label, mainTime, now);
+            if (str) blocks.push({ time: mainTime, text: str });
+        }
+        ktGetMinis().forEach(function (mini, index) {
+            if (ktGetTimerState(mini.time, now).status === 'expired') return;
+            const label = ktFormatLabel('Mini ' + (index + 1), mini.count, mini.first, mini.last);
+            const str = ktGenerateBoardString(label, mini.time, now);
+            if (str) blocks.push({ time: mini.time, text: str });
+        });
+        if (!blocks.length) return null;
+        blocks.sort(function (a, b) { return b.time - a.time; });
+        return blocks.map(function (b) { return b.text; }).join('\n\n');
+    }
+
+    function ktFallbackCopy(text) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            return true;
+        } catch (e) { return false; }
+    }
+    function ktCopyBoardPost() {
+        const text = ktBuildBoardPost();
+        if (!text) return Promise.resolve(false);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return ktFallbackCopy(text); });
+        }
+        return Promise.resolve(ktFallbackCopy(text));
+    }
+
+    // ---- Pending drop (auto-detect → user confirms where it goes) ----
+    // kads: array of { name, isFed } (subset of what Kadoatery module
+    // already scrapes). Compares against the previous snapshot by
+    // index/name to spot newly-sad kads — the same "a batch just dropped"
+    // signal KadWatch uses — and, if it looks like a genuine new drop (not
+    // the first load, not within the debounce window of the last logged
+    // drop), stores it as a pending drop for the Settings section to offer
+    // assigning to Main / a new Mini / an existing Mini. Returns the
+    // pending-drop object when one was (re-)detected, otherwise null.
+    function ktDetectRefresh(kads) {
+        const currentState = {};
+        (kads || []).forEach(function (k, i) {
+            currentState[i] = { name: k.name || '', status: k.isFed ? 'fed' : 'sad' };
+        });
+        const prevState = ktGet(KT_PREV_STATES_KEY, {});
+        const isFirst = ktGet(KT_FIRST_RUN_KEY, true);
+        ktSet(KT_FIRST_RUN_KEY, false);
+
+        let minIdx = null, maxIdx = null;
+        Object.keys(currentState).forEach(function (i) {
+            if (currentState[i].status === 'sad') {
+                const p = prevState[i];
+                const isNew = !p || p.status !== 'sad' || p.name !== currentState[i].name;
+                if (isNew) {
+                    const idx = +i;
+                    if (minIdx === null || idx < minIdx) minIdx = idx;
+                    if (maxIdx === null || idx > maxIdx) maxIdx = idx;
+                }
+            }
+        });
+        ktSet(KT_PREV_STATES_KEY, currentState);
+        if (isFirst || minIdx === null) return null;
+
+        const names = [];
+        for (let i = minIdx; i <= maxIdx; i++) {
+            if (currentState[i] && currentState[i].status === 'sad') names.push(currentState[i].name);
+        }
+        if (!names.length) return null;
+
+        const now = Date.now();
+        const mainTime = ktGetMainTime();
+        let highest = mainTime;
+        ktGetMinis().forEach(function (m) { if (m.time > highest) highest = m.time; });
+        if (now - highest < KT_DEBOUNCE_MS) return null;
+
+        const existing = ktGet(KT_PENDING_DROP_KEY, null);
+        if (existing && existing.time && (now - existing.time) < KT_DEBOUNCE_MS) return existing;
+
+        const pending = { time: now, count: names.length, names: names };
+        ktSet(KT_PENDING_DROP_KEY, pending);
+        return pending;
+    }
+    function ktGetPendingDrop() { return ktGet(KT_PENDING_DROP_KEY, null); }
+    function ktDiscardPendingDrop() { ktDel(KT_PENDING_DROP_KEY); }
+    function ktPendingFirstLast(drop) {
+        return { first: drop.names[0] || '', last: drop.count > 1 ? drop.names[drop.count - 1] : '' };
+    }
+    function ktMergePendingToMain() {
+        const drop = ktGetPendingDrop();
+        if (!drop) return;
+        const fl = ktPendingFirstLast(drop);
+        ktSetMain(drop.time, drop.count, fl.first, fl.last);
+        ktDiscardPendingDrop();
+    }
+    function ktMergePendingToNewMini() {
+        const drop = ktGetPendingDrop();
+        if (!drop) return;
+        const fl = ktPendingFirstLast(drop);
+        ktAddMini(drop.time, drop.count, fl.first, fl.last);
+        ktDiscardPendingDrop();
+    }
+    function ktMergePendingToMini(index) {
+        const drop = ktGetPendingDrop();
+        if (!drop) return;
+        const fl = ktPendingFirstLast(drop);
+        ktUpdateMini(index, { time: drop.time, count: drop.count, first: fl.first, last: fl.last });
+        ktDiscardPendingDrop();
+    }
+
     let initialized = false;
     function init(opts) {
         opts = opts || {};
@@ -3457,6 +3865,17 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         },
         addCustomTheme: function(key, def) { THEMES[key] = def; saveCustomTheme(key, def); },
         deleteCustomTheme: function(key) { delete THEMES[key]; deleteCustomTheme(key); },
+        KadTimer: {
+            MAIN_DELAY_MS: KT_MAIN_DELAY_MS,
+            WINDOW_MS: KT_WINDOW_MS,
+            INTERVAL_MS: KT_INTERVAL_MS,
+            getLastRefresh: function () { return ktGet(KT_LAST_REFRESH_KEY, 0); },
+            getLastCount: function () { return ktGet(KT_LAST_COUNT_KEY, 0); },
+            getState: function (now) { return ktGetTimerState(ktGet(KT_LAST_REFRESH_KEY, 0), now || Date.now()); },
+            detectRefresh: ktDetectRefresh,
+            formatCountdown: ktFormatCountdown,
+            formatClock: ktFormatClock,
+        },
     };
 
 })(window);
@@ -12900,6 +13319,36 @@ return {
         linksCard.innerHTML = linksHtml;
         gridContainer.appendChild(linksCard);
 
+        // --- KAD MODE: HOMEPAGE TIMEKEEPER ---
+        // Same engine the Kadoatery page panel uses (NeoUI.KadTimer), just a
+        // smaller readout so the window/countdown is visible without having
+        // to be on the Kadoatery page. Only appears when "Kad Mode (Timer)"
+        // is switched on in Settings.
+        if (NeoUI.isModuleEnabled('kad-timer')) {
+            const KT = NeoUI.KadTimer;
+            const kadCard = nuiCard('height:fit-content;');
+            kadCard.innerHTML = cardHeader('🐱 Kad Timer', '<a href="/games/kadoatery/index.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:2px 8px;font-size:11px;text-decoration:none;">Open</a>') +
+                '<div id="nui-home-kad-timer" style="text-align:center; padding:6px 0; font-size:13px; font-weight:600;">Loading…</div>';
+            gridContainer.appendChild(kadCard);
+
+            (function () {
+                const el = kadCard.querySelector('#nui-home-kad-timer');
+                function tick() {
+                    if (!el || !el.isConnected) return;
+                    const state = KT.getState();
+                    if (state.status === 'expired') {
+                        el.innerHTML = '<span style="color:var(--nui-text-muted);">No window logged yet — visit the Kadoatery to start tracking.</span>';
+                    } else if (state.status === 'active') {
+                        el.innerHTML = '<span style="color:var(--nui-success); font-weight:800;">🟢 WINDOW ACTIVE!</span> closes in <b>' + Math.ceil(state.timeRemaining / 1000) + 's</b>';
+                    } else {
+                        el.innerHTML = 'Next window in <b style="color:var(--nui-accent);">' + KT.formatCountdown(state.countdown) + '</b> (' + KT.formatClock(state.nextStart) + ')';
+                    }
+                    setTimeout(tick, 1000);
+                }
+                tick();
+            })();
+        }
+
         pageWrapper.appendChild(gridContainer);
         document.body.appendChild(pageWrapper);
     }
@@ -14373,4 +14822,415 @@ return {
         document.addEventListener('DOMContentLoaded', boot);
     }
 
+})();
+
+// ==============================================================================
+// MODULE 20: SITEWIDE CHROME (UNIVERSAL FALLBACK)
+// ==============================================================================
+// Activates on: any page not already claimed by a page-specific module above.
+//
+// Every module above guards itself to one URL pattern and, when it matches,
+// builds the shared topbar via NeoUI.buildTopbar(). This module is the
+// catch-all: it runs last, after every page-specific module has already had
+// its chance to check its own URL and (if it matched) build its own topbar.
+// If nothing has created #nui-page-topbar by the time this runs, we're on a
+// page none of the modules above know about, so this module:
+//   1. Hides the native Neopets header/footer/ad chrome
+//   2. Builds the shared topbar + drawer nav on top
+//   3. Reserves space for the (fixed-position) topbar with a spacer div,
+//      rather than touching document.body's own class/style — so if a
+//      slower, async module further down the pipeline turns out to also
+//      match this page and later wipes document.body.innerHTML, our spacer
+//      disappears along with everything else instead of leaving a stray gap.
+//
+// This is a chrome-only reskin, not a SPA rebuild — the actual page content
+// (shop forms, game embeds, pet pages, whatever it is) is left completely
+// untouched underneath, just pushed down below the topbar.
+//
+// NOTE ON THE SELECTOR LIST: Neopets does not use one consistent page
+// skeleton across every section of the site — the selectors below are the
+// chrome elements already referenced elsewhere in this file (detectPremium,
+// scrapeLegacyProfile, the nui-spa-active rules), which cover the classic
+// template. This should be treated as a first pass: some page families may
+// need additions here once this has actually been seen running on a spread
+// of different page types. Deliberately NOT included: anything like #main —
+// on an unaudited page that could just as easily be real content we want to
+// keep, not chrome we want to hide.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!window.NeoUI || !window.NeoUI.__ready) return;
+    const NeoUI = window.NeoUI;
+    if (!NeoUI.isModuleEnabled('sitewide-chrome')) return;
+
+    // Some page-specific module above already claimed this page (built its
+    // own topbar, or did a full SPA rebuild) — don't double up.
+    if (document.getElementById('nui-page-topbar')) return;
+
+    const CHROME_SELECTORS = [
+        '#header',                                              // classic top masthead
+        '#ban', '#ad', '.ad-container',                         // ad banner rows
+        '#footer', '.footerlinks',                              // classic footer
+        '.premium-toolbar', '.nav-premium-container',
+        '#premium_bar', '.sswdrop',                             // premium toolbar variants
+    ];
+
+    try {
+        NeoUI.init();
+
+        const style = document.createElement('style');
+        style.id = 'nui-sitewide-chrome-style';
+        style.textContent = CHROME_SELECTORS.join(', ') + ' { display: none !important; }';
+        document.head.appendChild(style);
+
+        const spacer = document.createElement('div');
+        spacer.id = 'nui-sitewide-chrome-spacer';
+        spacer.setAttribute('aria-hidden', 'true');
+        spacer.style.cssText = 'height: var(--nui-topbar-h); width: 100%; flex-shrink: 0;';
+        document.body.insertBefore(spacer, document.body.firstChild);
+
+        const profile = NeoUI.scrapeLegacyProfile();
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+    } catch (e) {}
+})();
+
+
+// ==============================================================================
+// MODULE 21: KADOATERY (MOBILE GRID + TAP-TO-COPY)
+// ==============================================================================
+// Activates on: /games/kadoatery/
+//
+// Scrapes the current grid of kadoaties (name, colour/state read straight off
+// its sprite filename, and — for hungry ones — the item it wants) out of the
+// server-rendered table, then rebuilds it as a compact, mobile-friendly grid
+// with the Shop Wizard and Safety Deposit Box front and center.
+//
+// Feeding itself still goes through the real feed_kadoatie.phtml flow — that
+// page's item-picker markup wasn't sampled here, so tapping a kad's portrait
+// navigates there normally rather than guessing at a form to rebuild. This
+// module only reskins the listing and speeds up finding what each one wants.
+//
+// Status (hungry vs fed) is communicated with colour — amber border + item
+// badge for hungry, dimmed + checkmark for fed — rather than the kadoatie's
+// own species colour. Layering two colour-coding schemes (species AND status)
+// onto the same small tile makes both harder to read at a glance; the
+// kadoatie's actual colour is still visible in its sprite either way.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/games\/kadoatery\//.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('kadoatery')) return;
+    const NeoUI = window.NeoUI;
+    if (!NeoUI.__ready) return;
+
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Kadoatery SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.appendChild(box);
+        } catch (e2) {}
+    }
+
+    function showToast(msg, isError) {
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 18px;border-radius:var(--nui-radius-md);font-size:14px;font-weight:700;max-width:90vw;text-align:center;box-shadow:0 4px 16px var(--nui-shadow);background:' + (isError ? 'var(--nui-danger)' : 'var(--nui-success)') + ';color:#fff;transition:opacity 0.3s;';
+        toast.textContent = msg;
+        document.body.appendChild(toast);
+        setTimeout(function () { toast.style.opacity = '0'; setTimeout(function () { toast.remove(); }, 300); }, 2200);
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ---- Item auto-search (hidden power-user flag) ----
+    // Deliberately NOT in TOGGLEABLE_MODULES / Settings → Modules — some
+    // people want tapping an item to just copy the name (the default,
+    // harmless behaviour everyone gets); this flips it so tapping instead
+    // opens the SSW modal already searching that item. Flipped by holding
+    // down on the "N hungry · M fed" summary line for ~0.7s (see below),
+    // not by any visible switch. It's still just a plain localStorage flag
+    // — readable in the source like everything else here — "hidden" only in
+    // the sense of "not surfaced as a setting," not secret.
+    const KAD_AUTOSEARCH_KEY = 'nui_kad_autosearch';
+    function isAutoSearchOn() {
+        try { return localStorage.getItem(KAD_AUTOSEARCH_KEY) === '1'; } catch (e) { return false; }
+    }
+    function setAutoSearch(on) {
+        try { localStorage.setItem(KAD_AUTOSEARCH_KEY, on ? '1' : '0'); } catch (e) {}
+    }
+
+    function hexToRgba(hex, alpha) {
+        const clean = String(hex || '').replace('#', '');
+        const full = clean.length === 3 ? clean.split('').map(function (c) { return c + c; }).join('') : clean;
+        const r = parseInt(full.substr(0, 2), 16);
+        const g = parseInt(full.substr(2, 2), 16);
+        const b = parseInt(full.substr(4, 2), 16);
+        return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+    }
+
+    function fallbackCopy(text, onDone) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (onDone) onDone();
+        } catch (e) {}
+    }
+    function copyToClipboard(text, onDone) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(onDone, function () { fallbackCopy(text, onDone); });
+        } else {
+            fallbackCopy(text, onDone);
+        }
+    }
+
+    // ---- Scrape the server-rendered grid before we touch the DOM ----
+    function scrapeKadoaties() {
+        const kads = [];
+        document.querySelectorAll('a[href^="feed_kadoatie.phtml"]').forEach(function (a) {
+            const td = a.closest('td');
+            if (!td) return;
+            const idMatch = a.getAttribute('href').match(/kad_id=(\d+)/);
+            const img = td.querySelector('img');
+            const rawSrc = img ? (img.getAttribute('src') || '') : '';
+            const srcMatch = rawSrc.match(/([a-z]+)_(happy|sad)\.gif/i);
+            const color = srcMatch ? srcMatch[1].toLowerCase() : 'unknown';
+            const isFed = srcMatch ? srcMatch[2].toLowerCase() === 'happy' : /has been fed/i.test(td.textContent);
+            const strongs = td.querySelectorAll('strong');
+            const name = strongs.length ? strongs[0].textContent.trim() : 'Kadoatie';
+            // Last <strong> in the cell is the item name when hungry, or the
+            // feeding user's name when fed — meaningful in both cases now.
+            const secondary = strongs.length > 1 ? strongs[strongs.length - 1].textContent.trim() : null;
+            const itemName = !isFed ? secondary : null;
+            const fedBy = isFed ? secondary : null;
+            let imgSrc = rawSrc;
+            if (imgSrc && imgSrc.indexOf('//') === 0) imgSrc = 'https:' + imgSrc;
+            kads.push({
+                id: idMatch ? idMatch[1] : null,
+                name: name,
+                color: color,
+                isFed: isFed,
+                itemName: itemName,
+                fedBy: fedBy,
+                imgSrc: imgSrc,
+                feedHref: a.getAttribute('href')
+            });
+        });
+        return kads;
+    }
+
+    function init() {
+        const profile = NeoUI.scrapeLegacyProfile();
+        const kads = scrapeKadoaties();
+
+        // ---- Snapshot for other userscripts before we wipe the DOM ----
+        // This SPA rebuild replaces the server-rendered markup entirely
+        // (including result banners like "Hoorah!"/"Oops!" on
+        // feed_kadoatie.phtml, which don't contain a kad grid and so would
+        // otherwise just vanish). Other userscripts that scrape this page's
+        // original text/table structure — e.g. Statdoatie — can read this
+        // instead of the live DOM, regardless of which script happens to
+        // run first. Kept minimal (name/item/fed-state only) since that's
+        // all that's meaningfully re-derivable from the wiped markup.
+        try {
+            window.__NeoUI_KadScrapeCache = {
+                timestamp: Date.now(),
+                pageText: document.body.innerText,
+                kads: kads.map(function (k) {
+                    return {
+                        name: k.name,
+                        itemName: k.itemName ? k.itemName.replace(/[.!?,]+$/, '').trim() : k.itemName,
+                        isFed: k.isFed,
+                        fedBy: k.fedBy
+                    };
+                })
+            };
+        } catch (e) {}
+
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset nui-spa-active';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        NeoUI.init();
+        if (NeoUI.setProfileInfo) NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'nui-reset';
+        wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-3) var(--nui-space-5); max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px;';
+        document.body.appendChild(wrapper);
+
+        if (!kads.length) {
+            wrapper.innerHTML = '<div class="nui-surface" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:20px; text-align:center; color:var(--nui-text-muted);">No kadoaties found on this page — Neopets may have changed the layout here.</div>';
+            return;
+        }
+
+        const hungryCount = kads.filter(function (k) { return !k.isFed; }).length;
+        const fedCount = kads.length - hungryCount;
+
+        // ---- Action bar: SSW, classic Shop Wizard, SDB — prominent, at the very top ----
+        const actionBar = document.createElement('div');
+        actionBar.style.cssText = 'display:flex; gap:6px;';
+        actionBar.innerHTML =
+            '<button type="button" id="nui-kad-ssw" class="nui-btn nui-btn-primary" title="Super Shop Wizard" style="flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:8px 4px; font-size:12.5px;">⚡ SSW</button>' +
+            '<a href="/market.phtml?type=wizard" title="Shop Wizard" class="nui-btn" style="flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none;">🧙 SW</a>' +
+            '<a href="/safetydeposit.phtml" title="Safety Deposit Box" class="nui-btn" style="flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none;">📦 SDB</a>';
+        wrapper.appendChild(actionBar);
+        actionBar.querySelector('#nui-kad-ssw').addEventListener('click', function () { NeoUI.openSSW(); });
+
+        // ---- Summary ----
+        const summary = document.createElement('div');
+        summary.style.cssText = 'font-size:13px; font-weight:700; color:var(--nui-text-muted); text-align:center; -webkit-user-select:none; user-select:none;';
+        summary.textContent = hungryCount + ' hungry · ' + fedCount + ' fed';
+        wrapper.appendChild(summary);
+
+        // Hold down on the summary line for ~0.7s to flip the hidden
+        // item-auto-search flag. No visible affordance on purpose — this is
+        // an opt-in power-user shortcut, not something we want changing
+        // behaviour for people who never asked for it.
+        (function () {
+            let pressTimer = null;
+            function cancelPress() { clearTimeout(pressTimer); pressTimer = null; }
+            summary.addEventListener('pointerdown', function () {
+                cancelPress();
+                pressTimer = setTimeout(function () {
+                    const next = !isAutoSearchOn();
+                    setAutoSearch(next);
+                    showToast(next
+                        ? '🔍 Item auto-search: ON (reload to apply)'
+                        : '📋 Item auto-search: OFF (reload to apply)');
+                    pressTimer = null;
+                }, 700);
+            });
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (evt) {
+                summary.addEventListener(evt, cancelPress);
+            });
+        })();
+
+        // ---- Grid — fixed 4 columns, matching the original 4x5 table layout ----
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;';
+        wrapper.appendChild(grid);
+
+
+        const myUsername = (profile.username || '').toLowerCase().trim();
+        const sorted = kads.slice().sort(function (a, b) { return (a.isFed === b.isFed) ? 0 : (a.isFed ? 1 : -1); });
+        const autoSearchOn = isAutoSearchOn();
+
+        sorted.forEach(function (k) {
+            const fedByMe = !!(k.isFed && k.fedBy && myUsername && k.fedBy.toLowerCase().trim() === myUsername);
+            const vibe = (k.isFed && k.fedBy && window.VibeRater && typeof window.VibeRater.getVibe === 'function')
+                ? window.VibeRater.getVibe(k.fedBy) : null;
+
+            const tile = document.createElement('div');
+            tile.className = 'nui-surface';
+            tile.style.cssText = 'border-radius:var(--nui-radius-md); overflow:hidden; text-align:center; ' +
+                (fedByMe
+                    ? 'border:2px solid var(--nui-accent);'
+                    : k.isFed
+                        ? 'border:1px solid var(--nui-border); opacity:0.55;'
+                        : 'border:2px solid var(--nui-warning);');
+
+            const nameHtml = '<div style="font-size:10.5px; font-weight:800; padding:3px 2px 0; color:var(--nui-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(k.name) + '</div>';
+
+            const imgHtml = '<a href="' + escapeHtml(k.feedHref) + '" style="display:block;" title="Feed ' + escapeHtml(k.name) + '">' +
+                '<img src="' + escapeHtml(k.imgSrc) + '" width="56" height="56" style="display:block; margin:2px auto; width:56px; height:56px; object-fit:contain;" alt="' + escapeHtml(k.name) + '">' +
+            '</a>';
+
+            let statusHtml;
+            if (!k.isFed) {
+                const itemBtn = '<button type="button" class="nui-kad-copy-item nui-reset" data-item="' + escapeHtml(k.itemName) + '" style="flex:1; min-width:0; font-size:10px; font-weight:800; color:#fff; background:var(--nui-warning); border:none; padding:3px 4px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + (autoSearchOn ? 'Tap to search SSW' : 'Tap to copy item name') + '">' + escapeHtml(k.itemName) + '</button>';
+                // SDB shortcut only shows up when the hidden auto-search
+                // flag is on — it's the same flag, just a second way to act
+                // on the item besides the SSW-search tap.
+                const sdbBtn = autoSearchOn
+                    ? '<a href="/safetydeposit.phtml?obj_name=' + encodeURIComponent(k.itemName) + '&category=0" target="_blank" rel="noopener" class="nui-reset" title="Open in Safety Deposit Box" style="flex-shrink:0; display:flex; align-items:center; justify-content:center; width:20px; background:var(--nui-warning); filter:brightness(0.85); color:#fff; text-decoration:none; font-size:10px;">📦</a>'
+                    : '';
+                statusHtml = '<div style="display:flex; width:100%;">' + itemBtn + sdbBtn + '</div>';
+            } else if (fedByMe) {
+                // Fed by the current user — flag it clearly so there's no
+                // temptation to feed it again (it can't be fed twice anyway,
+                // but this makes that obvious at a glance).
+                statusHtml = '<div style="font-size:9.5px; font-weight:800; color:#fff; background:var(--nui-accent); padding:3px 4px;" title="You already fed this one">✓ You fed this</div>';
+            } else {
+                const userStyle = vibe
+                    ? 'border-left:3px solid ' + vibe.color + '; background:' + hexToRgba(vibe.color, 0.14) + '; color:var(--nui-text);'
+                    : 'color:var(--nui-text-muted);';
+                const titleAttr = vibe ? (escapeHtml(k.fedBy) + ' — ' + escapeHtml(vibe.label)) : escapeHtml(k.fedBy || '');
+                statusHtml = '<div style="font-size:9.5px; font-weight:700; padding:3px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; ' + userStyle + '" title="' + titleAttr + '">✓ ' + escapeHtml(k.fedBy || 'Fed') + '</div>';
+            }
+
+            tile.innerHTML = nameHtml + imgHtml + statusHtml;
+            grid.appendChild(tile);
+        });
+
+        grid.querySelectorAll('.nui-kad-copy-item').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const item = this.getAttribute('data-item');
+                if (isAutoSearchOn()) {
+                    if (NeoUI.openSSW) NeoUI.openSSW(item);
+                } else {
+                    copyToClipboard(item, function () { showToast('Copied "' + item + '"'); });
+                }
+            });
+        });
+
+        // ---- Kad Timer panel (condensed KadWatch), bottom of page ----
+        // Toggleable independently of the Kadoatery module itself via the
+        // "Kad Mode (Timer)" switch in Settings. Auto-detects a new drop by
+        // diffing this load's hungry-kad snapshot against the last one
+        // (same signal KadWatch watches for), then tracks the ~35min quiet
+        // period + ~60s-every-7min window cycle that follows.
+        if (NeoUI.isModuleEnabled('kad-timer')) {
+            const KT = NeoUI.KadTimer;
+            const drop = KT.detectRefresh(kads);
+
+            const ktPanel = document.createElement('div');
+            ktPanel.id = 'nui-kad-timer-panel';
+            ktPanel.className = 'nui-surface';
+            ktPanel.style.cssText = 'border-radius:var(--nui-radius-md); border:1px solid var(--nui-border); padding:10px 12px; text-align:center; margin-top:2px;';
+            wrapper.appendChild(ktPanel);
+
+            const ktLabel = document.createElement('div');
+            ktLabel.style.cssText = 'font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.02em; color:var(--nui-text-faint); margin-bottom:4px;';
+            ktLabel.textContent = '🐱 Kad Timer';
+            ktPanel.appendChild(ktLabel);
+
+            const ktBody = document.createElement('div');
+            ktBody.style.cssText = 'font-size:13px; font-weight:600;';
+            ktPanel.appendChild(ktBody);
+
+            function renderKtPanel() {
+                if (!ktBody.isConnected) return;
+                const state = KT.getState();
+                if (state.status === 'expired') {
+                    ktBody.innerHTML = '<span style="color:var(--nui-text-muted);">No window logged yet — feed a hungry kad to start tracking.</span>';
+                } else if (state.status === 'active') {
+                    ktBody.innerHTML = '<span style="color:var(--nui-success); font-weight:800;">🟢 WINDOW ACTIVE</span> — closes in <b>' + Math.ceil(state.timeRemaining / 1000) + 's</b>';
+                } else {
+                    ktBody.innerHTML = 'Next window <b>' + KT.formatClock(state.nextStart) + '</b> · in <b style="color:var(--nui-accent);">' + KT.formatCountdown(state.countdown) + '</b>';
+                }
+            }
+            renderKtPanel();
+            setInterval(renderKtPanel, 1000);
+
+            if (drop) {
+                showToast('🐱 New drop detected (' + drop.count + ' kad' + (drop.count > 1 ? 's' : '') + ') — timer reset');
+            }
+        }
+    }
+
+    try { init(); } catch (err) { showFatalError(err); }
 })();
