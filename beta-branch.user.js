@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.56
+// @version      1.1.66
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -49,6 +49,122 @@
  *   Faerie Quests    — sitewide quest watcher + /quests.phtml enhancement
  *
  * CHANGELOG  (last 5 versions)
+ *
+ * v1.1.66
+ *   - VibeRater: added a "Reset to Defaults" button next to "+ Add New
+ *     Vibe" in all three copies of the preset editor (Neomail, Neoboards,
+ *     Kadoatery). Calls a new VibeRater.resetPresets(), which clears the
+ *     shared neoui_vibe_presets_v1 key and re-renders — an easy way to
+ *     nuke a corrupted/custom preset list back to the six defaults
+ *     without needing devtools, especially on mobile.
+ *
+ * v1.1.65
+ *   - VibeRater: the preset editor's color swatches now open NeoUI's own
+ *     saturation/hue popover (the same one the theme editor uses) instead
+ *     of the OS-native <input type="color">, so the picker looks and
+ *     behaves the same on every browser/platform. openColorPopover is now
+ *     exposed as NeoUI.openColorPopover so other modules can reuse it.
+ *     Applied to all three copies of the preset editor (Neomail,
+ *     Neoboards, Kadoatery).
+ *
+ * v1.1.64
+ *   - VibeRater: found the actual cause of the missing default presets
+ *     (Friend, Fave, Sus, Avoid, Block, Neutral). There's only ever been
+ *     one shared preset list (neoui_vibe_presets_v1, used site-wide, not
+ *     a separate Kadoatery copy) — but loadPresets() did
+ *     `JSON.parse(raw) || DEFAULT_PRESETS`, and an empty array is truthy
+ *     in JS, so once anything saved an empty list it stayed empty forever.
+ *     The pre-1.1.63 container-detachment bug did exactly that: editing a
+ *     preset in the Kadoatery panel read preset rows from a detached
+ *     node (0 rows) and saved that empty list, wiping every preset
+ *     site-wide. loadPresets() now self-heals back to defaults whenever
+ *     the stored list isn't a non-empty array, and savePresets() refuses
+ *     to persist an empty list going forward.
+ *   - Kadoatery: the refresh button now replaces the static "KadWatch"
+ *     title in the panel header (tap the title to refresh) instead of
+ *     sitting in its own row above it. Also fixed a related bug where the
+ *     button's click listener was silently lost: it had been appended via
+ *     a real DOM insert but then immediately wiped out by a
+ *     `dashboard.innerHTML +=` a few lines later, which reparses and
+ *     clones every existing child — including the button — discarding
+ *     its event listener in the process. The header markup is now built
+ *     in one `innerHTML =` assignment with a placeholder slot, and the
+ *     button is appended into that slot afterward via a real DOM insert.
+ *
+ * v1.1.63
+ *   - Core: fixed the actual reason Vibe Rater presets weren't showing up
+ *     in the Kadoatery settings section. renderSettings() built each
+ *     section into a scratch <div>, then moved its children out into the
+ *     shared settings list and left the scratch div detached. Sections
+ *     that re-render themselves later — like Vibe Rater responding to
+ *     onChange or to editing/adding/removing a preset — were writing into
+ *     that now-detached div, so nothing visibly updated (add/edit/delete
+ *     silently "worked" in storage but never appeared on screen). The
+ *     scratch container is now kept attached in the live DOM for as long
+ *     as the settings panel is open, so in-place re-renders show up
+ *     correctly. This also fixes the same class of issue for any other
+ *     settings section that re-renders itself reactively (e.g. the Vibe
+ *     Rater sections on Neomail/Neoboards).
+ *
+ * v1.1.62
+ *   - Home: fixed a crash ("Homepage Dashboard crashed") in the new
+ *     KadWatch hero pill. renderKadPill() ran synchronously before
+ *     pageWrapper was attached to the document, so kadPillRow.isConnected
+ *     was false on its first call — which tried to clearInterval() a
+ *     const that hadn't been initialised yet (TDZ). kadPillInterval is
+ *     now declared up front with `let` so the guard is safe on every call.
+ *
+ * v1.1.61
+ *   - Home: removed the full-width "Kad Timer" card from the dashboard
+ *     grid. In its place, a small KadWatch pill now lives in the hero
+ *     banner (same row/style as the training pills) and only appears when
+ *     a KadWatch main time has actually been saved on the Kadoatery page —
+ *     it no longer shows a permanent "no window logged" placeholder card.
+ *
+ * v1.1.60
+ *   - Kadoatery: Vibe Rater settings section no longer gets stuck on
+ *     "VibeRater not loaded." if it renders before VibeRater's IIFE has
+ *     initialised. Now polls for up to ~2s (same pattern as the drawer's
+ *     vibe dot), so presets reliably appear.
+ *   - Kadoatery: Refresh button is now permanently housed in the KadWatch
+ *     panel header whenever KadWatch (kad-timer module) is on, regardless
+ *     of the "KadWatch on top" position pref. It only falls back to the
+ *     top action bar when kad-timer is disabled and there's no KadWatch
+ *     panel to house it.
+ *
+ * v1.1.59
+ *   - Kadoatery: inline settings panel removed from the page. KadWatch
+ *     layout prefs (KadWatch on top, shop buttons on bottom) are now a
+ *     "Kad Settings" section in the NeoUI sidebar settings drawer, only
+ *     visible on /games/kadoatery/ pages — same pattern as Modules on home.
+ *   - Kadoatery: VibeRater settings (preset editor + assigned users) now
+ *     registered as a sidebar settings section on the kad page, matching
+ *     the same section available on Neoboards and Neomail.
+ *
+ * v1.1.58
+ *   - Kadoatery: settings panel added. Two toggles: "KadWatch position"
+ *     (top / bottom of page) and "Shop buttons" (top / bottom). Prefs saved
+ *     to localStorage and applied on every grid render.
+ *   - Kadoatery: Refresh button moved inside the KadWatch panel header when
+ *     KadWatch is set to top position, removing it from the action bar.
+ *   - Kadoatery: KadWatch home hook fixed. renderGridArea now calls
+ *     NeoUI.KadTimer.detectRefresh(kads) in addition to KW.checkDrop(kads),
+ *     so the home page Kad Timer widget's countdown actually advances after
+ *     a kad refresh — previously only KW's private storage was written and
+ *     the home widget read from a different key that never updated.
+ *
+ * v1.1.57
+ *   - Module toggles: removed from home screen card (v1.1.56 approach).
+ *     Now back in the sidebar settings drawer where they belong, but with
+ *     a pathname guard — the section only renders when you're on /home/.
+ *     On all other pages the settings drawer opens as normal with no
+ *     Modules section visible. Collapse state persisted in localStorage.
+ *   - Kadoatery: VibeRater wired into the grid. Fed tiles show a coloured
+ *     vibe dot next to the feeder username if that user has a vibe set.
+ *     Tapping the feeder status row opens the preset popover inline —
+ *     same pattern as Neomail/Neoboards/sidebar. Dot updates live on
+ *     selection without requiring a grid refresh. Guarded on VibeRater
+ *     availability so it's a clean no-op if the module isn't loaded.
  *
  * v1.1.56
  *   - Module toggles: removed from the sidebar settings drawer entirely.
@@ -1990,7 +2106,79 @@
     // built-in; consuming apps can push more via NeoUI.registerSettingsSection.
     const settingsSections = [];
 
-    // Module toggles moved to home screen dashboard card (v1.1.56).
+    // Register the Modules settings section — only visible on the home screen.
+    // The render() guard checks location.pathname so the section is a no-op
+    // (empty container) on every other page, keeping the settings drawer clean.
+    registerSettingsSection({
+        id: 'module_toggles',
+        title: 'Modules',
+        render: function (container) {
+            // Only show on the home page — hide on all other pages
+            if (!/\/home\/(index\.phtml)?$/.test(location.pathname)) return;
+
+            const disabled = getDisabledModules();
+
+            const rows = TOGGLEABLE_MODULES.map(function (mod) {
+                const on = !disabled.has(mod.id);
+                return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--nui-border);gap:8px;">' +
+                    '<div style="min-width:0;">' +
+                        '<div style="font-size:13px;font-weight:700;color:var(--nui-text);">' + mod.label + '</div>' +
+                        '<div style="font-size:11px;color:var(--nui-text-muted);">' + mod.desc + '</div>' +
+                    '</div>' +
+                    '<button type="button" data-mod-toggle="' + mod.id + '" style="flex-shrink:0;padding:5px 14px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;' +
+                        'background:' + (on ? 'var(--nui-accent)' : 'var(--nui-surface-2)') + ';' +
+                        'color:' + (on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)') + ';' +
+                        'border-color:' + (on ? 'var(--nui-accent)' : 'var(--nui-border)') + ';">' +
+                        (on ? 'On' : 'Off') +
+                    '</button>' +
+                '</div>';
+            }).join('');
+
+            // JS-driven collapsible — no <details> to fight WebKit animation
+            const MOD_COLLAPSED_KEY = 'neoui_home_modules_collapsed';
+            let collapsed;
+            try { collapsed = localStorage.getItem(MOD_COLLAPSED_KEY) === '1'; } catch (e) { collapsed = false; }
+
+            container.innerHTML =
+                '<div class="nui-drawer-section" style="margin:var(--nui-space-3) 0;">' +
+                    '<div id="nui-mod-settings-hdr" class="nui-drawer-section-title" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">' +
+                        'Modules' +
+                        '<span id="nui-mod-settings-chev" style="font-size:11px;opacity:0.5;transition:transform 0.2s;display:inline-block;transform:' + (collapsed ? 'rotate(-90deg)' : 'rotate(0deg)') + ';">▾</span>' +
+                    '</div>' +
+                    '<div id="nui-mod-settings-body" style="overflow:hidden;transition:max-height 0.25s ease;max-height:' + (collapsed ? '0' : '2000px') + ';">' +
+                        '<div style="font-size:12px;color:var(--nui-text-muted);margin:10px 0 8px;line-height:1.5;">Changes take effect on next page load.</div>' +
+                        rows +
+                    '</div>' +
+                '</div>';
+
+            const hdr  = container.querySelector('#nui-mod-settings-hdr');
+            const body = container.querySelector('#nui-mod-settings-body');
+            const chev = container.querySelector('#nui-mod-settings-chev');
+
+            hdr.addEventListener('click', function () {
+                collapsed = !collapsed;
+                try { localStorage.setItem(MOD_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) {}
+                body.style.maxHeight = collapsed ? '0' : '2000px';
+                chev.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+            });
+
+            container.querySelectorAll('[data-mod-toggle]').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    const id = btn.getAttribute('data-mod-toggle');
+                    const d = getDisabledModules();
+                    const nowOn = d.has(id);
+                    if (nowOn) d.delete(id); else d.add(id);
+                    setDisabledModules(d);
+                    btn.textContent = nowOn ? 'On' : 'Off';
+                    btn.style.background = nowOn ? 'var(--nui-accent)' : 'var(--nui-surface-2)';
+                    btn.style.color = nowOn ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)';
+                    btn.style.borderColor = nowOn ? 'var(--nui-accent)' : 'var(--nui-border)';
+                });
+            });
+        }
+    });
+
 
     const DAILY_TIMERS_KEY = 'neoui_daily_timers_v1';
 
@@ -3444,9 +3632,9 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         function renderSettings() {
             settingsContainer.innerHTML = '';
             settingsSections.forEach(function (section) {
-                const tmp = document.createElement('div');
-                section.render(tmp);
-                while (tmp.firstChild) settingsContainer.appendChild(tmp.firstChild);
+                const sectionEl = document.createElement('div');
+                section.render(sectionEl);
+                settingsContainer.appendChild(sectionEl);
             });
         }
 
@@ -3736,7 +3924,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
     global.NeoUI = {
         __ready: true,
-        VERSION: '2.3.0',
+        VERSION: '2.3.2',
         THEMES: THEMES,
         init: init,
         setTheme: setTheme,
@@ -3772,6 +3960,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         },
         addCustomTheme: function(key, def) { THEMES[key] = def; saveCustomTheme(key, def); },
         deleteCustomTheme: function(key) { delete THEMES[key]; deleteCustomTheme(key); },
+        openColorPopover: openColorPopover,
         KadTimer: {
             MAIN_DELAY_MS: KT_MAIN_DELAY_MS,
             WINDOW_MS: KT_WINDOW_MS,
@@ -3806,11 +3995,23 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     ];
 
     function loadPresets() {
-        try { return JSON.parse(localStorage.getItem(VIBE_PRESETS_KEY)) || DEFAULT_PRESETS; }
-        catch (e) { return DEFAULT_PRESETS; }
+        try {
+            const raw = localStorage.getItem(VIBE_PRESETS_KEY);
+            if (!raw) return DEFAULT_PRESETS;
+            const parsed = JSON.parse(raw);
+            // An empty array is truthy, so a prior bug that saved [] (e.g.
+            // reading preset rows from a detached container) would silently
+            // and permanently wipe the presets — self-heal back to defaults
+            // whenever the stored list isn't a non-empty array.
+            return (Array.isArray(parsed) && parsed.length > 0) ? parsed : DEFAULT_PRESETS;
+        } catch (e) { return DEFAULT_PRESETS; }
     }
 
     function savePresets(presets) {
+        // Never persist an empty list — that would wipe every preset
+        // site-wide (this key isn't Kadoatery-specific, it's shared by
+        // every page that uses VibeRater). Treat an empty save as a no-op.
+        if (!Array.isArray(presets) || presets.length === 0) return;
         try { localStorage.setItem(VIBE_PRESETS_KEY, JSON.stringify(presets)); notify('__presets__'); } catch (e) {}
     }
 
@@ -3830,6 +4031,11 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         get PRESETS() { return loadPresets(); },
 
         saveCustomPresets: savePresets,
+
+        resetPresets: function () {
+            try { localStorage.removeItem(VIBE_PRESETS_KEY); } catch (e) {}
+            notify('__presets__');
+        },
 
         getVibe: function (username) {
             if (!username) return null;
@@ -4395,7 +4601,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                         const presetList = presets.map((p, idx) => `
                             <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                                <input type="color" data-preset-idx="${idx}" value="${p.color}" style="width:24px; height:24px; border:none; padding:0; cursor:pointer; background:none;">
+                                <button type="button" class="nui-vibe-swatch" data-preset-idx="${idx}" data-color="${p.color}" title="Choose color" style="width:24px; height:24px; flex-shrink:0; border-radius:6px; border:1px solid var(--nui-border); padding:0; cursor:pointer; background:${p.color};"></button>
                                 <input type="text" data-preset-label="${idx}" value="${p.label}" class="nui-input" style="padding:4px 8px; font-size:12px; flex:1;">
                                 <button type="button" data-preset-del="${idx}" style="background:none; border:none; color:var(--nui-danger); cursor:pointer; font-weight:bold;">✕</button>
                             </div>
@@ -4412,7 +4618,10 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                                         <div style="font-size:12px; color:var(--nui-text-muted); margin-bottom: 10px; line-height:1.5;">Customize your vibe options. Edits are saved automatically.</div>
                                         <div id="nui-vibe-presets-container">
                                             ${presetList}
-                                            <button type="button" id="nui-add-preset" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="margin-top:8px;">+ Add New Vibe</button>
+                                            <div style="display:flex; gap:8px; margin-top:8px;">
+                                                <button type="button" id="nui-add-preset" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="flex:1;">+ Add New Vibe</button>
+                                                <button type="button" id="nui-reset-presets" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="flex:1;">Reset to Defaults</button>
+                                            </div>
                                         </div>
                                     </div>
                                     <div>
@@ -4426,17 +4635,29 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                         const updatePresets = () => {
                             const newPresets = [];
-                            settingsContainer.querySelectorAll('[data-preset-idx]').forEach(colorInput => {
-                                const idx = colorInput.getAttribute('data-preset-idx');
+                            settingsContainer.querySelectorAll('[data-preset-idx]').forEach(colorBtn => {
+                                const idx = colorBtn.getAttribute('data-preset-idx');
                                 const labelInput = settingsContainer.querySelector(`[data-preset-label="${idx}"]`);
                                 const id = labelInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_') || `vibe_${idx}`;
-                                newPresets.push({ id, label: labelInput.value || 'Custom', color: colorInput.value });
+                                newPresets.push({ id, label: labelInput.value || 'Custom', color: colorBtn.getAttribute('data-color') });
                             });
                             window.VibeRater.saveCustomPresets(newPresets);
                         };
 
-                        settingsContainer.querySelectorAll('[data-preset-idx], [data-preset-label]').forEach(input => {
+                        settingsContainer.querySelectorAll('[data-preset-label]').forEach(input => {
                             input.addEventListener('change', updatePresets);
+                        });
+
+                        settingsContainer.querySelectorAll('.nui-vibe-swatch').forEach(swatchBtn => {
+                            swatchBtn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                const current = swatchBtn.getAttribute('data-color') || '#888888';
+                                window.NeoUI.openColorPopover(swatchBtn, current, (hex) => {
+                                    swatchBtn.setAttribute('data-color', hex);
+                                    swatchBtn.style.background = hex;
+                                    updatePresets();
+                                });
+                            });
                         });
 
                         settingsContainer.querySelectorAll('[data-preset-del]').forEach(btn => {
@@ -4459,6 +4680,13 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                             const current = window.VibeRater.PRESETS;
                             current.push({ id: `new_${Date.now()}`, label: 'New Vibe', color: '#888888' });
                             window.VibeRater.saveCustomPresets(current);
+                            renderVibeSettings();
+                        });
+
+                        settingsContainer.querySelector('#nui-reset-presets').addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (!confirm('Reset all vibe presets to the defaults? This removes any custom presets and colors.')) return;
+                            window.VibeRater.resetPresets();
                             renderVibeSettings();
                         });
 
@@ -7354,7 +7582,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     // Custom Presets List
                     const presetList = presets.map((p, idx) => `
                         <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                            <input type="color" data-preset-idx="${idx}" value="${p.color}" style="width:24px; height:24px; border:none; padding:0; cursor:pointer; background:none;">
+                            <button type="button" class="nui-vibe-swatch" data-preset-idx="${idx}" data-color="${p.color}" title="Choose color" style="width:24px; height:24px; flex-shrink:0; border-radius:6px; border:1px solid var(--nui-border); padding:0; cursor:pointer; background:${p.color};"></button>
                             <input type="text" data-preset-label="${idx}" value="${p.label}" class="nui-input" style="padding:4px 8px; font-size:12px; flex:1;">
                             <button type="button" data-preset-del="${idx}" style="background:none; border:none; color:var(--nui-danger); cursor:pointer; font-weight:bold;">✕</button>
                         </div>
@@ -7371,7 +7599,10 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                                     <div style="font-size:12px; color:var(--nui-text-muted); margin-bottom: 10px; line-height:1.5;">Customize your vibe options. Edits are saved automatically.</div>
                                     <div id="nui-vibe-presets-container">
                                         ${presetList}
-                                        <button type="button" id="nui-add-preset" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="margin-top:8px;">+ Add New Vibe</button>
+                                        <div style="display:flex; gap:8px; margin-top:8px;">
+                                            <button type="button" id="nui-add-preset" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="flex:1;">+ Add New Vibe</button>
+                                            <button type="button" id="nui-reset-presets" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="flex:1;">Reset to Defaults</button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div>
@@ -7386,17 +7617,29 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     // Preset Editing Logic
                     const updatePresets = () => {
                         const newPresets = [];
-                        container.querySelectorAll('[data-preset-idx]').forEach(colorInput => {
-                            const idx = colorInput.getAttribute('data-preset-idx');
+                        container.querySelectorAll('[data-preset-idx]').forEach(colorBtn => {
+                            const idx = colorBtn.getAttribute('data-preset-idx');
                             const labelInput = container.querySelector(`[data-preset-label="${idx}"]`);
                             const id = labelInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_') || `vibe_${idx}`;
-                            newPresets.push({ id, label: labelInput.value || 'Custom', color: colorInput.value });
+                            newPresets.push({ id, label: labelInput.value || 'Custom', color: colorBtn.getAttribute('data-color') });
                         });
                         window.VibeRater.saveCustomPresets(newPresets);
                     };
 
-                    container.querySelectorAll('[data-preset-idx], [data-preset-label]').forEach(input => {
+                    container.querySelectorAll('[data-preset-label]').forEach(input => {
                         input.addEventListener('change', updatePresets);
+                    });
+
+                    container.querySelectorAll('.nui-vibe-swatch').forEach(swatchBtn => {
+                        swatchBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const current = swatchBtn.getAttribute('data-color') || '#888888';
+                            window.NeoUI.openColorPopover(swatchBtn, current, (hex) => {
+                                swatchBtn.setAttribute('data-color', hex);
+                                swatchBtn.style.background = hex;
+                                updatePresets();
+                            });
+                        });
                     });
 
                     container.querySelectorAll('[data-preset-del]').forEach(btn => {
@@ -7420,6 +7663,13 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                         const current = window.VibeRater.PRESETS;
                         current.push({ id: `new_${Date.now()}`, label: 'New Vibe', color: '#888888' });
                         window.VibeRater.saveCustomPresets(current);
+                        renderVibeSettings();
+                    });
+
+                    container.querySelector('#nui-reset-presets').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (!confirm('Reset all vibe presets to the defaults? This removes any custom presets and colors.')) return;
+                        window.VibeRater.resetPresets();
                         renderVibeSettings();
                     });
 
@@ -13138,8 +13388,16 @@ return {
         trainingPillRow.id = 'nui-hero-training-pills';
         trainingPillRow.style.cssText = 'display:none;gap:6px;flex-wrap:wrap;';
 
+        // KadWatch summary pill — starts hidden, shown only when a KadWatch
+        // main time has been saved on the Kadoatery page (nui_kw_mainTime).
+        // Same visual treatment/pattern as the training pill row above.
+        const kadPillRow = document.createElement('div');
+        kadPillRow.id = 'nui-hero-kad-pill';
+        kadPillRow.style.cssText = 'display:none;gap:6px;flex-wrap:wrap;';
+
         heroBanner.appendChild(heroBannerTop);
         heroBanner.appendChild(trainingPillRow);
+        heroBanner.appendChild(kadPillRow);
         heroBanner.appendChild(heroBannerAlerts);
         pageWrapper.appendChild(heroBanner);
 
@@ -13149,6 +13407,53 @@ return {
             if (!document.body.contains(clockEl)) { clearInterval(clockInterval); return; }
             clockEl.textContent = formatNST(getNSTDate());
         }, 1000);
+
+        // KadWatch hero pill — mirrors the "KadWatch on top" panel's own
+        // window math (same constants, shared via NeoUI.KadTimer) but reads
+        // the KadWatch main-time key directly, so the pill only appears
+        // once a time has actually been saved in the Kadoatery page.
+        if (NeoUI.isModuleEnabled('kad-timer')) {
+            const KT = NeoUI.KadTimer;
+            const KW_MAIN_KEY = 'nui_kw_mainTime';
+
+            function getKwState(now) {
+                const last = parseInt(localStorage.getItem(KW_MAIN_KEY) || '0', 10);
+                if (!last) return { status: 'expired' };
+                const mainStart = last + KT.MAIN_DELAY_MS;
+                const diff = now - mainStart;
+                if (diff < 0) return { status: 'waiting', nextStart: mainStart, countdown: mainStart - now };
+                const cycle = Math.floor(diff / KT.INTERVAL_MS);
+                const winStart = mainStart + cycle * KT.INTERVAL_MS;
+                const winEnd = winStart + KT.WINDOW_MS;
+                if (now >= winStart && now < winEnd) return { status: 'active', timeRemaining: winEnd - now };
+                const nextStart = mainStart + (cycle + 1) * KT.INTERVAL_MS;
+                return { status: 'waiting', nextStart: nextStart, countdown: nextStart - now };
+            }
+
+            let kadPillInterval = null;
+            function renderKadPill() {
+                if (!kadPillRow.isConnected) { if (kadPillInterval) clearInterval(kadPillInterval); return; }
+                const state = getKwState(Date.now());
+                if (state.status === 'expired') {
+                    kadPillRow.style.display = 'none';
+                    kadPillRow.innerHTML = '';
+                    return;
+                }
+                let pillStyle = 'display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--nui-radius-pill);font-size:12px;font-weight:700;border:1px solid;cursor:pointer;text-decoration:none;';
+                let label;
+                if (state.status === 'active') {
+                    label = `🟢 KadWatch — Active! ${Math.ceil(state.timeRemaining / 1000)}s`;
+                    pillStyle += `background:var(--nui-success)22;color:var(--nui-success);border-color:var(--nui-success);`;
+                } else {
+                    label = `🐱 KadWatch — <span>${KT.formatCountdown(state.countdown)}</span>`;
+                    pillStyle += `background:var(--nui-accent-soft);color:var(--nui-accent);border-color:var(--nui-accent);`;
+                }
+                kadPillRow.innerHTML = `<a href="/games/kadoatery/index.phtml" style="${pillStyle}">${label}</a>`;
+                kadPillRow.style.display = 'flex';
+            }
+            renderKadPill();
+            kadPillInterval = setInterval(renderKadPill, 1000);
+        }
 
         // Kick off live training fetch — use captured references, never getElementById
         (async () => {
@@ -13347,124 +13652,8 @@ return {
         linksCard.innerHTML = linksHtml;
         gridContainer.appendChild(linksCard);
 
-        // --- KAD MODE: HOMEPAGE TIMEKEEPER ---
-        // Same engine the Kadoatery page panel uses (NeoUI.KadTimer), just a
-        // smaller readout so the window/countdown is visible without having
-        // to be on the Kadoatery page. Only appears when "Kad Mode (Timer)"
-        // is switched on in Settings.
-        if (NeoUI.isModuleEnabled('kad-timer')) {
-            const KT = NeoUI.KadTimer;
-            const kadCard = nuiCard('height:fit-content;');
-            kadCard.innerHTML = cardHeader('🐱 Kad Timer', '<a href="/games/kadoatery/index.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:2px 8px;font-size:11px;text-decoration:none;">Open</a>') +
-                '<div id="nui-home-kad-timer" style="text-align:center; padding:6px 0; font-size:13px; font-weight:600;">Loading…</div>';
-            gridContainer.appendChild(kadCard);
-
-            (function () {
-                const el = kadCard.querySelector('#nui-home-kad-timer');
-                function tick() {
-                    if (!el || !el.isConnected) return;
-                    const state = KT.getState();
-                    if (state.status === 'expired') {
-                        el.innerHTML = '<span style="color:var(--nui-text-muted);">No window logged yet — visit the Kadoatery to start tracking.</span>';
-                    } else if (state.status === 'active') {
-                        el.innerHTML = '<span style="color:var(--nui-success); font-weight:800;">🟢 WINDOW ACTIVE!</span> closes in <b>' + Math.ceil(state.timeRemaining / 1000) + 's</b>';
-                    } else {
-                        el.innerHTML = 'Next window in <b style="color:var(--nui-accent);">' + KT.formatCountdown(state.countdown) + '</b> (' + KT.formatClock(state.nextStart) + ')';
-                    }
-                    setTimeout(tick, 1000);
-                }
-                tick();
-            })();
-        }
-
         pageWrapper.appendChild(gridContainer);
 
-        // ── Modules card (full-width, below the grid) ────────────────────────
-        // This is the only place module toggles live — no sidebar settings entry.
-        // Collapse state is persisted in localStorage so it survives page loads.
-        (function () {
-            const MOD_COLLAPSED_KEY = 'neoui_home_modules_collapsed';
-            let collapsed;
-            try { collapsed = localStorage.getItem(MOD_COLLAPSED_KEY) === '1'; } catch (e) { collapsed = false; }
-
-            const modCard = nuiCard();
-            modCard.style.cssText += 'width:100%;max-width:960px;';
-
-            // Header row with collapse toggle
-            const modHeader = document.createElement('div');
-            modHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;padding-bottom:8px;border-bottom:1px solid var(--nui-border);';
-            modHeader.innerHTML = `
-                <div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">⚙️ Modules</div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span style="font-size:11px;color:var(--nui-text-muted);font-weight:600;">Changes apply on next page load</span>
-                    <span id="nui-mod-chevron" style="font-size:13px;color:var(--nui-text-muted);transition:transform 0.2s;display:inline-block;transform:${collapsed ? 'rotate(-90deg)' : 'rotate(0deg)'};">▾</span>
-                </div>
-            `;
-
-            // Body with all toggle rows
-            const modBody = document.createElement('div');
-            modBody.id = 'nui-mod-body';
-            modBody.style.cssText = `overflow:hidden;transition:max-height 0.25s ease;max-height:${collapsed ? '0' : '2000px'};`;
-
-            const inner = document.createElement('div');
-            inner.style.cssText = 'padding-top:12px;display:flex;flex-direction:column;gap:0;';
-
-            function getDisabled() {
-                try { return new Set(JSON.parse(localStorage.getItem('neoui_disabled_modules') || '[]')); } catch (e) { return new Set(); }
-            }
-            function setDisabled(s) {
-                try { localStorage.setItem('neoui_disabled_modules', JSON.stringify([...s])); } catch (e) {}
-            }
-
-            // Read TOGGLEABLE_MODULES from window.NeoUI if available, else fall back
-            // to the modules we know about from Core at runtime via the public key.
-            const mods = (window.__NUI_TOGGLEABLE_MODULES__ || []);
-
-            if (mods.length === 0) {
-                inner.innerHTML = '<div style="font-size:13px;color:var(--nui-text-muted);padding:8px 0;">No toggleable modules found — try reloading.</div>';
-            } else {
-                const disabled = getDisabled();
-                mods.forEach(mod => {
-                    const on = !disabled.has(mod.id);
-                    const row = document.createElement('div');
-                    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--nui-border);gap:8px;';
-                    row.innerHTML = `
-                        <div style="min-width:0;">
-                            <div style="font-size:13px;font-weight:700;color:var(--nui-text);">${mod.label}</div>
-                            <div style="font-size:11px;color:var(--nui-text-muted);">${mod.desc}</div>
-                        </div>
-                        <button type="button" style="flex-shrink:0;padding:5px 14px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;background:${on ? 'var(--nui-accent)' : 'var(--nui-surface-2)'};color:${on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)'};border-color:${on ? 'var(--nui-accent)' : 'var(--nui-border)'};">${on ? 'On' : 'Off'}</button>
-                    `;
-                    const btn = row.querySelector('button');
-                    btn.addEventListener('click', () => {
-                        const d = getDisabled();
-                        const nowOn = d.has(mod.id);
-                        if (nowOn) d.delete(mod.id); else d.add(mod.id);
-                        setDisabled(d);
-                        btn.textContent = nowOn ? 'On' : 'Off';
-                        btn.style.background = nowOn ? 'var(--nui-accent)' : 'var(--nui-surface-2)';
-                        btn.style.color = nowOn ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)';
-                        btn.style.borderColor = nowOn ? 'var(--nui-accent)' : 'var(--nui-border)';
-                    });
-                    inner.appendChild(row);
-                });
-            }
-
-            modBody.appendChild(inner);
-
-            // Collapse toggle
-            modHeader.addEventListener('click', () => {
-                collapsed = !collapsed;
-                try { localStorage.setItem(MOD_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) {}
-                modBody.style.maxHeight = collapsed ? '0' : '2000px';
-                const chevron = modHeader.querySelector('#nui-mod-chevron');
-                if (chevron) chevron.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-            });
-
-            modCard.appendChild(modHeader);
-            modCard.appendChild(modBody);
-            pageWrapper.appendChild(modCard);
-        })();
         document.body.appendChild(pageWrapper);
     }
 
@@ -14878,24 +15067,300 @@ return {
         if (typeof NeoUI.buildTopbar === 'function') NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
         if (typeof NeoUI.buildDrawer === 'function') NeoUI.buildDrawer();
 
+        // ---- Sidebar Settings Sections ----
+
+        // Kad Settings — layout prefs (KadWatch position, shop buttons)
+        NeoUI.registerSettingsSection({
+            id: 'kad_settings',
+            title: 'Kad Settings',
+            render: function (container) {
+                if (!/\/games\/kadoatery\//.test(location.pathname)) return;
+
+                function renderKadSettings() {
+                    const prefs = getKadPrefs();
+
+                    function row(label, desc, key) {
+                        const on = !!prefs[key];
+                        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--nui-border);gap:8px;">' +
+                            '<div><div style="font-size:13px;font-weight:700;color:var(--nui-text);">' + label + '</div>' +
+                            '<div style="font-size:11px;color:var(--nui-text-muted);">' + desc + '</div></div>' +
+                            '<button type="button" data-kad-pref="' + key + '" style="flex-shrink:0;padding:5px 14px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;' +
+                                'background:' + (on ? 'var(--nui-accent)' : 'var(--nui-surface-2)') + ';' +
+                                'color:' + (on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)') + ';' +
+                                'border-color:' + (on ? 'var(--nui-accent)' : 'var(--nui-border)') + ';">' +
+                                (on ? 'On' : 'Off') +
+                            '</button></div>';
+                    }
+
+                    container.innerHTML =
+                        '<div class="nui-drawer-section" style="margin:var(--nui-space-3) 0;">' +
+                            '<div class="nui-drawer-section-title" style="pointer-events:none;">Kad Settings</div>' +
+                            '<div style="margin-top:12px;display:flex;flex-direction:column;gap:0;">' +
+                                row('KadWatch on top', 'Move KadWatch above the grid', 'kwTop') +
+                                row('Shop buttons on bottom', 'Move SSW / SW / SDB below the grid', 'shopsBottom') +
+                            '</div>' +
+                        '</div>';
+
+                    container.querySelectorAll('[data-kad-pref]').forEach(function (btn) {
+                        btn.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            const key = btn.getAttribute('data-kad-pref');
+                            const p = getKadPrefs();
+                            p[key] = !p[key];
+                            setKadPrefs(p);
+                            assembleLayout();
+                            renderKadSettings();
+                            // Update button state in-place
+                            const on = !!p[key];
+                            btn.textContent = on ? 'On' : 'Off';
+                            btn.style.background = on ? 'var(--nui-accent)' : 'var(--nui-surface-2)';
+                            btn.style.color = on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)';
+                            btn.style.borderColor = on ? 'var(--nui-accent)' : 'var(--nui-border)';
+                        });
+                    });
+                }
+                renderKadSettings();
+            }
+        });
+
+        // Vibe Rater settings — preset editor + assigned users list
+        NeoUI.registerSettingsSection({
+            id: 'kad_vibe',
+            title: 'Vibe Rater',
+            render: function (container) {
+                if (!/\/games\/kadoatery\//.test(location.pathname)) return;
+
+                function renderVibeSettings() {
+                    if (!window.VibeRater) {
+                        container.innerHTML = '<div style="font-size:13px;color:var(--nui-text-muted);padding:8px 0;">VibeRater not loaded.</div>';
+                        return;
+                    }
+                    const vibes = window.VibeRater.getAllVibes();
+                    const keys = Object.keys(vibes);
+                    const presets = window.VibeRater.PRESETS;
+
+                    const existingDetails = container.querySelector('details.nui-drawer-section');
+                    const wasOpen = existingDetails ? existingDetails.open : false;
+
+                    const rows = keys.length === 0
+                        ? '<div style="font-size:13px;color:var(--nui-text-muted);padding:8px 0;">No vibes assigned yet.</div>'
+                        : keys.map(function (u) {
+                            const v = vibes[u];
+                            return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--nui-border);">' +
+                                '<div style="width:12px;height:12px;border-radius:50%;background:' + v.color + ';flex-shrink:0;"></div>' +
+                                '<span style="flex:1;font-size:13px;font-weight:700;color:var(--nui-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + u + '</span>' +
+                                '<span style="font-size:11px;color:var(--nui-text-muted);font-weight:600;">' + v.label + '</span>' +
+                                '<button type="button" data-vr="' + u + '" style="font-size:11px;padding:2px 8px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-danger);cursor:pointer;">✕</button>' +
+                            '</div>';
+                        }).join('');
+
+                    const presetList = presets.map(function (p, idx) {
+                        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+                            '<button type="button" class="nui-vibe-swatch" data-preset-idx="' + idx + '" data-color="' + p.color + '" title="Choose color" style="width:24px;height:24px;flex-shrink:0;border-radius:6px;border:1px solid var(--nui-border);padding:0;cursor:pointer;background:' + p.color + ';"></button>' +
+                            '<input type="text" data-preset-label="' + idx + '" value="' + p.label + '" class="nui-input" style="padding:4px 8px;font-size:12px;flex:1;">' +
+                            '<button type="button" data-preset-del="' + idx + '" style="background:none;border:none;color:var(--nui-danger);cursor:pointer;font-weight:bold;">✕</button>' +
+                        '</div>';
+                    }).join('');
+
+                    container.innerHTML =
+                        '<details class="nui-drawer-section"' + (wasOpen ? ' open' : '') + '>' +
+                            '<summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">' +
+                                'Vibe Rater <span style="font-size:10px;opacity:0.5;">▼</span>' +
+                            '</summary>' +
+                            '<div style="margin-top:12px;display:flex;flex-direction:column;gap:16px;">' +
+                                '<div>' +
+                                    '<div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--nui-text-faint);letter-spacing:0.5px;margin-bottom:6px;">Presets</div>' +
+                                    '<div style="font-size:12px;color:var(--nui-text-muted);margin-bottom:10px;line-height:1.5;">Customize your vibe options. Edits are saved automatically.</div>' +
+                                    '<div id="nui-kad-vibe-presets">' + presetList +
+                                        '<div style="display:flex;gap:8px;margin-top:8px;">' +
+                                            '<button type="button" id="nui-kad-add-preset" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="flex:1;">+ Add New Vibe</button>' +
+                                            '<button type="button" id="nui-kad-reset-presets" class="nui-btn nui-btn-secondary nui-btn-sm nui-btn-block" style="flex:1;">Reset to Defaults</button>' +
+                                        '</div>' +
+                                    '</div>' +
+                                '</div>' +
+                                '<div>' +
+                                    '<div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--nui-text-faint);letter-spacing:0.5px;margin-bottom:6px;">Assigned Users</div>' +
+                                    '<div>' + rows + '</div>' +
+                                    (keys.length > 0 ? '<button type="button" id="nui-kad-vr-clear-all" class="nui-btn nui-btn-danger nui-btn-block" style="margin-top:10px;">Clear All Assigned</button>' : '') +
+                                '</div>' +
+                            '</div>' +
+                        '</details>';
+
+                    const updatePresets = function () {
+                        const newPresets = [];
+                        container.querySelectorAll('[data-preset-idx]').forEach(function (colorBtn) {
+                            const idx = colorBtn.getAttribute('data-preset-idx');
+                            const labelInput = container.querySelector('[data-preset-label="' + idx + '"]');
+                            const id = labelInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_') || ('vibe_' + idx);
+                            newPresets.push({ id: id, label: labelInput.value || 'Custom', color: colorBtn.getAttribute('data-color') });
+                        });
+                        window.VibeRater.saveCustomPresets(newPresets);
+                    };
+
+                    container.querySelectorAll('[data-preset-label]').forEach(function (input) {
+                        input.addEventListener('change', updatePresets);
+                    });
+
+                    container.querySelectorAll('.nui-vibe-swatch').forEach(function (swatchBtn) {
+                        swatchBtn.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            const current = swatchBtn.getAttribute('data-color') || '#888888';
+                            window.NeoUI.openColorPopover(swatchBtn, current, function (hex) {
+                                swatchBtn.setAttribute('data-color', hex);
+                                swatchBtn.style.background = hex;
+                                updatePresets();
+                            });
+                        });
+                    });
+                    container.querySelectorAll('[data-preset-del]').forEach(function (btn) {
+                        btn.addEventListener('click', function (e) { e.stopPropagation(); btn.parentElement.remove(); updatePresets(); renderVibeSettings(); });
+                    });
+
+                    const addBtn = container.querySelector('#nui-kad-add-preset');
+                    if (addBtn) {
+                        addBtn.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            const cur = window.VibeRater.PRESETS;
+                            cur.push({ id: 'new_' + Date.now(), label: 'New Vibe', color: '#888888' });
+                            window.VibeRater.saveCustomPresets(cur);
+                            renderVibeSettings();
+                        });
+                    }
+                    const resetBtn = container.querySelector('#nui-kad-reset-presets');
+                    if (resetBtn) {
+                        resetBtn.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            if (!confirm('Reset all vibe presets to the defaults? This removes any custom presets and colors.')) return;
+                            window.VibeRater.resetPresets();
+                            renderVibeSettings();
+                        });
+                    }
+                    container.querySelectorAll('[data-vr]').forEach(function (btn) {
+                        btn.addEventListener('click', function (e) { e.stopPropagation(); window.VibeRater.clearVibe(btn.getAttribute('data-vr')); renderVibeSettings(); });
+                    });
+                    const clearAll = container.querySelector('#nui-kad-vr-clear-all');
+                    if (clearAll) clearAll.addEventListener('click', function (e) { e.stopPropagation(); window.VibeRater.clearAll(); renderVibeSettings(); });
+                }
+
+                renderVibeSettings();
+
+                // Poll up to ~2s for VibeRater if it wasn't ready on first
+                // render (it loads in a later IIFE), so presets reliably
+                // show up instead of being stuck on "VibeRater not loaded."
+                if (window.VibeRater) {
+                    window.VibeRater.onChange(function (changed) {
+                        if (changed === '__all__' || changed === '__presets__') renderVibeSettings();
+                    });
+                } else {
+                    let attempts = 0;
+                    const poll = setInterval(function () {
+                        attempts++;
+                        if (window.VibeRater) {
+                            clearInterval(poll);
+                            renderVibeSettings();
+                            window.VibeRater.onChange(function (changed) {
+                                if (changed === '__all__' || changed === '__presets__') renderVibeSettings();
+                            });
+                        } else if (attempts > 20) {
+                            clearInterval(poll); // give up after ~2s
+                        }
+                    }, 100);
+                }
+            }
+        });
+
         const wrapper = document.createElement('div');
         wrapper.className = 'nui-reset';
         wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-3) var(--nui-space-5); max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px;';
         document.body.appendChild(wrapper);
 
-        // ---- Action Bar ----
-        const actionBar = document.createElement('div');
-        actionBar.style.cssText = 'display:flex; gap:6px;';
-        actionBar.innerHTML =
-            '<button type="button" id="nui-kad-refresh" class="nui-btn" style="flex:1; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text);">🔄 Refresh</button>' +
-            '<button type="button" id="nui-kad-ssw" class="nui-btn nui-btn-primary" style="flex:1; padding:8px 4px; font-size:12.5px;">⚡ SSW</button>' +
-            '<a href="/market.phtml?type=wizard" target="_blank" class="nui-btn" style="flex:1; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none; text-align:center;">🧙 SW</a>' +
-            '<a href="/safetydeposit.phtml" target="_blank" class="nui-btn" style="flex:1; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none; text-align:center;">📦 SDB</a>';
-        wrapper.appendChild(actionBar);
 
-        actionBar.querySelector('#nui-kad-ssw').addEventListener('click', function () { if(NeoUI.openSSW) NeoUI.openSSW(); });
+        // ---- Kad Settings Prefs ----
+        const KAD_PREF_KEY = 'neoui_kad_prefs_v1';
+        function getKadPrefs() {
+            try { return Object.assign({ kwTop: false, shopsBottom: false }, JSON.parse(localStorage.getItem(KAD_PREF_KEY) || '{}')); }
+            catch (e) { return { kwTop: false, shopsBottom: false }; }
+        }
+        function setKadPrefs(p) {
+            try { localStorage.setItem(KAD_PREF_KEY, JSON.stringify(p)); } catch (e) {}
+        }
 
-        const refreshBtn = actionBar.querySelector('#nui-kad-refresh');
+        // ---- Action Bar (rebuilt based on prefs) ----
+        // refreshBtn is always created; it lives permanently inside the
+        // KadWatch header — replacing the static "KadWatch" title itself —
+        // when the kad-timer module is enabled (regardless of KadWatch's
+        // top/bottom position), falling back to the top action bar only
+        // when there's no KadWatch panel to house it.
+        const kadTimerOn = NeoUI.isModuleEnabled('kad-timer');
+        const refreshBtn = document.createElement('button');
+        refreshBtn.type = 'button';
+        refreshBtn.id = 'nui-kad-refresh';
+        refreshBtn.className = 'nui-btn';
+        let refreshRestLabel;
+        if (kadTimerOn) {
+            refreshBtn.style.cssText = 'padding:2px 0; font-size:14px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; background:none; border:none; color:var(--nui-text); flex-shrink:0; cursor:pointer; text-align:left;';
+            refreshRestLabel = '🐱 KadWatch';
+        } else {
+            refreshBtn.style.cssText = 'flex:1; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text);';
+            refreshRestLabel = '🔄 Refresh';
+        }
+        refreshBtn.textContent = refreshRestLabel;
+
+        const sswBtn = document.createElement('button');
+        sswBtn.type = 'button'; sswBtn.id = 'nui-kad-ssw';
+        sswBtn.className = 'nui-btn nui-btn-primary';
+        sswBtn.style.cssText = 'flex:1; padding:8px 4px; font-size:12.5px;';
+        sswBtn.textContent = '⚡ SSW';
+        sswBtn.addEventListener('click', function () { if (NeoUI.openSSW) NeoUI.openSSW(); });
+
+        const swLink = document.createElement('a');
+        swLink.href = '/market.phtml?type=wizard'; swLink.target = '_blank';
+        swLink.className = 'nui-btn';
+        swLink.style.cssText = 'flex:1; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none; text-align:center;';
+        swLink.textContent = '🧙 SW';
+
+        const sdbLink = document.createElement('a');
+        sdbLink.href = '/safetydeposit.phtml'; sdbLink.target = '_blank';
+        sdbLink.className = 'nui-btn';
+        sdbLink.style.cssText = 'flex:1; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none; text-align:center;';
+        sdbLink.textContent = '📦 SDB';
+
+        // Settings panel (collapsible)
+        // Layout containers — assembleLayout() orders them based on prefs
+        const topBarArea  = document.createElement('div'); topBarArea.style.cssText  = 'display:flex; gap:6px;';
+        const gridArea    = document.createElement('div'); gridArea.style.cssText    = 'display:flex; flex-direction:column; gap:12px;';
+        const timerArea   = document.createElement('div');
+        const bottomBarArea = document.createElement('div'); bottomBarArea.style.cssText = 'display:flex; gap:6px;';
+
+        function assembleLayout() {
+            const prefs = getKadPrefs();
+
+            // Clear all wrapper children and rebuild in pref order
+            while (wrapper.firstChild) wrapper.removeChild(wrapper.firstChild);
+
+            // Top action bar: refresh only lands here when there's no KadWatch
+            // panel to house it (kad-timer module off); shops unless shopsBottom
+            topBarArea.innerHTML = '';
+            if (!kadTimerOn) topBarArea.appendChild(refreshBtn);
+            if (!prefs.shopsBottom) { topBarArea.appendChild(sswBtn); topBarArea.appendChild(swLink); topBarArea.appendChild(sdbLink); }
+            if (topBarArea.children.length) wrapper.appendChild(topBarArea);
+
+            // KadWatch (timer) — top or bottom
+            if (prefs.kwTop) wrapper.appendChild(timerArea);
+
+            wrapper.appendChild(gridArea);
+
+            if (!prefs.kwTop) wrapper.appendChild(timerArea);
+
+            // Bottom shop bar
+            bottomBarArea.innerHTML = '';
+            if (prefs.shopsBottom) { bottomBarArea.appendChild(sswBtn); bottomBarArea.appendChild(swLink); bottomBarArea.appendChild(sdbLink); }
+            if (bottomBarArea.children.length) wrapper.appendChild(bottomBarArea);
+        }
+
+        assembleLayout();
+
+        // Wire refresh button (it's a standalone node, always accessible)
         refreshBtn.addEventListener('click', async function() {
             refreshBtn.textContent = '⏳ ...';
             try {
@@ -14930,19 +15395,18 @@ return {
                     KW.checkDrop(newKads);
                     document.dispatchEvent(new CustomEvent('kw-update'));
                 }
+                // Also update the Core KadTimer key so the home page widget
+                // picks up the new refresh time.
+                if (NeoUI.KadTimer && typeof NeoUI.KadTimer.detectRefresh === 'function') {
+                    NeoUI.KadTimer.detectRefresh(newKads);
+                }
             } catch (e) {
                 showToast('Failed to refresh grid', true);
             }
-            refreshBtn.textContent = '🔄 Refresh';
+            refreshBtn.textContent = refreshRestLabel;
         });
 
-        // ---- Layout Areas ----
-        const gridArea = document.createElement('div');
-        gridArea.style.cssText = 'display:flex; flex-direction:column; gap:12px;';
-        wrapper.appendChild(gridArea);
-
-        const timerArea = document.createElement('div');
-        wrapper.appendChild(timerArea);
+        // Layout areas are declared and assembled above in assembleLayout().
 
         // ---- Grid Renderer ----
         function renderGridArea(kads, feedResultHtml) {
@@ -15008,6 +15472,15 @@ return {
                 tile.style.cssText = 'border-radius:var(--nui-radius-md); overflow:hidden; text-align:center; ' +
                     (fedByMe ? 'border:2px solid var(--nui-accent);' : k.isFed ? 'border:1px solid var(--nui-border); opacity:0.55;' : 'border:2px solid var(--nui-warning);');
 
+                // Vibe dot helper — renders a coloured dot SVG for a username,
+                // or an empty placeholder if VibeRater isn't loaded yet.
+                function vibeDot(username) {
+                    if (!username || !window.VibeRater) return '';
+                    const vibe = window.VibeRater.getVibe(username);
+                    if (!vibe) return '';
+                    return '<span title="Vibe: ' + escapeHtml(vibe.label) + '" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + escapeHtml(vibe.color) + ';margin-left:3px;vertical-align:middle;flex-shrink:0;"></span>';
+                }
+
                 const nameHtml = '<div style="font-size:10.5px; font-weight:800; padding:3px 2px 0; color:var(--nui-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(k.name) + '</div>';
                 const imgHtml = '<a href="' + escapeHtml(k.feedHref) + '" style="display:block;"><img src="' + escapeHtml(k.imgSrc) + '" width="56" height="56" style="display:block; margin:2px auto; object-fit:contain;" alt="' + escapeHtml(k.name) + '"></a>';
 
@@ -15019,11 +15492,84 @@ return {
                 } else if (fedByMe) {
                     statusHtml = '<div style="font-size:9.5px; font-weight:800; color:#fff; background:var(--nui-accent); padding:3px 4px;">✓ You fed this</div>';
                 } else {
-                    statusHtml = '<div style="font-size:9.5px; font-weight:700; padding:3px 4px; color:var(--nui-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">✓ ' + escapeHtml(k.fedBy || 'Fed') + '</div>';
+                    // Show fedBy username with a vibe dot if rated, and make it
+                    // tappable to open the vibe preset popover.
+                    const feederName = k.fedBy || 'Fed';
+                    const dot = vibeDot(feederName);
+                    statusHtml = '<div class="nui-kad-feeder" data-feeder="' + escapeHtml(feederName) + '" style="display:flex;align-items:center;justify-content:center;gap:2px;font-size:9.5px; font-weight:700; padding:3px 4px; color:var(--nui-text-muted); white-space:nowrap; overflow:hidden; cursor:pointer;" title="Set vibe for ' + escapeHtml(feederName) + '">✓ <span style="overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(feederName) + '</span>' + dot + '</div>';
                 }
                 tile.innerHTML = nameHtml + imgHtml + statusHtml;
                 grid.appendChild(tile);
             });
+
+            // Vibe popover for feeder names in fed tiles
+            (function wireKadVibes() {
+                function openVibePopover(feederName, anchorEl) {
+                    if (!window.VibeRater) return;
+                    document.querySelectorAll('.nui-vibe-pop').forEach(function (el) { el.remove(); });
+
+                    const pop = document.createElement('div');
+                    pop.className = 'nui-vibe-pop';
+                    pop.style.cssText = 'position:fixed;z-index:999999;background:var(--nui-surface);border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:8px;display:flex;flex-direction:column;gap:4px;box-shadow:0 4px 16px var(--nui-shadow);min-width:130px;';
+
+                    const lbl = document.createElement('div');
+                    lbl.style.cssText = 'font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;padding:2px 6px 6px;border-bottom:1px solid var(--nui-border);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;';
+                    lbl.textContent = feederName;
+                    pop.appendChild(lbl);
+
+                    window.VibeRater.PRESETS.forEach(function (preset) {
+                        const opt = document.createElement('button');
+                        opt.type = 'button';
+                        opt.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:none;border-radius:6px;background:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--nui-text);text-align:left;';
+                        opt.innerHTML = '<span style="width:10px;height:10px;border-radius:50%;background:' + preset.color + ';flex-shrink:0;"></span>' + preset.label;
+                        opt.addEventListener('click', function () {
+                            window.VibeRater.setVibe(feederName, preset.id);
+                            pop.remove();
+                            // Refresh all dots for this feeder across the grid
+                            grid.querySelectorAll('.nui-kad-feeder[data-feeder="' + feederName + '"]').forEach(function (el) {
+                                const vibe = window.VibeRater.getVibe(feederName);
+                                const existing = el.querySelector('.nui-kad-vibe-dot');
+                                if (existing) existing.remove();
+                                if (vibe) {
+                                    const dot = document.createElement('span');
+                                    dot.className = 'nui-kad-vibe-dot';
+                                    dot.title = 'Vibe: ' + vibe.label;
+                                    dot.style.cssText = 'display:inline-block;width:7px;height:7px;border-radius:50%;background:' + vibe.color + ';margin-left:3px;vertical-align:middle;flex-shrink:0;';
+                                    el.appendChild(dot);
+                                }
+                            });
+                        });
+                        pop.appendChild(opt);
+                    });
+
+                    const clearOpt = document.createElement('button');
+                    clearOpt.type = 'button';
+                    clearOpt.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:none;border-radius:6px;background:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--nui-danger);text-align:left;border-top:1px solid var(--nui-border);margin-top:2px;padding-top:7px;';
+                    clearOpt.textContent = '✕  Clear vibe';
+                    clearOpt.addEventListener('click', function () {
+                        window.VibeRater.clearVibe(feederName);
+                        pop.remove();
+                        grid.querySelectorAll('.nui-kad-feeder[data-feeder="' + feederName + '"] .nui-kad-vibe-dot').forEach(function (el) { el.remove(); });
+                    });
+                    pop.appendChild(clearOpt);
+
+                    document.body.appendChild(pop);
+                    const r = anchorEl.getBoundingClientRect();
+                    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+                    pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8)) + 'px';
+                    pop.style.top = (r.bottom + 6 + ph > window.innerHeight ? r.top - ph - 6 : r.bottom + 6) + 'px';
+
+                    const dismiss = function (ev) { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', dismiss, true); } };
+                    setTimeout(function () { document.addEventListener('click', dismiss, true); }, 0);
+                }
+
+                grid.querySelectorAll('.nui-kad-feeder').forEach(function (el) {
+                    el.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        openVibePopover(el.getAttribute('data-feeder'), el);
+                    });
+                });
+            })();
 
             grid.querySelectorAll('.nui-kad-copy-item').forEach(function (btn) {
                 btn.addEventListener('click', function (e) {
@@ -15048,7 +15594,7 @@ return {
 
             dashboard.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--nui-border); padding-bottom:8px; gap:8px;">
-                    <div style="font-weight:800; color:var(--nui-text); font-size:14px; text-transform:uppercase; letter-spacing:0.5px;">🐱 KadWatch</div>
+                    <div id="nui-kw-title-slot" style="flex-shrink:0;"></div>
                     <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
                         <input type="text" id="kw-input" class="nui-input" placeholder="HH:MM:SS" style="width:75px; padding:4px 6px; font-size:12px; text-align:center;">
                         <button type="button" id="kw-add-main" class="nui-btn nui-btn-secondary" style="padding:4px 8px; font-size:11px;">Main</button>
@@ -15060,6 +15606,12 @@ return {
                 <div id="kw-main"></div>
                 <div id="kw-minis" style="display:flex; flex-direction:column; gap:6px;"></div>
             `;
+
+            // Refresh button replaces the static "KadWatch" title — tapping
+            // it refreshes the grid. Appended via a real DOM insert (not
+            // innerHTML) so it stays the exact same node whose click
+            // listener was already wired up above.
+            dashboard.querySelector('#nui-kw-title-slot').appendChild(refreshBtn);
 
             const btnMain = dashboard.querySelector('#kw-add-main');
             const btnMini = dashboard.querySelector('#kw-add-mini');
