@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.51
+// @version      1.1.62
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -49,6 +49,81 @@
  *   Faerie Quests    — sitewide quest watcher + /quests.phtml enhancement
  *
  * CHANGELOG  (last 5 versions)
+ *
+ * v1.1.55
+ *   - KadWatch: removed the dead "NeoUI.KadTimer" auto-detect engine added
+ *     last version and replaced it with the real thing — the Kadoatery
+ *     page's manually-logged Main/Mini timer (previously a private `KW`
+ *     object scoped to that page alone) is now NeoUI.KadWatch, shared
+ *     between the Kadoatery dashboard and the Home widget. The Home widget
+ *     now shows the actual next Main/Mini countdown instead of a separate
+ *     timer that was never fed any data.
+ *   - Settings: new dedicated "KadWatch" section with two independent
+ *     toggles — "Home Widget" and "Kadoatery Dashboard" — replacing the old
+ *     "Kad Mode (Timer)" entry in the generic Modules list. The Home
+ *     widget's visibility is no longer tied to the Kadoatery module toggle
+ *     at all; it's its own switch, and the Kadoatery-page dashboard has its
+ *     own switch too.
+ *
+ * v1.1.54
+ *   - Kadoatery: VibeRater compatibility. Kads fed by someone else now tint
+ *     their tile border/background to that user's vibe color and show a
+ *     live vibe dot next to their name; tapping the "fed by" row opens the
+ *     same preset popover used sitewide (sidebar, Neomail, Neoboards) to
+ *     set/change it right from the grid. This was documented back in
+ *     v1.1.49 but never actually wired up — the grid never touched
+ *     window.VibeRater at all. Fixed now.
+ *   - Settings: the "Modules" section is collapsible again (native
+ *     <details>/<summary>, open by default), so it can be closed instead of
+ *     being permanently expanded. The v1.1.52 fix for the open/close race
+ *     removed the <details> wrapper entirely rather than just fixing the
+ *     race; restored the wrapper while keeping the race-free in-place
+ *     button mutation (toggling a module still never touches this
+ *     section's innerHTML), so it can't reintroduce the original bug.
+ *   - Home / Kadoatery: the "Kad Timer" card was reading NeoUI.KadTimer,
+ *     but nothing ever called its detectRefresh() — the Kadoatery page's
+ *     embedded dashboard runs on a separate, manually-entered timer (KW)
+ *     instead. The two never synced, so the Home card sat on "No window
+ *     logged yet" indefinitely. The Kadoatery module now calls
+ *     NeoUI.KadTimer.detectRefresh() on every real scrape (initial load and
+ *     manual refresh), so the Home card reflects genuine detected drops.
+ *     It's also moved to the top of the Home dashboard (full-width, above
+ *     the pet card) instead of being buried after Quick Links, and still
+ *     only renders when "Kad Mode (Timer)" is toggled on.
+ *
+ * v1.1.53
+ *   - Kadoatery: "Back to Kadoatery" button on the feed result screen now
+ *     also calls history.pushState to update the address bar back to
+ *     /games/kadoatery/index.phtml, so the URL reflects where you actually
+ *     are after navigating away from feed_kadoatie.phtml.
+ *   - Fruit Machine: module retired. Neopets has rebuilt the Fruit Machine
+ *     page; our headless SPA is redundant. The URL guard now exits early on
+ *     every Fruit Machine page so the native Neopets UI is shown untouched.
+ *     The toggle entry and isModuleEnabled key are kept so existing user
+ *     preferences aren't orphaned, but the module body is a no-op.
+ *   - All Events: module retired. Neopets has rebuilt /allevents.phtml as a
+ *     Vue SPA with bulk-select/delete. Our old module scraped form[name=
+ *     "eventform"] which no longer exists, making it render an empty state
+ *     incorrectly. The module now exits early and lets the new native page
+ *     render untouched. Sitewide Chrome applies our topbar on top as usual.
+ *
+ * v1.1.52
+ *   - Module toggles: replaced <details> wrapper with a plain always-visible
+ *     section header; toggle buttons now mutate their own style in-place
+ *     rather than re-rendering the whole container, fixing the visual state
+ *     not updating on tap (the <details> open/close animation was racing the
+ *     re-render and collapsing the section before the DOM update landed).
+ *   - Sidebar: vibe-dot button added to the drawer profile block next to the
+ *     username. Tapping it opens the same preset popover used in Neomail and
+ *     Neoboards so you can rate any user you've seen on any page directly
+ *     from the side nav without needing to find a post from them first.
+ *     Updates live via VibeRater.onChange; guarded so it no-ops gracefully
+ *     on pages where VibeRater hasn't initialised yet.
+ *   - Sitewide Chrome: expanded CHROME_SELECTORS to cover more page families
+ *     (nav5 bar, new-template sidebars, sticky ad rails). Body now gets
+ *     box-sizing + overflow-x clamp so content doesn't bleed under the
+ *     fixed topbar. Wrapped page body in a flex column with topbar padding
+ *     so unclaimed pages render cleanly rather than sliding under the bar.
  *
  * v1.1.51
  *   - Kadoatery: hidden item auto-search flag (nui_kad_autosearch in
@@ -1491,12 +1566,25 @@
 
     const CUSTOM_NAV_KEY = 'neoui_custom_nav_v1';
 
+    function isValidSiteNav(parsed) {
+        return Array.isArray(parsed) && parsed.length > 0 && parsed.every(function (section) {
+            return section && typeof section.title === 'string' && Array.isArray(section.items) &&
+                section.items.every(function (item) {
+                    return item && typeof item.label === 'string';
+                });
+        });
+    }
+
     function loadSiteNav() {
         try {
             const raw = localStorage.getItem(CUSTOM_NAV_KEY);
             if (raw) {
                 const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+                // A malformed save (missing/non-array `items`, missing `title`,
+                // items without a `label`, etc.) must never reach buildNavHtml —
+                // that used to throw mid-build and permanently wedge the drawer,
+                // since drawerBuilt was already flipped true before the crash.
+                if (isValidSiteNav(parsed)) return parsed;
             }
         } catch (e) {}
         return DEFAULT_SITE_NAV;
@@ -1664,10 +1752,17 @@
             const profileDropdown = document.querySelector('[id^="navprofiledropdown__"]');
             const petImgDiv = document.querySelector('[id^="navProfilePet__"]');
 
+            // H5-converted pages ("Welcome, <a>user</a>" / "Active Pet: <a
+            // class='profile-dropdown-link'>pet</a>") don't sit inside an
+            // id="navprofiledropdown__..." wrapper at all, so those need
+            // their own fallback selectors alongside the legacy ones.
             const userLink = (profileDropdown && profileDropdown.querySelector('a[href^="/userlookup.phtml?user="]'))
-                || document.querySelector('.user a[href^="/userlookup.phtml?user="]');
+                || document.querySelector('.user a[href^="/userlookup.phtml?user="]')
+                || document.querySelector('.nav-profile-dropdown-text a[href^="/userlookup.phtml?user="]');
 
-            const petLink = profileDropdown && profileDropdown.querySelector('a[href^="/petlookup.phtml?pet="]');
+            const petLink = (profileDropdown && profileDropdown.querySelector('a[href^="/petlookup.phtml?pet="]'))
+                || document.querySelector('a.profile-dropdown-link[href^="/petlookup.phtml?pet="]')
+                || document.querySelector('.nav-profile-dropdown-text a[href^="/petlookup.phtml?pet="]');
             const legacyPetName = document.querySelector('.sidebarHeader a b');
 
             let petImage = null;
@@ -1764,14 +1859,15 @@
         });
     }
 
-        function buildTopbar(opts) {
+
+    function buildTopbar(opts) {
         opts = opts || {};
         const existing = document.getElementById('nui-page-topbar');
 
         if (existing) {
             if (opts.stats) {
                 const statsEl = existing.querySelector('#nui-topbar-stats');
-                if (statsEl) statsEl.innerHTML = 'NP: <b>' + opts.stats.np + '</b> &nbsp; NC: <b>' + opts.stats.nc + '</b>';
+                if (statsEl) statsEl.innerHTML = '<a href="/inventory.phtml" style="color:inherit;text-decoration:none;">NP: <b>' + opts.stats.np + '</b></a><span>NC: <b>' + opts.stats.nc + '</b></span>';
             }
             return existing;
         }
@@ -1804,7 +1900,10 @@
                         'filter: drop-shadow(0 2px 4px var(--nui-shadow));' +
                     '"></a>' +
                 '</div>' +
-                '<div class="nui-topbar-stats" id="nui-topbar-stats" style="z-index:2;"><a href="/inventory.phtml" style="color:inherit;text-decoration:none;">NP: <b>' + stats.np + '</b></a> &nbsp; NC: <b>' + stats.nc + '</b></div>' +
+                '<div class="nui-topbar-stats" id="nui-topbar-stats" style="z-index:2; display:flex; flex-direction:column; align-items:flex-end; justify-content:center; gap:3px; line-height:1; font-size:11.5px;">' +
+                    '<a href="/inventory.phtml" style="color:inherit;text-decoration:none;">NP: <b>' + stats.np + '</b></a>' +
+                    '<span>NC: <b>' + stats.nc + '</b></span>' +
+                '</div>' +
             '</div>';
 
         document.body.insertBefore(wrapper, document.body.firstChild);
@@ -1826,6 +1925,7 @@
 
         return wrapper;
     }
+
 
 
 
@@ -1881,7 +1981,6 @@
         { id: 'coincidence',    label: 'The Coincidence',            desc: 'Coincidence SPA' },
         { id: 'buried-treasure',label: 'Buried Treasure',            desc: 'Map SPA' },
         { id: 'kadoatery',      label: 'Kadoatery',                  desc: 'Mobile grid + tap-to-copy items' },
-        { id: 'kad-timer',      label: 'Kad Mode (Timer)',           desc: 'Kadoatery window timer, on Kadoatery page + Home' },
         { id: 'fruit-machine',  label: 'Fruit Machine',              desc: 'Spin SPA' },
         { id: 'coconut-shy',    label: 'Coconut Shy',                desc: 'Coconut Shy wrapper' },
         { id: 'faerie-quests',  label: 'Faerie Quests',              desc: 'Quest watcher + page' },
@@ -1917,46 +2016,56 @@
         id: 'module_toggles',
         title: 'Modules',
         render: function (container) {
-            function renderModuleToggles() {
-                const disabled = getDisabledModules();
-                const existingDetails = container.querySelector('details.nui-drawer-section');
-                const wasOpen = existingDetails ? existingDetails.open : false;
+            // Build the section once; mutate button state in-place on toggle
+            // so we never fight <details> open/close animation races.
+            const disabled = getDisabledModules();
 
-                const rows = TOGGLEABLE_MODULES.map(mod => {
-                    const on = !disabled.has(mod.id);
-                    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--nui-border);gap:8px;">
-                        <div style="min-width:0;">
-                            <div style="font-size:13px;font-weight:700;color:var(--nui-text);">${mod.label}</div>
-                            <div style="font-size:11px;color:var(--nui-text-muted);">${mod.desc}</div>
-                        </div>
-                        <button type="button" data-mod-toggle="${mod.id}" style="flex-shrink:0;padding:4px 12px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;background:${on ? 'var(--nui-accent)' : 'var(--nui-surface-2)'};color:${on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)'};border-color:${on ? 'var(--nui-accent)' : 'var(--nui-border)'};">${on ? 'On' : 'Off'}</button>
-                    </div>`;
-                }).join('');
+            const rows = TOGGLEABLE_MODULES.map(mod => {
+                const on = !disabled.has(mod.id);
+                return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--nui-border);gap:8px;">
+                    <div style="min-width:0;">
+                        <div style="font-size:13px;font-weight:700;color:var(--nui-text);">${mod.label}</div>
+                        <div style="font-size:11px;color:var(--nui-text-muted);">${mod.desc}</div>
+                    </div>
+                    <button type="button" data-mod-toggle="${mod.id}" data-mod-on="${on ? '1' : '0'}" style="flex-shrink:0;padding:4px 12px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;background:${on ? 'var(--nui-accent)' : 'var(--nui-surface-2)'};color:${on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)'};border-color:${on ? 'var(--nui-accent)' : 'var(--nui-border)'};">${on ? 'On' : 'Off'}</button>
+                </div>`;
+            }).join('');
 
-                container.innerHTML = `
-                    <details class="nui-drawer-section"${wasOpen ? ' open' : ''}>
-                        <summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
-                            Modules <span style="font-size:10px;opacity:0.5;">▼</span>
-                        </summary>
-                        <div style="margin-top:12px;display:flex;flex-direction:column;gap:0;">
-                            <div style="font-size:12px;color:var(--nui-text-muted);margin-bottom:10px;line-height:1.5;">Toggle modules on or off. Changes take effect on next page load.</div>
-                            ${rows}
-                        </div>
-                    </details>
-                `;
+            // Collapsible like every other settings section (native
+            // <details>/<summary> — closing/opening it doesn't touch this
+            // container's innerHTML at all, so it can't race with the
+            // toggle buttons below, which still just mutate their own
+            // style in-place. That in-place mutation is what actually
+            // fixed the v1.1.52 race; the section itself just needed to be
+            // wrapped back in <details> so it can be closed.
+            container.innerHTML = `
+                <details class="nui-drawer-section" style="margin:var(--nui-space-3) 0;" open>
+                    <summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+                        Modules <span style="font-size:10px;opacity:0.5;">▼</span>
+                    </summary>
+                    <div style="margin-top:12px;display:flex;flex-direction:column;gap:0;">
+                        <div style="font-size:12px;color:var(--nui-text-muted);margin-bottom:10px;line-height:1.5;">Toggle modules on or off. Changes take effect on next page load.</div>
+                        ${rows}
+                    </div>
+                </details>
+            `;
 
-                container.querySelectorAll('[data-mod-toggle]').forEach(btn => {
-                    btn.addEventListener('click', e => {
-                        e.stopPropagation();
-                        const id = btn.getAttribute('data-mod-toggle');
-                        const d = getDisabledModules();
-                        if (d.has(id)) { d.delete(id); } else { d.add(id); }
-                        setDisabledModules(d);
-                        renderModuleToggles();
-                    });
+            container.querySelectorAll('[data-mod-toggle]').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const id = btn.getAttribute('data-mod-toggle');
+                    const d = getDisabledModules();
+                    const nowOn = d.has(id); // currently disabled → toggling ON
+                    if (nowOn) { d.delete(id); } else { d.add(id); }
+                    setDisabledModules(d);
+                    // Mutate this button's appearance in-place — no re-render needed
+                    btn.setAttribute('data-mod-on', nowOn ? '1' : '0');
+                    btn.textContent = nowOn ? 'On' : 'Off';
+                    btn.style.background = nowOn ? 'var(--nui-accent)' : 'var(--nui-surface-2)';
+                    btn.style.color = nowOn ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)';
+                    btn.style.borderColor = nowOn ? 'var(--nui-accent)' : 'var(--nui-border)';
                 });
-            }
-            renderModuleToggles();
+            });
         }
     });
 
@@ -3373,7 +3482,26 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     }
 
     function buildDrawer() {
-        if (drawerBuilt) return;
+        try {
+            if (drawerBuilt && drawerEl && drawerEl.isConnected) {
+                return { open: openDrawer, close: closeDrawer };
+            }
+            return buildDrawerUnsafe();
+        } catch (e) {
+            // Something in nav/theme data was unexpectedly broken, or the
+            // connectivity check itself failed for some reason. Reset the
+            // flag so the NeoGo button isn't permanently dead for the rest of
+            // the page's life — the next tap gets a fresh attempt instead of
+            // silently doing nothing forever, and callers (e.g. the Home
+            // Dashboard's own run()) never see this throw.
+            drawerBuilt = false;
+            drawerEl = null;
+            try { console.error('NeoUI: buildDrawer failed', e); } catch (e2) {}
+            return null;
+        }
+    }
+
+    function buildDrawerUnsafe() {
         drawerBuilt = true;
 
         const nav = loadSiteNav();
@@ -3384,8 +3512,11 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
                 '<div class="nui-drawer-profile">' +
                     '<img class="nui-drawer-avatar" data-slot="petImage" src="https://images.neopets.com/themes/h5/basic/images/mystery-icon.png" alt="Pet">' +
-                    '<div>' +
-                        '<div class="nui-drawer-name" data-slot="username">Neopian</div>' +
+                    '<div style="min-width:0;flex:1;">' +
+                        '<div style="display:flex;align-items:center;gap:6px;">' +
+                            '<div class="nui-drawer-name" data-slot="username">Neopian</div>' +
+                            '<button type="button" id="nui-drawer-vibe-btn" title="Set vibe" style="flex-shrink:0;background:none;border:none;padding:0;cursor:pointer;line-height:0;opacity:0.6;" aria-label="Set vibe for this user"></button>' +
+                        '</div>' +
                         '<div class="nui-drawer-sub" data-slot="petname"></div>' +
                     '</div>' +
                 '</div>' +
@@ -3434,6 +3565,102 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             el.addEventListener('click', () => { closeDrawer(); openGlobalSSW(''); });
         });
 
+        // ── Sidebar vibe button ──────────────────────────────────────────────
+        // Wire the vibe-dot button next to the username. VibeRater initialises
+        // in a later IIFE, so we poll briefly then give up rather than blocking.
+        (function wireDrawerVibe() {
+            const vibeBtn = backdrop.querySelector('#nui-drawer-vibe-btn');
+            if (!vibeBtn) return;
+
+            const VIBE_DOT_SVG = (color, opacity) =>
+                `<svg width="14" height="14" viewBox="0 0 18 18" fill="none">` +
+                `<circle cx="9" cy="9" r="6" fill="${color}" opacity="${opacity}"/>` +
+                `<circle cx="9" cy="9" r="8" stroke="${color}" stroke-width="1.5" fill="none" opacity="${opacity > 0.5 ? '0.35' : '0.2'}"/>` +
+                `</svg>`;
+
+            function updateDot() {
+                if (!window.VibeRater) { vibeBtn.innerHTML = VIBE_DOT_SVG('var(--nui-border)', '0.4'); return; }
+                const usernameEl = backdrop.querySelector('[data-slot="username"]');
+                const username = usernameEl ? usernameEl.textContent.trim() : '';
+                if (!username || username === 'Neopian') { vibeBtn.style.display = 'none'; return; }
+                vibeBtn.style.display = '';
+                const vibe = window.VibeRater.getVibe(username);
+                vibeBtn.innerHTML = VIBE_DOT_SVG(vibe ? vibe.color : 'var(--nui-border)', vibe ? '1' : '0.4');
+                vibeBtn.style.opacity = vibe ? '1' : '0.5';
+                vibeBtn.title = vibe ? `Vibe: ${vibe.label} — tap to change` : 'Set vibe';
+            }
+
+            function openVibePop(e) {
+                e.stopPropagation();
+                if (!window.VibeRater) return;
+                document.querySelectorAll('.nui-vibe-pop').forEach(el => el.remove());
+
+                const usernameEl = backdrop.querySelector('[data-slot="username"]');
+                const username = usernameEl ? usernameEl.textContent.trim() : '';
+                if (!username || username === 'Neopian') return;
+
+                const pop = document.createElement('div');
+                pop.className = 'nui-vibe-pop';
+                pop.style.cssText = 'position:fixed;z-index:999999;background:var(--nui-surface);border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:8px;display:flex;flex-direction:column;gap:4px;box-shadow:0 4px 16px var(--nui-shadow);min-width:130px;';
+
+                const label = document.createElement('div');
+                label.style.cssText = 'font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;padding:2px 6px 6px;border-bottom:1px solid var(--nui-border);margin-bottom:2px;';
+                label.textContent = username;
+                pop.appendChild(label);
+
+                window.VibeRater.PRESETS.forEach(preset => {
+                    const opt = document.createElement('button');
+                    opt.type = 'button';
+                    opt.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:none;border-radius:6px;background:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--nui-text);text-align:left;transition:background 0.1s;';
+                    opt.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:${preset.color};flex-shrink:0;"></span>${preset.label}`;
+                    opt.addEventListener('mouseenter', () => { opt.style.background = preset.color + '22'; });
+                    opt.addEventListener('mouseleave', () => { opt.style.background = 'none'; });
+                    opt.addEventListener('click', () => { window.VibeRater.setVibe(username, preset.id); pop.remove(); });
+                    pop.appendChild(opt);
+                });
+
+                const clearOpt = document.createElement('button');
+                clearOpt.type = 'button';
+                clearOpt.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:none;border-radius:6px;background:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--nui-danger);text-align:left;border-top:1px solid var(--nui-border);margin-top:2px;padding-top:7px;transition:background 0.1s;';
+                clearOpt.textContent = '✕  Clear vibe';
+                clearOpt.addEventListener('mouseenter', () => { clearOpt.style.background = 'var(--nui-danger-soft)'; });
+                clearOpt.addEventListener('mouseleave', () => { clearOpt.style.background = 'none'; });
+                clearOpt.addEventListener('click', () => { window.VibeRater.clearVibe(username); pop.remove(); });
+                pop.appendChild(clearOpt);
+
+                // Position below/near the button
+                document.body.appendChild(pop);
+                const r = vibeBtn.getBoundingClientRect();
+                const pw = pop.offsetWidth, ph = pop.offsetHeight;
+                const left = Math.min(r.left, window.innerWidth - pw - 8);
+                const top = r.bottom + 6 + ph > window.innerHeight ? r.top - ph - 6 : r.bottom + 6;
+                pop.style.left = Math.max(8, left) + 'px';
+                pop.style.top = Math.max(8, top) + 'px';
+
+                const dismiss = (ev) => { if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', dismiss, true); } };
+                setTimeout(() => document.addEventListener('click', dismiss, true), 0);
+            }
+
+            vibeBtn.addEventListener('click', openVibePop);
+
+            // Poll up to ~2s for VibeRater (it loads in a later IIFE)
+            let attempts = 0;
+            const poll = setInterval(() => {
+                attempts++;
+                if (window.VibeRater) {
+                    clearInterval(poll);
+                    updateDot();
+                    window.VibeRater.onChange(changed => {
+                        const usernameEl = backdrop.querySelector('[data-slot="username"]');
+                        const username = usernameEl ? usernameEl.textContent.trim() : '';
+                        if (changed === username.toLowerCase().trim() || changed === '__all__') updateDot();
+                    });
+                } else if (attempts > 20) {
+                    clearInterval(poll); // give up after ~2s
+                }
+            }, 100);
+        })();
+
         document.body.appendChild(backdrop);
         drawerEl = backdrop;
 
@@ -3466,6 +3693,40 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             const imgEl = drawerEl.querySelector('[data-slot="petImage"]');
             if (imgEl) imgEl.src = info.petImage;
         }
+
+        // Persist any real values back to the profile cache so that accurate
+        // data captured on one page (e.g. the Home carousel on H5) is
+        // available to every other page that can only fall back to cache.
+        try {
+            const DEFAULTS = { username: 'Neopian', petname: 'Unknown Pet', petImage: 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png', np: '0', nc: '0' };
+            let cache = {};
+            try { cache = JSON.parse(localStorage.getItem('nui_profile_cache')) || {}; } catch (e) {}
+            let changed = false;
+            ['username', 'petname', 'petImage', 'np', 'nc'].forEach(function (key) {
+                const val = info[key];
+                if (val && val !== DEFAULTS[key] && val !== cache[key]) {
+                    cache[key] = val;
+                    changed = true;
+                }
+            });
+            if (changed) localStorage.setItem('nui_profile_cache', JSON.stringify(cache));
+        } catch (e) {}
+
+        // Refresh the sidebar vibe dot now that the username slot is populated.
+        // VibeRater may already be ready (same-page), or may not be yet (poll
+        // in wireDrawerVibe will catch it); only act if it's already present.
+        if (info.username && window.VibeRater) {
+            const vibeBtn = drawerEl.querySelector('#nui-drawer-vibe-btn');
+            if (vibeBtn) {
+                const vibe = window.VibeRater.getVibe(info.username);
+                const color = vibe ? vibe.color : 'var(--nui-border)';
+                const op = vibe ? '1' : '0.4';
+                vibeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="6" fill="' + color + '" opacity="' + op + '"/><circle cx="9" cy="9" r="8" stroke="' + color + '" stroke-width="1.5" fill="none" opacity="' + (vibe ? '0.35' : '0.2') + '"/></svg>';
+                vibeBtn.style.opacity = vibe ? '1' : '0.5';
+                vibeBtn.style.display = '';
+                vibeBtn.title = vibe ? 'Vibe: ' + vibe.label + ' \u2014 tap to change' : 'Set vibe';
+            }
+        }
     }
 
 
@@ -3483,339 +3744,197 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     }
 
     // ---- Public init ----
-    // ── Kad Timer engine (condensed KadWatch) ──────────────────────────────
-    // Shared by the Kadoatery module (panel at the bottom of the grid), the
-    // Home module ("Kad Mode" homepage widget), and the "🐱 Kad Timer"
-    // Settings section (manual editing, minis, board-post copy — the
-    // KadWatch feature set, just living in the sidebar instead of its own
-    // floating panel). Lives here in Core so all three can reach it via
-    // NeoUI.KadTimer without duplicating the timing math. Storage is plain
-    // localStorage (this script runs with @grant none), keyed separately
-    // from KadWatch's own GM_-backed keys so the two can coexist without
-    // clobbering each other.
-    const KT_LAST_REFRESH_KEY = 'nui_kadtimer_last_refresh';
-    const KT_MAIN_DATA_KEY = 'nui_kadtimer_main_data';   // {count, first, last}
-    const KT_MINIS_KEY = 'nui_kadtimer_minis';           // [{time, count, first, last}]
-    const KT_PENDING_DROP_KEY = 'nui_kadtimer_pending';  // {time, count, names[]}
-    const KT_PREV_STATES_KEY = 'nui_kadtimer_prev_states';
-    const KT_FIRST_RUN_KEY = 'nui_kadtimer_first_run';
-    const KT_24H_KEY = 'nui_kadtimer_24h';
-    // Same cadence as the real Kadoatery drop cycle: ~35 min quiet period,
-    // then a ~60s window every 7 minutes until the next drop.
-    const KT_MAIN_DELAY_MS = 2100000;
-    const KT_WINDOW_MS = 60000;
-    const KT_INTERVAL_MS = 420000;
-    const KT_DEBOUNCE_MS = 300000; // ignore re-detections within 5 min of the last logged refresh/pending drop
+    // ── KadWatch engine ─────────────────────────────────────────────────────
+    // This is the actual main/mini feed-window tracker (manually logged by
+    // the user tapping "Main"/"Mini" after a refresh) — previously defined
+    // as a private `KW` object inside the Kadoatery page module, with the
+    // Home dashboard reading from an entirely separate, never-actually-wired
+    // "NeoUI.KadTimer" auto-detect engine instead. The two never synced.
+    // Moved here so both the Kadoatery page panel and the Home widget read
+    // the exact same source of truth via NeoUI.KadWatch.
+    const KW_MAIN_KEY = 'nui_kw_mainTime';
+    const KW_MINIS_KEY = 'nui_kw_minisArr';
+    const KW_PENDING_KEY = 'nui_kw_pendingDrop';
+    // Separate from the Kadoatery module's own "kadoatery" / dashboard
+    // toggles — this only controls whether the Home dashboard shows a
+    // KadWatch countdown card at all. Lives in its own "KadWatch" settings
+    // section rather than the generic Modules list. Defaults on so existing
+    // users see no change until they choose to turn it off.
+    const KW_HOME_WIDGET_KEY = 'nui_kw_home_widget_enabled';
+    const KW_KADOATERY_DASHBOARD_KEY = 'nui_kw_kadoatery_dashboard_enabled';
 
-    function ktGet(key, def) {
-        try {
-            const raw = localStorage.getItem(key);
-            return raw === null ? def : JSON.parse(raw);
-        } catch (e) { return def; }
+    function isKadWatchHomeWidgetEnabled() {
+        try { return localStorage.getItem(KW_HOME_WIDGET_KEY) !== '0'; } catch (e) { return true; }
     }
-    function ktSet(key, val) {
-        try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+    function setKadWatchHomeWidgetEnabled(on) {
+        try { localStorage.setItem(KW_HOME_WIDGET_KEY, on ? '1' : '0'); } catch (e) {}
     }
-    function ktDel(key) {
-        try { localStorage.removeItem(key); } catch (e) {}
+    function isKadWatchDashboardEnabled() {
+        try { return localStorage.getItem(KW_KADOATERY_DASHBOARD_KEY) !== '0'; } catch (e) { return true; }
+    }
+    function setKadWatchDashboardEnabled(on) {
+        try { localStorage.setItem(KW_KADOATERY_DASHBOARD_KEY, on ? '1' : '0'); } catch (e) {}
     }
 
-    function ktGetTimerState(lastRefreshTime, now) {
-        if (!lastRefreshTime) return { status: 'expired' };
-        const mainStart = lastRefreshTime + KT_MAIN_DELAY_MS;
-        const sinceStart = now - mainStart;
-        if (sinceStart < 0) return { status: 'waiting', nextStart: mainStart, countdown: mainStart - now };
-        const cycle = Math.floor(sinceStart / KT_INTERVAL_MS);
-        const winStart = mainStart + cycle * KT_INTERVAL_MS;
-        const winEnd = winStart + KT_WINDOW_MS;
-        if (now >= winStart && now < winEnd) return { status: 'active', timeRemaining: winEnd - now };
-        const nextStart = mainStart + (cycle + 1) * KT_INTERVAL_MS;
-        return { status: 'waiting', nextStart: nextStart, countdown: nextStart - now };
-    }
+    const KadWatch = {
+        getMain: () => parseInt(localStorage.getItem(KW_MAIN_KEY) || '0', 10),
+        setMain: (ms) => localStorage.setItem(KW_MAIN_KEY, ms.toString()),
+        getMinis: () => JSON.parse(localStorage.getItem(KW_MINIS_KEY) || '[]'),
+        setMinis: (arr) => localStorage.setItem(KW_MINIS_KEY, JSON.stringify(arr)),
+        getPending: () => JSON.parse(localStorage.getItem(KW_PENDING_KEY) || '{}'),
+        setPending: (obj) => localStorage.setItem(KW_PENDING_KEY, JSON.stringify(obj)),
 
-    function ktFormatCountdown(ms) {
-        const totalSec = Math.max(0, Math.floor(ms / 1000));
-        const m = Math.floor(totalSec / 60), s = totalSec % 60;
-        return (m < 10 ? '0' + m : '' + m) + ':' + (s < 10 ? '0' + s : '' + s);
-    }
-    // Kadoatery windows run on NST (America/Los_Angeles), same as the rest
-    // of the site's dailies — show that clock rather than the visitor's
-    // local time, same as KadWatch's formatWindowTime/formatLastRefresh.
-    function ktFormatClock(ms) {
-        if (!ms) return '';
-        try {
-            const is24h = ktGet(KT_24H_KEY, false);
-            const str = new Date(ms).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: !is24h });
-            return str.replace(/ /g, '').toLowerCase();
-        } catch (e) { return ''; }
-    }
-    function ktIs24h() { return ktGet(KT_24H_KEY, false); }
-    function ktSet24h(on) { ktSet(KT_24H_KEY, !!on); }
+        getState: (lastRefreshMs, nowMs) => {
+            if (!lastRefreshMs || lastRefreshMs === 0) return { status: 'expired' };
+            const start = lastRefreshMs + 2100000;
+            const diff = nowMs - start;
+            if (diff < 0) return { status: 'waiting', next: start, cd: start - nowMs };
 
-    function ktFormatLabel(type, count, first, last) {
-        if (!count) return type;
-        const f = first || '', l = last || '';
-        if (count === 1) return f ? (type + ' (1) ' + f) : (type + ' (1)');
-        if (!f && !l) return type + ' (' + count + ')';
-        if (!f) return type + ' (' + count + ') › ' + l;
-        if (!l) return type + ' (' + count + ') ' + f + ' ›';
-        return type + ' (' + count + ') ' + f + ' › ' + l;
-    }
+            const cycle = Math.floor(diff / 420000);
+            const cStart = start + (cycle * 420000);
+            const cEnd = cStart + 60000;
 
-    // ---- Main + Minis CRUD ----
-    function ktGetMainTime() { return ktGet(KT_LAST_REFRESH_KEY, 0); }
-    function ktGetMainData() { return ktGet(KT_MAIN_DATA_KEY, {}); }
-    function ktSetMain(timeMs, count, first, last) {
-        ktSet(KT_LAST_REFRESH_KEY, timeMs);
-        ktSet(KT_MAIN_DATA_KEY, { count: count || 0, first: first || '', last: last || '' });
-    }
-    function ktClearMain() {
-        ktDel(KT_LAST_REFRESH_KEY);
-        ktDel(KT_MAIN_DATA_KEY);
-    }
-    function ktGetMinis() {
-        const minis = ktGet(KT_MINIS_KEY, []);
-        return Array.isArray(minis) ? minis : [];
-    }
-    function ktSaveMinis(arr) { ktSet(KT_MINIS_KEY, arr); }
-    function ktAddMini(timeMs, count, first, last) {
-        const minis = ktGetMinis();
-        minis.push({ time: timeMs, count: count || 0, first: first || '', last: last || '' });
-        minis.sort(function (a, b) { return a.time - b.time; });
-        ktSaveMinis(minis);
-    }
-    function ktUpdateMini(index, patch) {
-        const minis = ktGetMinis();
-        if (!minis[index]) return;
-        minis[index] = Object.assign({}, minis[index], patch);
-        ktSaveMinis(minis);
-    }
-    function ktRemoveMini(index) {
-        const minis = ktGetMinis();
-        minis.splice(index, 1);
-        ktSaveMinis(minis);
-    }
-    function ktPromoteMini(index) {
-        const minis = ktGetMinis();
-        const mini = minis[index];
-        if (!mini) return;
-        const mainTime = ktGetMainTime();
-        minis.splice(index, 1);
-        if (mainTime) {
-            const mainData = ktGetMainData();
-            minis.push({ time: mainTime, count: mainData.count || 0, first: mainData.first || '', last: mainData.last || '' });
-        }
-        ktSaveMinis(minis);
-        ktSetMain(mini.time, mini.count, mini.first, mini.last);
-    }
-    function ktDemoteMain() {
-        const mainTime = ktGetMainTime();
-        if (!mainTime) return;
-        const data = ktGetMainData();
-        ktAddMini(mainTime, data.count, data.first, data.last);
-        ktClearMain();
-    }
-    function ktUpdateMain(patch) {
-        const time = patch.time != null ? patch.time : ktGetMainTime();
-        const data = ktGetMainData();
-        ktSetMain(time, patch.count != null ? patch.count : data.count, patch.first != null ? patch.first : data.first, patch.last != null ? patch.last : data.last);
-    }
+            if (nowMs >= cStart && nowMs < cEnd) return { status: 'active', remain: cEnd - nowMs };
+            const nStart = start + ((cycle + 1) * 420000);
+            return { status: 'waiting', next: nStart, cd: nStart - nowMs };
+        },
 
-    // ---- Manual time entry ----
-    // Accepts things like "3:45", "3:45pm", "15:45:10" and resolves them
-    // against *today in NST*, same rules KadWatch used (12h without am/pm
-    // is disambiguated by proximity to the current NST hour; a value that
-    // crosses midnight relative to "now" rolls to the adjacent day).
-    function ktParseTimeInput(val) {
-        if (!val) return null;
-        const isPM = val.toLowerCase().indexOf('p') !== -1;
-        const isAM = val.toLowerCase().indexOf('a') !== -1;
-        const cleanVal = val.replace(/[a-z\s]/gi, '');
-        const parts = cleanVal.split(':');
-        if (parts.length < 2) return null;
-
-        let hour = parseInt(parts[0], 10);
-        let min = parseInt(parts[1], 10);
-        let sec = parts.length > 2 ? parseInt(parts[2], 10) : -1;
-        if (isNaN(hour) || isNaN(min)) return null;
-        if (sec === -1 || isNaN(sec)) sec = 0;
-
-        if (isPM && hour < 12) hour += 12;
-        if (isAM && hour === 12) hour = 0;
-
-        const now = new Date();
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-        });
-        const p = {};
-        formatter.formatToParts(now).forEach(function (part) { p[part.type] = part.value; });
-        let currentNstHour = parseInt(p.hour, 10);
-        if (currentNstHour === 24) currentNstHour = 0;
-
-        if (!isPM && !isAM && hour < 12 && currentNstHour >= 12) {
-            if (Math.abs((hour + 12) - currentNstHour) < Math.abs(hour - currentNstHour)) hour += 12;
-        }
-
-        const pad = function (n) { return String(n).padStart(2, '0'); };
-        const nstIso = p.year + '-' + p.month + '-' + p.day + 'T' + pad(currentNstHour) + ':' + p.minute + ':' + p.second;
-        const nstNow = new Date(nstIso);
-        const nstTarget = new Date(nstIso);
-        nstTarget.setHours(hour, min, sec, 0);
-
-        if (currentNstHour <= 1 && hour >= 22) nstTarget.setDate(nstTarget.getDate() - 1);
-        else if (currentNstHour >= 22 && hour <= 1) nstTarget.setDate(nstTarget.getDate() + 1);
-
-        const diffMs = nstTarget.getTime() - nstNow.getTime();
-        return new Date(now.getTime() + diffMs);
-    }
-
-    // ---- Board-post text (the "copy post" feature) ----
-    function ktGenerateBoardString(label, lastTimeMs, now) {
-        if (!lastTimeMs) return null;
-        const mainWindowStart = lastTimeMs + KT_MAIN_DELAY_MS;
-        const timesToDisplay = [];
-        let cycle = Math.floor((now - mainWindowStart) / KT_INTERVAL_MS);
-        if (cycle < 0) cycle = 0;
-        for (let i = cycle; i <= cycle + 10; i++) {
-            const windowStart = mainWindowStart + i * KT_INTERVAL_MS;
-            if (now < windowStart + KT_WINDOW_MS) timesToDisplay.push(new Date(windowStart));
-            if (timesToDisplay.length >= 6) break;
-        }
-        if (!timesToDisplay.length) return null;
-
-        const lastStr = ktFormatClock(lastTimeMs);
-        const nextStr = ktFormatClock(timesToDisplay[0].getTime());
-        const pends = [];
-        for (let i = 1; i < timesToDisplay.length; i++) {
-            const d = timesToDisplay[i];
-            const m = d.getMinutes();
-            pends.push(':' + (m < 10 ? '0' + m : m));
-        }
-        const pendsStr = pends.length ? ' / ' + pends.join(' / ') : '';
-        return label + ' @ ' + lastStr + '\nNext ' + nextStr + pendsStr;
-    }
-
-    function ktBuildBoardPost() {
-        const now = Date.now();
-        const blocks = [];
-        const mainTime = ktGetMainTime();
-        if (mainTime && ktGetTimerState(mainTime, now).status !== 'expired') {
-            const data = ktGetMainData();
-            const label = ktFormatLabel('Main', data.count, data.first, data.last);
-            const str = ktGenerateBoardString(label, mainTime, now);
-            if (str) blocks.push({ time: mainTime, text: str });
-        }
-        ktGetMinis().forEach(function (mini, index) {
-            if (ktGetTimerState(mini.time, now).status === 'expired') return;
-            const label = ktFormatLabel('Mini ' + (index + 1), mini.count, mini.first, mini.last);
-            const str = ktGenerateBoardString(label, mini.time, now);
-            if (str) blocks.push({ time: mini.time, text: str });
-        });
-        if (!blocks.length) return null;
-        blocks.sort(function (a, b) { return b.time - a.time; });
-        return blocks.map(function (b) { return b.text; }).join('\n\n');
-    }
-
-    function ktFallbackCopy(text) {
-        try {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            return true;
-        } catch (e) { return false; }
-    }
-    function ktCopyBoardPost() {
-        const text = ktBuildBoardPost();
-        if (!text) return Promise.resolve(false);
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return ktFallbackCopy(text); });
-        }
-        return Promise.resolve(ktFallbackCopy(text));
-    }
-
-    // ---- Pending drop (auto-detect → user confirms where it goes) ----
-    // kads: array of { name, isFed } (subset of what Kadoatery module
-    // already scrapes). Compares against the previous snapshot by
-    // index/name to spot newly-sad kads — the same "a batch just dropped"
-    // signal KadWatch uses — and, if it looks like a genuine new drop (not
-    // the first load, not within the debounce window of the last logged
-    // drop), stores it as a pending drop for the Settings section to offer
-    // assigning to Main / a new Mini / an existing Mini. Returns the
-    // pending-drop object when one was (re-)detected, otherwise null.
-    function ktDetectRefresh(kads) {
-        const currentState = {};
-        (kads || []).forEach(function (k, i) {
-            currentState[i] = { name: k.name || '', status: k.isFed ? 'fed' : 'sad' };
-        });
-        const prevState = ktGet(KT_PREV_STATES_KEY, {});
-        const isFirst = ktGet(KT_FIRST_RUN_KEY, true);
-        ktSet(KT_FIRST_RUN_KEY, false);
-
-        let minIdx = null, maxIdx = null;
-        Object.keys(currentState).forEach(function (i) {
-            if (currentState[i].status === 'sad') {
-                const p = prevState[i];
-                const isNew = !p || p.status !== 'sad' || p.name !== currentState[i].name;
-                if (isNew) {
-                    const idx = +i;
-                    if (minIdx === null || idx < minIdx) minIdx = idx;
-                    if (maxIdx === null || idx > maxIdx) maxIdx = idx;
-                }
+        // Picks the single most relevant timer across Main + all Minis: an
+        // already-open window wins (soonest-closing if more than one
+        // somehow overlaps), otherwise the soonest upcoming window. Returns
+        // null when nothing's logged or everything's expired — this is what
+        // the Home widget's "next feed countdown" reads.
+        getNextEvent: () => {
+            const now = Date.now();
+            const candidates = [];
+            const main = KadWatch.getMain();
+            if (main) candidates.push({ label: 'Main', state: KadWatch.getState(main, now) });
+            KadWatch.getMinis().forEach((m, i) => {
+                if (m && m.time) candidates.push({ label: 'Mini ' + (i + 1), state: KadWatch.getState(m.time, now) });
+            });
+            const active = candidates.filter((c) => c.state.status === 'active');
+            if (active.length) {
+                active.sort((a, b) => a.state.remain - b.state.remain);
+                return active[0];
             }
-        });
-        ktSet(KT_PREV_STATES_KEY, currentState);
-        if (isFirst || minIdx === null) return null;
+            const waiting = candidates.filter((c) => c.state.status === 'waiting');
+            if (waiting.length) {
+                waiting.sort((a, b) => a.state.cd - b.state.cd);
+                return waiting[0];
+            }
+            return null;
+        },
 
-        const names = [];
-        for (let i = minIdx; i <= maxIdx; i++) {
-            if (currentState[i] && currentState[i].status === 'sad') names.push(currentState[i].name);
+        parseInput: (val) => {
+            if (!val) return null;
+            let clean = val.replace(/[a-z\s]/gi, '');
+            let parts = clean.split(":");
+            if (parts.length < 2) return null;
+            let h = parseInt(parts[0], 10), m = parseInt(parts[1], 10), s = parts.length > 2 ? parseInt(parts[2], 10) : 0;
+            if (isNaN(h) || isNaN(m)) return null;
+            let now = new Date();
+            let nstStr = new Date().toLocaleString("en-US", {timeZone: "America/Los_Angeles"});
+            let target = new Date(nstStr);
+            target.setHours(h, m, s, 0);
+            if (target.getHours() <= 1 && h >= 22) target.setDate(target.getDate() - 1);
+            else if (target.getHours() >= 22 && h <= 1) target.setDate(target.getDate() + 1);
+            return new Date(now.getTime() + (target.getTime() - new Date(nstStr).getTime()));
+        },
+
+        formatTime: (ms) => {
+            if (!ms) return '';
+            return new Date(ms).toLocaleString("en-US", {timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true}).replace(/ /g, '').toLowerCase();
+        },
+
+        formatCd: (ms) => {
+            const totalSec = Math.max(0, Math.floor(ms / 1000));
+            const m = Math.floor(totalSec / 60);
+            const s = totalSec % 60;
+            return (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
+        },
+
+        genBoardStr: (label, ms, now) => {
+            if (!ms) return null;
+            let mainStart = ms + 2100000;
+            let cycle = Math.floor((now - mainStart) / 420000);
+            if (cycle < 0) cycle = 0;
+            let times = [];
+            for (let i = cycle; i <= cycle + 10; i++) {
+                let ws = mainStart + (i * 420000);
+                if (now < ws + 60000) times.push(new Date(ws));
+                if (times.length >= 6) break;
+            }
+            if (!times.length) return null;
+
+            let lastStr = KadWatch.formatTime(ms);
+            let nextStr = KadWatch.formatTime(times[0].getTime());
+            let pends = [];
+            for(let i = 1; i < times.length; i++) {
+                let m = times[i].getMinutes();
+                pends.push(":" + (m < 10 ? '0'+m : m));
+            }
+            let pendsStr = pends.length > 0 ? " / " + pends.join(" / ") : "";
+            return `${label} @ ${lastStr}\nNext ${nextStr}${pendsStr}`;
+        },
+
+        checkDrop: (kads) => {
+            let states = {};
+            let prev = JSON.parse(localStorage.getItem('nui_kw_states') || '{}');
+            let hasNew = false;
+            kads.forEach((k, i) => {
+                states[i] = { fed: k.isFed };
+                if (!k.isFed && (!prev[i] || prev[i].fed)) hasNew = true;
+            });
+            localStorage.setItem('nui_kw_states', JSON.stringify(states));
+            if (hasNew) KadWatch.setPending({ time: Date.now() });
         }
-        if (!names.length) return null;
+    };
 
-        const now = Date.now();
-        const mainTime = ktGetMainTime();
-        let highest = mainTime;
-        ktGetMinis().forEach(function (m) { if (m.time > highest) highest = m.time; });
-        if (now - highest < KT_DEBOUNCE_MS) return null;
+    // ---- KadWatch settings section (separate from the generic Modules
+    // list — a dedicated home for KadWatch's own visibility toggles) ----
+    registerSettingsSection({
+        id: 'kadwatch',
+        title: 'KadWatch',
+        render: function (container) {
+            function row(label, desc, on, key) {
+                return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--nui-border);gap:8px;">
+                    <div style="min-width:0;">
+                        <div style="font-size:13px;font-weight:700;color:var(--nui-text);">${label}</div>
+                        <div style="font-size:11px;color:var(--nui-text-muted);">${desc}</div>
+                    </div>
+                    <button type="button" data-kw-toggle="${key}" data-kw-on="${on ? '1' : '0'}" style="flex-shrink:0;padding:4px 12px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;background:${on ? 'var(--nui-accent)' : 'var(--nui-surface-2)'};color:${on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)'};border-color:${on ? 'var(--nui-accent)' : 'var(--nui-border)'};">${on ? 'On' : 'Off'}</button>
+                </div>`;
+            }
 
-        const existing = ktGet(KT_PENDING_DROP_KEY, null);
-        if (existing && existing.time && (now - existing.time) < KT_DEBOUNCE_MS) return existing;
+            container.innerHTML = `
+                <details class="nui-drawer-section" style="margin:var(--nui-space-3) 0;" open>
+                    <summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+                        KadWatch <span style="font-size:10px;opacity:0.5;">▼</span>
+                    </summary>
+                    <div style="margin-top:12px;display:flex;flex-direction:column;gap:0;">
+                        <div style="font-size:12px;color:var(--nui-text-muted);margin-bottom:10px;line-height:1.5;">Manually-logged Main/Mini feed-window tracker. These control where its countdown shows up — independent of the Kadoatery module itself.</div>
+                        ${row('Home Widget', 'Next feed countdown card at the top of the homepage', isKadWatchHomeWidgetEnabled(), 'home')}
+                        ${row('Kadoatery Dashboard', 'Main/Mini tracker panel at the bottom of the Kadoatery grid', isKadWatchDashboardEnabled(), 'dashboard')}
+                    </div>
+                </details>
+            `;
 
-        const pending = { time: now, count: names.length, names: names };
-        ktSet(KT_PENDING_DROP_KEY, pending);
-        return pending;
-    }
-    function ktGetPendingDrop() { return ktGet(KT_PENDING_DROP_KEY, null); }
-    function ktDiscardPendingDrop() { ktDel(KT_PENDING_DROP_KEY); }
-    function ktPendingFirstLast(drop) {
-        return { first: drop.names[0] || '', last: drop.count > 1 ? drop.names[drop.count - 1] : '' };
-    }
-    function ktMergePendingToMain() {
-        const drop = ktGetPendingDrop();
-        if (!drop) return;
-        const fl = ktPendingFirstLast(drop);
-        ktSetMain(drop.time, drop.count, fl.first, fl.last);
-        ktDiscardPendingDrop();
-    }
-    function ktMergePendingToNewMini() {
-        const drop = ktGetPendingDrop();
-        if (!drop) return;
-        const fl = ktPendingFirstLast(drop);
-        ktAddMini(drop.time, drop.count, fl.first, fl.last);
-        ktDiscardPendingDrop();
-    }
-    function ktMergePendingToMini(index) {
-        const drop = ktGetPendingDrop();
-        if (!drop) return;
-        const fl = ktPendingFirstLast(drop);
-        ktUpdateMini(index, { time: drop.time, count: drop.count, first: fl.first, last: fl.last });
-        ktDiscardPendingDrop();
-    }
+            container.querySelectorAll('[data-kw-toggle]').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const key = btn.getAttribute('data-kw-toggle');
+                    const nowOn = btn.getAttribute('data-kw-on') !== '1';
+                    if (key === 'home') setKadWatchHomeWidgetEnabled(nowOn);
+                    else if (key === 'dashboard') setKadWatchDashboardEnabled(nowOn);
+                    btn.setAttribute('data-kw-on', nowOn ? '1' : '0');
+                    btn.textContent = nowOn ? 'On' : 'Off';
+                    btn.style.background = nowOn ? 'var(--nui-accent)' : 'var(--nui-surface-2)';
+                    btn.style.color = nowOn ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)';
+                    btn.style.borderColor = nowOn ? 'var(--nui-accent)' : 'var(--nui-border)';
+                });
+            });
+        }
+    });
 
     let initialized = false;
     function init(opts) {
@@ -3865,17 +3984,9 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         },
         addCustomTheme: function(key, def) { THEMES[key] = def; saveCustomTheme(key, def); },
         deleteCustomTheme: function(key) { delete THEMES[key]; deleteCustomTheme(key); },
-        KadTimer: {
-            MAIN_DELAY_MS: KT_MAIN_DELAY_MS,
-            WINDOW_MS: KT_WINDOW_MS,
-            INTERVAL_MS: KT_INTERVAL_MS,
-            getLastRefresh: function () { return ktGet(KT_LAST_REFRESH_KEY, 0); },
-            getLastCount: function () { return ktGet(KT_LAST_COUNT_KEY, 0); },
-            getState: function (now) { return ktGetTimerState(ktGet(KT_LAST_REFRESH_KEY, 0), now || Date.now()); },
-            detectRefresh: ktDetectRefresh,
-            formatCountdown: ktFormatCountdown,
-            formatClock: ktFormatClock,
-        },
+        KadWatch: KadWatch,
+        isKadWatchHomeWidgetEnabled: isKadWatchHomeWidgetEnabled,
+        isKadWatchDashboardEnabled: isKadWatchDashboardEnabled,
     };
 
 })(window);
@@ -5933,168 +6044,12 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 (function () {
     'use strict';
 
-    if (!/\/allevents\.phtml/.test(location.pathname)) return;
-    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('allevents')) return;
-
-    function run() {
-        const NeoUI = window.NeoUI;
-        if (!NeoUI || !NeoUI.__ready) { throw new Error('NeoUI Core Framework missing.'); }
-
-        // 1. Scrape the legacy events table
-        const events = [];
-        const eventForm = document.querySelector('form[name="eventform"]');
-
-        if (eventForm) {
-            const rows = Array.from(eventForm.querySelectorAll('tr'));
-            for (let i = 1; i < rows.length - 1; i++) {
-                const cells = rows[i].querySelectorAll('td');
-                if (cells.length < 4) continue;
-
-                events.push({
-                    time: cells[0].textContent.trim().replace(/\s+/g, ' '),
-                    actionUrl: cells[1].querySelector('a') ? cells[1].querySelector('a').href : '#',
-                    imgSrc: cells[1].querySelector('img') ? cells[1].querySelector('img').src : '',
-                    type: cells[1].querySelector('b') ? cells[1].querySelector('b').textContent.trim() : 'Event',
-                    descHtml: cells[2].innerHTML.trim(),
-                    delName: cells[3].querySelector('input') ? cells[3].querySelector('input').name : null
-                });
-            }
-        }
-
-        // 2. Nuke the DOM & Reset
-        document.body.innerHTML = '';
-        document.body.className = 'nui-reset';
-        document.documentElement.style.background = 'var(--nui-surface)';
-        document.body.style.background = 'var(--nui-surface)';
-        document.body.style.padding = '0';
-        document.body.style.margin = '0';
-        document.body.style.overflow = 'hidden'; // Prevent double scrollbars
-
-        // 3. Initialize NeoUI
-
-        NeoUI.init({ showNeoGoButton: false });
-
-        // 4. Build the App Wrapper
-        const wrapper = document.createElement('div');
-        wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100vh; width: 100%;';
-        document.body.appendChild(wrapper);
-
-        // --- HEADER ---
-        const header = document.createElement('div');
-        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: var(--nui-space-4); background: linear-gradient(135deg, var(--nui-accent-soft), var(--nui-surface-2)); border-bottom: 2px solid var(--nui-border); flex-shrink: 0;';
-
-        const title = document.createElement('div');
-        title.className = 'nui-text';
-        title.style.cssText = 'font-weight: 800; font-size: 20px; font-family: var(--nui-font-display); line-height: 1.1;';
-        title.textContent = `Notifications (${events.length})`;
-        header.appendChild(title);
-
-        if (events.length > 0) {
-            const clearAllBtn = document.createElement('button');
-            clearAllBtn.className = 'nui-btn nui-btn-sm';
-            clearAllBtn.style.cssText = 'background: var(--nui-danger-soft); color: var(--nui-danger); border: 1px solid var(--nui-danger-soft); font-size: 12px; padding: 6px 12px;';
-            clearAllBtn.textContent = 'Clear All';
-
-            clearAllBtn.addEventListener('click', () => {
-                if (window.confirm('Clear all notifications?')) {
-                    const wipeForm = document.createElement('form');
-                    wipeForm.action = 'process_allevents.phtml';
-                    wipeForm.method = 'POST';
-                    wipeForm.innerHTML = `<input type="hidden" name="type" value="all">`;
-                    document.body.appendChild(wipeForm);
-                    wipeForm.submit();
-                }
-            });
-            header.appendChild(clearAllBtn);
-        }
-        wrapper.appendChild(header);
-
-        // --- CONTENT AREA ---
-        if (events.length > 0) {
-            const form = document.createElement('form');
-            form.action = 'process_allevents.phtml';
-            form.method = 'POST';
-            form.style.cssText = 'display: flex; flex-direction: column; flex: 1; overflow: hidden;';
-
-            // Scrollable list container
-            const scrollArea = document.createElement('div');
-            scrollArea.style.cssText = 'flex: 1; overflow-y: auto; padding: var(--nui-space-3); display: flex; flex-direction: column; gap: var(--nui-space-2); -webkit-overflow-scrolling: touch;';
-
-            events.forEach((ev, idx) => {
-                // Using a <label> as the card makes the entire item clickable to check the box
-                const item = document.createElement('label');
-                item.className = 'nui-item nui-reset';
-                item.style.cssText = 'margin: 0; padding: var(--nui-space-3); display: flex; gap: var(--nui-space-3); align-items: flex-start; text-align: left; cursor: pointer; transition: transform 0.1s, border-color 0.2s;';
-
-                                item.innerHTML = `
-                    <a href="${ev.actionUrl}" target="_parent" style="width: 42px; height: 42px; border-radius: var(--nui-radius-sm); background: var(--nui-surface-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid var(--nui-border); text-decoration: none;">
-                        <img src="${ev.imgSrc}" style="max-width: 32px; max-height: 32px; object-fit: contain;">
-                    </a>
-                    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
-                        <a href="${ev.actionUrl}" target="_parent" style="font-weight: 800; font-size: 15px; color: var(--nui-text); text-decoration: none;">${ev.type}</a>
-                        <div class="nui-text-muted" style="font-size: 13.5px; line-height: 1.4; white-space: normal;">${ev.descHtml}</div>
-                        <div style="font-size: 11px; color: var(--nui-text-faint); font-weight: 700; margin-top: 2px;">${ev.time}</div>
-                    </div>
-                    <div style="flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-top: 8px;">
-                        <input type="checkbox" id="del-${idx}" name="${ev.delName}" style="width: 18px; height: 18px; accent-color: var(--nui-danger); cursor: pointer;">
-                    </div>
-                `;
-
-
-                // Ensure links inside the description open in the main window, not the iframe
-                item.querySelectorAll('a').forEach(a => {
-                    a.style.color = 'var(--nui-accent)';
-                    a.style.fontWeight = 'bold';
-                    a.style.textDecoration = 'none';
-                    a.setAttribute('target', '_parent');
-                    // Stop link clicks from toggling the checkbox
-                    a.addEventListener('click', (e) => e.stopPropagation());
-                });
-
-                // Visual feedback when checking the box
-                const checkbox = item.querySelector('input[type="checkbox"]');
-                checkbox.addEventListener('change', () => {
-                    if (checkbox.checked) {
-                        item.style.borderColor = 'var(--nui-danger)';
-                        item.style.background = 'var(--nui-danger-soft)';
-                    } else {
-                        item.style.borderColor = 'var(--nui-border)';
-                        item.style.background = 'var(--nui-surface)';
-                    }
-                });
-
-                scrollArea.appendChild(item);
-            });
-            form.appendChild(scrollArea);
-
-            // Sticky Bottom Footer
-            const footer = document.createElement('div');
-            footer.style.cssText = 'padding: var(--nui-space-4); border-top: 1px solid var(--nui-border); background: var(--nui-surface); flex-shrink: 0; box-shadow: 0 -4px 12px var(--nui-shadow);';
-
-            const submitBtn = document.createElement('button');
-            submitBtn.type = 'submit';
-            submitBtn.className = 'nui-btn nui-btn-secondary nui-btn-block';
-            submitBtn.textContent = 'Clear Selected';
-            footer.appendChild(submitBtn);
-
-            form.appendChild(footer);
-            wrapper.appendChild(form);
-
-        } else {
-            wrapper.innerHTML += `
-                <div class="nui-empty" style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding-bottom: 20vh;">
-                    <span class="nui-empty-emoji">✨</span>
-                    <span style="font-weight: 700; color: var(--nui-text-muted);">All caught up!</span>
-                </div>
-            `;
-        }
-    }
-
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        run();
-    } else {
-        document.addEventListener('DOMContentLoaded', run);
-    }
+    // Module retired v1.1.53. Neopets rebuilt /allevents.phtml as a Vue SPA
+    // with native bulk-select and delete. Our old module scraped
+    // form[name="eventform"] which no longer exists, causing it to render an
+    // empty "All caught up!" screen incorrectly. We exit immediately and let
+    // the native page render untouched. Sitewide Chrome applies our topbar
+    // on top as usual since no module builds #nui-page-topbar here anymore.
 })();
 // ==============================================================================
 // MODULE 6: THE COINCIDENCE (TRUE SPA + CUSTOM SSW MODAL)
@@ -13076,7 +13031,14 @@ return {
         // 3. INIT TOPBAR
         NeoUI.init();
         NeoUI.buildTopbar({ stats: activeStats, username: username, hasNotification: profile.hasNotification || false });
-        NeoUI.setProfileInfo(profile);
+        // The sidebar should reflect the same active pet the page itself is
+        // built from (the H5 carousel), not the raw legacy dropdown scrape —
+        // the two can disagree, e.g. right after switching active pets.
+        NeoUI.setProfileInfo(Object.assign({}, profile, {
+            username: username,
+            petname: activePet ? activePet.name : profile.petname,
+            petImage: activePet ? activePet.image : profile.petImage
+        }));
 
         // 4. BUILD LAYOUT
         const pageWrapper = document.createElement('div');
@@ -13206,6 +13168,42 @@ return {
         const gridContainer = document.createElement('div');
         gridContainer.style.cssText = 'width:100%;max-width:960px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--nui-space-4);align-items:start;';
 
+        // --- KADWATCH: PINNED AT THE TOP ---
+        // Rendered first (and spanning the full grid width) so it reads as a
+        // banner at the top of the dashboard instead of getting buried below
+        // the pet/dailies/links cards. Shows the same Main/Mini feed-window
+        // countdowns as the Kadoatery page's own KadWatch dashboard — both
+        // read NeoUI.KadWatch, so there's one source of truth instead of two
+        // separate timers that never agreed with each other. Visibility is
+        // its own dedicated toggle (Settings → KadWatch → Home Widget),
+        // independent of the Kadoatery module toggle — checked here every
+        // load, so flipping it off makes this card disappear entirely
+        // rather than just hiding it.
+        if (NeoUI.isKadWatchHomeWidgetEnabled()) {
+            const KW = NeoUI.KadWatch;
+            const kadCard = nuiCard('grid-column:1 / -1;');
+            kadCard.innerHTML = cardHeader('🐱 KadWatch', '<a href="/games/kadoatery/index.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:2px 8px;font-size:11px;text-decoration:none;">Open</a>') +
+                '<div id="nui-home-kad-timer" style="text-align:center; padding:6px 0; font-size:13px; font-weight:600;">Loading…</div>';
+            gridContainer.appendChild(kadCard);
+
+            (function () {
+                const el = kadCard.querySelector('#nui-home-kad-timer');
+                function tick() {
+                    if (!el || !el.isConnected) return;
+                    const next = KW.getNextEvent();
+                    if (!next) {
+                        el.innerHTML = '<span style="color:var(--nui-text-muted);">No Main/Mini logged yet — log one from the Kadoatery page to start tracking.</span>';
+                    } else if (next.state.status === 'active') {
+                        el.innerHTML = '<span style="color:var(--nui-success); font-weight:800;">🟢 ' + next.label + ' ACTIVE!</span> closes in <b>' + Math.ceil(next.state.remain / 1000) + 's</b>';
+                    } else {
+                        el.innerHTML = '<b>' + next.label + '</b> in <b style="color:var(--nui-accent);">' + KW.formatCd(next.state.cd) + '</b> (' + KW.formatTime(next.state.next) + ')';
+                    }
+                    setTimeout(tick, 1000);
+                }
+                tick();
+            })();
+        }
+
         // --- PET CARD ---
         const petCard = nuiCard();
 
@@ -13318,36 +13316,6 @@ return {
 
         linksCard.innerHTML = linksHtml;
         gridContainer.appendChild(linksCard);
-
-        // --- KAD MODE: HOMEPAGE TIMEKEEPER ---
-        // Same engine the Kadoatery page panel uses (NeoUI.KadTimer), just a
-        // smaller readout so the window/countdown is visible without having
-        // to be on the Kadoatery page. Only appears when "Kad Mode (Timer)"
-        // is switched on in Settings.
-        if (NeoUI.isModuleEnabled('kad-timer')) {
-            const KT = NeoUI.KadTimer;
-            const kadCard = nuiCard('height:fit-content;');
-            kadCard.innerHTML = cardHeader('🐱 Kad Timer', '<a href="/games/kadoatery/index.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:2px 8px;font-size:11px;text-decoration:none;">Open</a>') +
-                '<div id="nui-home-kad-timer" style="text-align:center; padding:6px 0; font-size:13px; font-weight:600;">Loading…</div>';
-            gridContainer.appendChild(kadCard);
-
-            (function () {
-                const el = kadCard.querySelector('#nui-home-kad-timer');
-                function tick() {
-                    if (!el || !el.isConnected) return;
-                    const state = KT.getState();
-                    if (state.status === 'expired') {
-                        el.innerHTML = '<span style="color:var(--nui-text-muted);">No window logged yet — visit the Kadoatery to start tracking.</span>';
-                    } else if (state.status === 'active') {
-                        el.innerHTML = '<span style="color:var(--nui-success); font-weight:800;">🟢 WINDOW ACTIVE!</span> closes in <b>' + Math.ceil(state.timeRemaining / 1000) + 's</b>';
-                    } else {
-                        el.innerHTML = 'Next window in <b style="color:var(--nui-accent);">' + KT.formatCountdown(state.countdown) + '</b> (' + KT.formatClock(state.nextStart) + ')';
-                    }
-                    setTimeout(tick, 1000);
-                }
-                tick();
-            })();
-        }
 
         pageWrapper.appendChild(gridContainer);
         document.body.appendChild(pageWrapper);
@@ -14405,423 +14373,18 @@ return {
     }
 })();
 
-// MODULE 19: FRUIT MACHINE (HEADLESS SPA WRAPPER)
+// MODULE 19: FRUIT MACHINE — RETIRED v1.1.53
 // ==============================================================================
-// Activates on: /desert/fruit/index.phtml (and any sibling path under
-//               /desert/fruit/).
-//
-// Mirrors the Buried Treasure module's approach: scrape whichever server-
-// rendered state the page is currently in, rebuild it inside the shared
-// NeoUI chrome, and drive the loop — spin, see the result, come back
-// tomorrow — via fetch() instead of full page reloads.
-//
-// Only the "ready to spin" screen was available to sample, so that state is
-// handled richly (matching the real markup: a form with a hidden spin=1
-// field, a hidden ck token, and a submit button). The "already spun today"
-// and "post-spin result" screens are unsampled — those scrapers match on
-// plausible/common shapes and always keep a raw-HTML fallback, so the
-// module degrades to "look mostly like the original page, just re-skinned"
-// rather than rendering blank if Neopets' markup doesn't match what's
-// guessed here. The actual spin submission always uses whatever hidden
-// fields the live form contains (not just spin/ck), so if Neopets adds or
-// changes fields later, nothing here needs to change to keep working.
+// Neopets rebuilt the Fruit Machine page as a proper interactive experience.
+// Our headless SPA wrapper is no longer needed. The module now exits
+// immediately so the native Neopets page renders untouched.
+// The 'fruit-machine' toggle key is kept in TOGGLEABLE_MODULES so any
+// existing user preferences are not orphaned.
 // ==============================================================================
 
 (function () {
     'use strict';
-
-    if (!/\/desert\/fruit\//.test(location.pathname)) return;
-    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('fruit-machine')) return;
-
-    const NeoUI = window.NeoUI;
-    if (!NeoUI || !NeoUI.__ready) return;
-
-    function showFatalError(err) {
-        try {
-            const box = document.createElement('div');
-            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
-            box.textContent = 'Fruit Machine SPA crashed:\n' + (err && err.stack ? err.stack : String(err));
-            document.body.insertBefore(box, document.body.firstChild);
-        } catch (e2) {}
-    }
-
-    const DAILY_TIMERS_KEY = 'neoui_daily_timers_v1';
-    const TIMER_ID = 'fruit-machine';
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Keep the shared Daily Timer Hub in sync, same as Buried Treasure does.
-    // Fruit Machine is a once-a-day freebie rather than a fixed-minutes wait,
-    // so when the server doesn't hand us an exact cooldown we fall back to
-    // estimating time-to-reset from the page's own NST clock globals
-    // (nh/nm/ns, set by Neopets' own inline clock script) rather than
-    // fabricating a number.
-    // ─────────────────────────────────────────────────────────────────────────
-    function syncTimer(msFromNow) {
-        try {
-            const raw = localStorage.getItem(DAILY_TIMERS_KEY);
-            const parsed = raw ? JSON.parse(raw) : [];
-            const list = Array.isArray(parsed) ? parsed : [];
-            let entry = list.find(function (item) { return item && item.id === TIMER_ID; });
-            if (!entry) { entry = { id: TIMER_ID }; list.push(entry); }
-            entry.nextAt = Date.now() + msFromNow;
-            localStorage.setItem(DAILY_TIMERS_KEY, JSON.stringify(list));
-        } catch (e) {}
-    }
-
-    function formatClock(msLeft) {
-        const totalSec = Math.max(0, Math.ceil(msLeft / 1000));
-        const h = Math.floor(totalSec / 3600);
-        const m = Math.floor((totalSec % 3600) / 60);
-        const s = totalSec % 60;
-        const pad = function (n) { return String(n).padStart(2, '0'); };
-        return pad(h) + ':' + pad(m) + ':' + pad(s);
-    }
-
-    // Best-effort estimate of ms until the daily NST reset, using the same
-    // nh/nm/ns globals Neopets' own inline clock script sets on every page.
-    // Returns null (rather than guessing) if those globals aren't present.
-    function msUntilMidnightNST() {
-        try {
-            if (typeof window.nh === 'number' && typeof window.nm === 'number' && typeof window.ns === 'number') {
-                const secsLeft = (23 - window.nh) * 3600 + (59 - window.nm) * 60 + (60 - window.ns);
-                if (secsLeft > 0 && secsLeft < 86400) return secsLeft * 1000;
-            }
-        } catch (e) {}
-        return null;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // SCRAPERS — figure out which state `doc` holds
-    // ─────────────────────────────────────────────────────────────────────────
-    function scrapeState(doc, baseUrl) {
-        const content = doc.querySelector('td.content') || doc.body;
-
-        // Two real samples confirm div.result is the one container reused
-        // across every sub-state: it holds the spin form when ready to
-        // play, and plain, unwrapped text (no <b>/<strong>/<p>) when the
-        // free spin's already been used for the day. We scope off it
-        // directly rather than searching loosely across the whole page, so
-        // whatever's actually inside it — including bare text — is what
-        // gets shown, instead of silently falling back to a made-up message.
-        const resultDiv = content.querySelector('div.result');
-        const spinForm = resultDiv ? resultDiv.querySelector('form') : null;
-        const hasSpinInput = spinForm && spinForm.querySelector('input[name="spin"][value="1"]');
-
-        // Ready state: the sampled markup — a form holding a hidden
-        // spin=1 field, a hidden ck token, and a submit button. Every hidden
-        // field on the form is captured generically (not just spin/ck) so
-        // the real POST body always matches whatever Neopets actually sends,
-        // even if fields are added or renamed later.
-        if (hasSpinInput) {
-            const hidden = {};
-            spinForm.querySelectorAll('input[type="hidden"]').forEach(function (inp) {
-                const name = inp.getAttribute('name');
-                if (name) hidden[name] = inp.value;
-            });
-            const submitBtn = spinForm.querySelector('input[type="submit"]');
-            return {
-                type: 'ready',
-                action: spinForm.getAttribute('action') ? new URL(spinForm.getAttribute('action'), baseUrl).href : baseUrl,
-                method: (spinForm.getAttribute('method') || 'post').toLowerCase(),
-                hidden: hidden,
-                submitLabel: submitBtn && submitBtn.value ? submitBtn.value : 'Spin, spin, spin!',
-            };
-        }
-
-        // No form inside div.result: either the daily cooldown message
-        // (sampled — plain text, e.g. "You've already had your free spin
-        // for today. Please come back tomorrow and try again.") or a
-        // post-spin result (unsampled). The exact text is always taken
-        // straight from div.result — no generic placeholder — and a
-        // phrasing check decides which of the two this is.
-        if (resultDiv) {
-            const resultText = resultDiv.textContent.replace(/\s+/g, ' ').trim();
-            const isCooldown = /already\s+(?:had|used|taken|spun|played)[^.]{0,60}(?:spin|turn|go)|come back tomorrow|one\s+(?:free\s+)?spin\s+per\s+day/i.test(resultText);
-            if (isCooldown) {
-                return { type: 'cooldown', message: resultText };
-            }
-
-            // Result state (unsampled): best-effort scrape of a post-spin
-            // outcome. Looks for a win/lose headline, any revealed fruit
-            // images, and any prize table within div.result — but always
-            // keeps div.result's raw HTML too, so the renderer can fall
-            // back to "the original content, re-skinned" if none of the
-            // guessed shapes actually match Neopets' markup.
-            const fruitImgs = Array.prototype.map.call(
-                resultDiv.querySelectorAll('img[src]'),
-                function (img) { return new URL(img.getAttribute('src'), baseUrl).href; }
-            );
-            const prizeTableEl = resultDiv.querySelector('table.prizeCell, td.prizeCell')
-                ? resultDiv.querySelector('table.prizeCell, td.prizeCell').closest('table')
-                : null;
-            const headlineEl = Array.prototype.find.call(resultDiv.querySelectorAll('b, strong'), function (el) {
-                return /won|nothing|sorry|congrat/i.test(el.textContent);
-            });
-
-            return {
-                type: 'result',
-                headline: headlineEl ? headlineEl.textContent.replace(/\s+/g, ' ').trim() : null,
-                fruitImgs: fruitImgs,
-                prizeTableHtml: prizeTableEl ? prizeTableEl.outerHTML : null,
-                rawHtml: resultDiv.innerHTML,
-            };
-        }
-
-        // Completely unrecognized shape (no div.result at all): fall back
-        // to scraping the whole content area rather than rendering nothing.
-        const fruitImgsFallback = Array.prototype.map.call(
-            content.querySelectorAll('#fruitMain img[src], .fruit img[src], img[src*="/desert/fruit/"]'),
-            function (img) { return new URL(img.getAttribute('src'), baseUrl).href; }
-        );
-        const headlineElFallback = Array.prototype.find.call(content.querySelectorAll('b, strong'), function (el) {
-            return /won|nothing|sorry|congrat/i.test(el.textContent);
-        });
-        return {
-            type: 'result',
-            headline: headlineElFallback ? headlineElFallback.textContent.replace(/\s+/g, ' ').trim() : null,
-            fruitImgs: fruitImgsFallback,
-            prizeTableHtml: null,
-            rawHtml: content.innerHTML,
-        };
-    }
-
-    async function fetchState(url, opts) {
-        const res = await fetch(url, Object.assign({ credentials: 'include' }, opts || {}));
-        const html = await res.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        return scrapeState(doc, url);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // SHARED CHROME — hero banner reused across every state
-    // ─────────────────────────────────────────────────────────────────────────
-    function buildBanner() {
-        const banner = document.createElement('div');
-        banner.className = 'nui-surface';
-        banner.style.cssText = 'border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;box-shadow:0 4px 12px var(--nui-shadow);position:relative;';
-        banner.innerHTML = `
-            <div style="position:relative;width:100%;height:110px;overflow:hidden;background:linear-gradient(135deg,#5A3A1E 0%,#8C5A2A 50%,#5A3A1E 100%);display:flex;align-items:center;gap:14px;padding:0 var(--nui-space-4);">
-                <img src="https://images.neopets.com/desert/fruit/fruit.png"
-                     style="width:74px;height:56px;border-radius:var(--nui-radius-md);border:2px solid rgba(255,255,255,0.25);object-fit:contain;flex-shrink:0;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.6));background:#fff;"
-                     onerror="this.style.display='none'">
-                <div>
-                    <div style="font-family:var(--nui-font-display);font-weight:800;font-size:26px;color:#FFD060;text-shadow:0 2px 8px rgba(0,0,0,0.6);line-height:1.1;">Fruit Machine</div>
-                    <div style="font-size:12.5px;color:rgba(255,225,180,0.9);font-weight:600;margin-top:3px;text-shadow:0 1px 3px rgba(0,0,0,0.5);">Roll up, roll up! · once a day</div>
-                </div>
-            </div>
-        `;
-        return banner;
-    }
-
-    function backToSakhmetButton() {
-        const btn = document.createElement('a');
-        btn.href = '/desert/sakhmet.phtml';
-        btn.className = 'nui-btn nui-btn-secondary nui-btn-block';
-        btn.style.cssText = 'text-decoration:none;display:block;box-sizing:border-box;';
-        btn.textContent = '← Return to Sakhmet';
-        return btn;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // STATE RENDERERS
-    // ─────────────────────────────────────────────────────────────────────────
-    let clockInterval = null;
-    function clearClock() {
-        if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
-    }
-
-    function renderReady(wrapper, state) {
-        clearClock();
-        wrapper.innerHTML = '';
-        wrapper.appendChild(buildBanner());
-
-        const card = document.createElement('div');
-        card.className = 'nui-surface';
-        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
-        card.innerHTML = `
-            <img src="https://images.neopets.com/desert/fruit/bg.jpg" style="width:100%;max-width:420px;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);" onerror="this.style.display='none'">
-            <div style="font-size:15px;color:var(--nui-text-muted);line-height:1.5;max-width:420px;">
-                It's the one and only Neopets Fruit Machine. Match the first two
-                fruits for a prize, or all three for a really big prize.
-            </div>
-            <button type="button" id="fm-spin-btn" class="nui-btn nui-btn-primary" style="font-size:16px;padding:14px 28px;border-radius:30px;width:100%;max-width:300px;box-shadow:0 4px 12px var(--nui-shadow);">
-                ${state.submitLabel}
-            </button>
-        `;
-        wrapper.appendChild(card);
-        wrapper.appendChild(backToSakhmetButton());
-
-        card.querySelector('#fm-spin-btn').addEventListener('click', async function () {
-            const btn = this;
-            btn.disabled = true;
-            btn.textContent = 'Spinning...';
-            try {
-                const body = new URLSearchParams(state.hidden);
-                const next = await fetchState(state.action, {
-                    method: state.method === 'get' ? 'GET' : 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: state.method === 'get' ? undefined : body.toString(),
-                });
-                renderState(wrapper, next);
-            } catch (err) {
-                showFatalError(err);
-                btn.disabled = false;
-                btn.textContent = state.submitLabel;
-            }
-        });
-    }
-
-    function renderCooldown(wrapper, state) {
-        clearClock();
-        wrapper.innerHTML = '';
-        wrapper.appendChild(buildBanner());
-
-        const knownMs = msUntilMidnightNST();
-        const targetAt = knownMs != null ? Date.now() + knownMs : null;
-        if (knownMs != null) syncTimer(knownMs);
-
-        const card = document.createElement('div');
-        card.className = 'nui-surface';
-        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
-        card.innerHTML = `
-            <div style="font-size:15px;font-weight:700;color:var(--nui-text);">${state.message}</div>
-            ${targetAt != null
-                ? '<div id="fm-clock" style="font-family:var(--nui-font-display);font-size:32px;font-weight:800;color:var(--nui-accent);letter-spacing:1px;">' + formatClock(targetAt - Date.now()) + '</div><div style="font-size:12px;color:var(--nui-text-faint);">estimated time until your next free spin</div>'
-                : '<div style="font-size:12px;color:var(--nui-text-faint);">Come back tomorrow for another free spin.</div>'}
-            <button type="button" id="fm-retry-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;">Check Again</button>
-        `;
-        wrapper.appendChild(card);
-        wrapper.appendChild(backToSakhmetButton());
-
-        if (targetAt != null) {
-            const clockEl = card.querySelector('#fm-clock');
-            clockInterval = setInterval(function () {
-                const remaining = targetAt - Date.now();
-                if (remaining <= 0) {
-                    clockEl.textContent = '00:00:00';
-                    clearClock();
-                    return;
-                }
-                clockEl.textContent = formatClock(remaining);
-            }, 1000);
-        }
-
-        card.querySelector('#fm-retry-btn').addEventListener('click', async function () {
-            const btn = this;
-            btn.disabled = true;
-            btn.textContent = 'Checking...';
-            try {
-                const next = await fetchState(new URL('index.phtml', location.href).href);
-                renderState(wrapper, next);
-            } catch (err) {
-                showFatalError(err);
-                btn.disabled = false;
-                btn.textContent = 'Check Again';
-            }
-        });
-    }
-
-    function renderResult(wrapper, state) {
-        clearClock();
-        wrapper.innerHTML = '';
-        wrapper.appendChild(buildBanner());
-
-        const headline = state.headline;
-        const isWin = headline ? !/nothing|sorry/i.test(headline) : null;
-        const hasStructured = !!(headline || state.fruitImgs.length || state.prizeTableHtml);
-
-        const fruitImgsHtml = state.fruitImgs.length
-            ? '<div style="display:flex;gap:var(--nui-space-3);justify-content:center;flex-wrap:wrap;">' +
-                state.fruitImgs.map(function (src) {
-                    return '<img src="' + src + '" style="width:83px;height:62px;object-fit:contain;border-radius:var(--nui-radius-md);border:1px solid var(--nui-border);background:var(--nui-surface-alt,#f4f4f4);">';
-                }).join('') +
-              '</div>'
-            : '';
-
-        const card = document.createElement('div');
-        card.className = 'nui-surface';
-        card.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-lg);padding:var(--nui-space-5) var(--nui-space-4);box-shadow:0 4px 12px var(--nui-shadow);text-align:center;display:flex;flex-direction:column;align-items:center;gap:var(--nui-space-3);';
-
-        if (hasStructured) {
-            card.innerHTML = `
-                ${isWin === true ? '<span class="nui-badge nui-badge-success" style="font-size:12px;padding:5px 12px;">🎉 Winner!</span>' : ''}
-                ${isWin === false ? '<span class="nui-badge" style="font-size:12px;padding:5px 12px;">🍒 No Match</span>' : ''}
-                ${fruitImgsHtml}
-                ${headline ? '<div style="font-family:var(--nui-font-display);font-size:19px;font-weight:800;color:' + (isWin ? 'var(--nui-success, #16a34a)' : 'var(--nui-text)') + ';line-height:1.4;">' + headline + '</div>' : ''}
-                ${state.prizeTableHtml ? '<div style="font-size:13px;color:var(--nui-text-muted);">' + state.prizeTableHtml + '</div>' : ''}
-                <button type="button" id="fm-refresh-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;">Refresh</button>
-            `;
-        } else {
-            // Safety net: none of the guessed shapes matched. Show the
-            // original scraped content, re-skinned into the card, rather than
-            // rendering nothing.
-            card.innerHTML = `
-                <div style="font-size:14px;color:var(--nui-text);line-height:1.6;text-align:left;width:100%;">${state.rawHtml}</div>
-                <button type="button" id="fm-refresh-btn" class="nui-btn nui-btn-secondary" style="width:100%;max-width:260px;">Refresh</button>
-            `;
-        }
-
-        wrapper.appendChild(card);
-        wrapper.appendChild(backToSakhmetButton());
-
-        card.querySelector('#fm-refresh-btn').addEventListener('click', async function () {
-            const btn = this;
-            btn.disabled = true;
-            btn.textContent = 'Refreshing...';
-            try {
-                const next = await fetchState(new URL('index.phtml', location.href).href);
-                renderState(wrapper, next);
-            } catch (err) {
-                showFatalError(err);
-                btn.disabled = false;
-                btn.textContent = 'Refresh';
-            }
-        });
-    }
-
-    function renderState(wrapper, state) {
-        if (state.type === 'ready') return renderReady(wrapper, state);
-        if (state.type === 'cooldown') return renderCooldown(wrapper, state);
-        return renderResult(wrapper, state);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // INIT
-    // ─────────────────────────────────────────────────────────────────────────
-    async function init() {
-        const profile = NeoUI.scrapeLegacyProfile();
-        const initialState = scrapeState(document, location.href);
-
-        document.body.innerHTML = '';
-        document.body.className = 'nui-reset';
-        document.documentElement.style.background = 'var(--nui-bg)';
-        document.body.style.background = 'var(--nui-bg)';
-
-        NeoUI.init();
-        NeoUI.setProfileInfo(profile);
-        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'nui-reset';
-        wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-4) var(--nui-space-5); max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--nui-space-4);';
-        document.body.appendChild(wrapper);
-
-        renderState(wrapper, initialState);
-    }
-
-    let booted = false;
-    function boot() {
-        if (booted) return;
-        booted = true;
-        init().catch(showFatalError);
-    }
-
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        boot();
-    } else {
-        document.addEventListener('DOMContentLoaded', boot);
-    }
-
+    // Retired — native Neopets page takes over.
 })();
 
 // ==============================================================================
@@ -14869,56 +14432,78 @@ return {
     // own topbar, or did a full SPA rebuild) — don't double up.
     if (document.getElementById('nui-page-topbar')) return;
 
+    // ---- Selector coverage ----
+    // Classic template chrome + nav5 bar variants + sidebar chrome +
+    // sticky ad rails seen across the broader site. Deliberately excludes
+    // anything that could be real page content (#main, .content-area, etc.).
     const CHROME_SELECTORS = [
-        '#header',                                              // classic top masthead
-        '#ban', '#ad', '.ad-container',                         // ad banner rows
-        '#footer', '.footerlinks',                              // classic footer
-        '.premium-toolbar', '.nav-premium-container',
-        '#premium_bar', '.sswdrop',                             // premium toolbar variants
+        // Classic masthead / footer
+        '#header', '#footer', '.footerlinks',
+        // Ad rows
+        '#ban', '#ad', '.ad-container', '.ad-banner', '.ads-banner',
+        // Premium toolbar variants
+        '.premium-toolbar', '.nav-premium-container', '#premium_bar', '.sswdrop',
+        // nav5 / new-template top navigation bar
+        '#nav5', '.nav5', '#h5-navigation', '.h5-navigation',
+        // Sticky sidebar / right-rail chrome
+        '#sidebar', '.sidebar-primary', '.side-nav',
+        // Cookie / GDPR banner rows
+        '#cookie-bar', '.cookie-consent',
     ];
+
+    // Extra inline rules: body normalisation so page content doesn't bleed
+    // under the fixed topbar, and overflow-x clamping for narrow viewports.
+    const EXTRA_RULES = `
+        body {
+            padding-top: var(--nui-topbar-h) !important;
+            overflow-x: hidden !important;
+            box-sizing: border-box !important;
+        }
+        /* Prevent any leftover legacy centering tables from overflowing */
+        body > table, body > center > table {
+            max-width: 100% !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        /* Give unclaimed page content breathing room and readable width */
+        #nui-sitewide-content-wrap {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: var(--nui-space-4) var(--nui-space-4) var(--nui-space-5);
+            box-sizing: border-box;
+            width: 100%;
+        }
+    `;
 
     try {
         NeoUI.init();
 
         const style = document.createElement('style');
         style.id = 'nui-sitewide-chrome-style';
-        style.textContent = CHROME_SELECTORS.join(', ') + ' { display: none !important; }';
+        style.textContent = CHROME_SELECTORS.join(', ') + ' { display: none !important; }\n' + EXTRA_RULES;
         document.head.appendChild(style);
 
-        const spacer = document.createElement('div');
-        spacer.id = 'nui-sitewide-chrome-spacer';
-        spacer.setAttribute('aria-hidden', 'true');
-        spacer.style.cssText = 'height: var(--nui-topbar-h); width: 100%; flex-shrink: 0;';
-        document.body.insertBefore(spacer, document.body.firstChild);
+        // Wrap existing body content in a centred content div so unclaimed
+        // pages don't render edge-to-edge or slide under the topbar.
+        // We do this before buildTopbar so the topbar is injected outside
+        // the wrap (buildTopbar prepends to document.body directly).
+        const contentWrap = document.createElement('div');
+        contentWrap.id = 'nui-sitewide-content-wrap';
+        // Move all current body children into the wrap
+        while (document.body.firstChild) {
+            contentWrap.appendChild(document.body.firstChild);
+        }
+        document.body.appendChild(contentWrap);
 
         const profile = NeoUI.scrapeLegacyProfile();
+        NeoUI.setProfileInfo(profile);
         NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
     } catch (e) {}
 })();
 
-
 // ==============================================================================
 // MODULE 21: KADOATERY (MOBILE GRID + TAP-TO-COPY)
 // ==============================================================================
-// Activates on: /games/kadoatery/
-//
-// Scrapes the current grid of kadoaties (name, colour/state read straight off
-// its sprite filename, and — for hungry ones — the item it wants) out of the
-// server-rendered table, then rebuilds it as a compact, mobile-friendly grid
-// with the Shop Wizard and Safety Deposit Box front and center.
-//
-// Feeding itself still goes through the real feed_kadoatie.phtml flow — that
-// page's item-picker markup wasn't sampled here, so tapping a kad's portrait
-// navigates there normally rather than guessing at a form to rebuild. This
-// module only reskins the listing and speeds up finding what each one wants.
-//
-// Status (hungry vs fed) is communicated with colour — amber border + item
-// badge for hungry, dimmed + checkmark for fed — rather than the kadoatie's
-// own species colour. Layering two colour-coding schemes (species AND status)
-// onto the same small tile makes both harder to read at a glance; the
-// kadoatie's actual colour is still visible in its sprite either way.
-// ==============================================================================
-
 (function () {
     'use strict';
 
@@ -14948,15 +14533,6 @@ return {
         return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // ---- Item auto-search (hidden power-user flag) ----
-    // Deliberately NOT in TOGGLEABLE_MODULES / Settings → Modules — some
-    // people want tapping an item to just copy the name (the default,
-    // harmless behaviour everyone gets); this flips it so tapping instead
-    // opens the SSW modal already searching that item. Flipped by holding
-    // down on the "N hungry · M fed" summary line for ~0.7s (see below),
-    // not by any visible switch. It's still just a plain localStorage flag
-    // — readable in the source like everything else here — "hidden" only in
-    // the sense of "not surfaced as a setting," not secret.
     const KAD_AUTOSEARCH_KEY = 'nui_kad_autosearch';
     function isAutoSearchOn() {
         try { return localStorage.getItem(KAD_AUTOSEARCH_KEY) === '1'; } catch (e) { return false; }
@@ -14974,30 +14550,78 @@ return {
         return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
     }
 
-    function fallbackCopy(text, onDone) {
-        try {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            if (onDone) onDone();
-        } catch (e) {}
-    }
     function copyToClipboard(text, onDone) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(onDone, function () { fallbackCopy(text, onDone); });
+            navigator.clipboard.writeText(text).then(onDone, function () {});
         } else {
-            fallbackCopy(text, onDone);
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (onDone) onDone();
+            } catch (e) {}
         }
     }
 
-    // ---- Scrape the server-rendered grid before we touch the DOM ----
-    function scrapeKadoaties() {
+    // ── VibeRater compatibility ─────────────────────────────────────────────
+    // Opens the same preset popover used sitewide (sidebar, Neomail,
+    // Neoboards) anchored to a tile's "fed by" button, so a kad-feeder's
+    // vibe can be set/changed right from the grid. No-ops gracefully if
+    // VibeRater hasn't initialised yet (it loads in a later IIFE).
+    function openKadVibePop(anchorEl, username) {
+        if (!window.VibeRater || !username) return;
+        document.querySelectorAll('.nui-vibe-pop').forEach(function (el) { el.remove(); });
+
+        const pop = document.createElement('div');
+        pop.className = 'nui-vibe-pop';
+        pop.style.cssText = 'position:fixed;z-index:999999;background:var(--nui-surface);border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:8px;display:flex;flex-direction:column;gap:4px;box-shadow:0 4px 16px var(--nui-shadow);min-width:130px;';
+
+        const label = document.createElement('div');
+        label.style.cssText = 'font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;padding:2px 6px 6px;border-bottom:1px solid var(--nui-border);margin-bottom:2px;';
+        label.textContent = username;
+        pop.appendChild(label);
+
+        window.VibeRater.PRESETS.forEach(function (preset) {
+            const opt = document.createElement('button');
+            opt.type = 'button';
+            opt.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:none;border-radius:6px;background:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--nui-text);text-align:left;transition:background 0.1s;';
+            opt.innerHTML = '<span style="width:10px;height:10px;border-radius:50%;background:' + preset.color + ';flex-shrink:0;"></span>' + escapeHtml(preset.label);
+            opt.addEventListener('mouseenter', function () { opt.style.background = preset.color + '22'; });
+            opt.addEventListener('mouseleave', function () { opt.style.background = 'none'; });
+            opt.addEventListener('click', function () { window.VibeRater.setVibe(username, preset.id); pop.remove(); });
+            pop.appendChild(opt);
+        });
+
+        const clearOpt = document.createElement('button');
+        clearOpt.type = 'button';
+        clearOpt.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:none;border-radius:6px;background:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--nui-danger);text-align:left;border-top:1px solid var(--nui-border);margin-top:2px;padding-top:7px;transition:background 0.1s;';
+        clearOpt.textContent = '✕  Clear vibe';
+        clearOpt.addEventListener('mouseenter', function () { clearOpt.style.background = 'var(--nui-danger-soft)'; });
+        clearOpt.addEventListener('mouseleave', function () { clearOpt.style.background = 'none'; });
+        clearOpt.addEventListener('click', function () { window.VibeRater.clearVibe(username); pop.remove(); });
+        pop.appendChild(clearOpt);
+
+        document.body.appendChild(pop);
+        const r = anchorEl.getBoundingClientRect();
+        const pw = pop.offsetWidth, ph = pop.offsetHeight;
+        const left = Math.min(r.left, window.innerWidth - pw - 8);
+        const top = (r.bottom + 6 + ph > window.innerHeight) ? (r.top - ph - 6) : (r.bottom + 6);
+        pop.style.left = Math.max(8, left) + 'px';
+        pop.style.top = Math.max(8, top) + 'px';
+
+        const dismiss = function (ev) {
+            if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', dismiss, true); }
+        };
+        setTimeout(function () { document.addEventListener('click', dismiss, true); }, 0);
+    }
+
+    function scrapeKadoaties(docContext = document) {
         const kads = [];
-        document.querySelectorAll('a[href^="feed_kadoatie.phtml"]').forEach(function (a) {
+        docContext.querySelectorAll('a[href^="feed_kadoatie.phtml"]').forEach(function (a) {
             const td = a.closest('td');
             if (!td) return;
             const idMatch = a.getAttribute('href').match(/kad_id=(\d+)/);
@@ -15008,8 +14632,7 @@ return {
             const isFed = srcMatch ? srcMatch[2].toLowerCase() === 'happy' : /has been fed/i.test(td.textContent);
             const strongs = td.querySelectorAll('strong');
             const name = strongs.length ? strongs[0].textContent.trim() : 'Kadoatie';
-            // Last <strong> in the cell is the item name when hungry, or the
-            // feeding user's name when fed — meaningful in both cases now.
+
             const secondary = strongs.length > 1 ? strongs[strongs.length - 1].textContent.trim() : null;
             const itemName = !isFed ? secondary : null;
             const fedBy = isFed ? secondary : null;
@@ -15029,32 +14652,32 @@ return {
         return kads;
     }
 
-    function init() {
-        const profile = NeoUI.scrapeLegacyProfile();
-        const kads = scrapeKadoaties();
+    // ---- KadWatch Logic ----
+    // Now lives in Core as NeoUI.KadWatch (shared with the Home dashboard
+    // widget, which reads the exact same Main/Mini timers). Aliased to the
+    // local name `KW` so the rest of this module needs no other changes.
+    const KW = NeoUI.KadWatch;
 
-        // ---- Snapshot for other userscripts before we wipe the DOM ----
-        // This SPA rebuild replaces the server-rendered markup entirely
-        // (including result banners like "Hoorah!"/"Oops!" on
-        // feed_kadoatie.phtml, which don't contain a kad grid and so would
-        // otherwise just vanish). Other userscripts that scrape this page's
-        // original text/table structure — e.g. Statdoatie — can read this
-        // instead of the live DOM, regardless of which script happens to
-        // run first. Kept minimal (name/item/fed-state only) since that's
-        // all that's meaningfully re-derivable from the wiped markup.
+    function init() {
+        const profile = NeoUI.scrapeLegacyProfile ? NeoUI.scrapeLegacyProfile() : { np: '0', nc: '0', username: '' };
+
+        let initialKads = scrapeKadoaties();
+        let initialFeedResult = null;
+        if (!initialKads.length) {
+            const centerDiv = document.querySelector('td.content div[align="center"]');
+            if (centerDiv) initialFeedResult = centerDiv.innerHTML;
+        }
+
+        // Export cache for Statdoatie Extension listener (initial page load)
         try {
             window.__NeoUI_KadScrapeCache = {
                 timestamp: Date.now(),
                 pageText: document.body.innerText,
-                kads: kads.map(function (k) {
-                    return {
-                        name: k.name,
-                        itemName: k.itemName ? k.itemName.replace(/[.!?,]+$/, '').trim() : k.itemName,
-                        isFed: k.isFed,
-                        fedBy: k.fedBy
-                    };
+                kads: initialKads.map(function (k) {
+                    return { name: k.name, itemName: k.itemName ? k.itemName.replace(/[.!?,]+$/, '').trim() : k.itemName, isFed: k.isFed, fedBy: k.fedBy };
                 })
             };
+            localStorage.setItem('nui_kad_cache_export', JSON.stringify(window.__NeoUI_KadScrapeCache));
         } catch (e) {}
 
         document.body.innerHTML = '';
@@ -15062,44 +14685,114 @@ return {
         document.documentElement.style.background = 'var(--nui-bg)';
         document.body.style.background = 'var(--nui-bg)';
 
-        NeoUI.init();
-        if (NeoUI.setProfileInfo) NeoUI.setProfileInfo(profile);
-        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+        if (typeof NeoUI.init === 'function') NeoUI.init();
+        if (typeof NeoUI.setProfileInfo === 'function') NeoUI.setProfileInfo(profile);
+        if (typeof NeoUI.buildTopbar === 'function') NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+        if (typeof NeoUI.buildDrawer === 'function') NeoUI.buildDrawer();
 
         const wrapper = document.createElement('div');
         wrapper.className = 'nui-reset';
         wrapper.style.cssText = 'padding: calc(var(--nui-topbar-h) + var(--nui-space-4)) var(--nui-space-3) var(--nui-space-5); max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px;';
         document.body.appendChild(wrapper);
 
-        if (!kads.length) {
-            wrapper.innerHTML = '<div class="nui-surface" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:20px; text-align:center; color:var(--nui-text-muted);">No kadoaties found on this page — Neopets may have changed the layout here.</div>';
-            return;
-        }
-
-        const hungryCount = kads.filter(function (k) { return !k.isFed; }).length;
-        const fedCount = kads.length - hungryCount;
-
-        // ---- Action bar: SSW, classic Shop Wizard, SDB — prominent, at the very top ----
+        // ---- Action Bar ----
         const actionBar = document.createElement('div');
         actionBar.style.cssText = 'display:flex; gap:6px;';
         actionBar.innerHTML =
-            '<button type="button" id="nui-kad-ssw" class="nui-btn nui-btn-primary" title="Super Shop Wizard" style="flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:8px 4px; font-size:12.5px;">⚡ SSW</button>' +
-            '<a href="/market.phtml?type=wizard" title="Shop Wizard" class="nui-btn" style="flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none;">🧙 SW</a>' +
-            '<a href="/safetydeposit.phtml" title="Safety Deposit Box" class="nui-btn" style="flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none;">📦 SDB</a>';
+            '<button type="button" id="nui-kad-refresh" class="nui-btn" style="flex:1; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text);">🔄 Refresh</button>' +
+            '<button type="button" id="nui-kad-ssw" class="nui-btn nui-btn-primary" style="flex:1; padding:8px 4px; font-size:12.5px;">⚡ SSW</button>' +
+            '<a href="/market.phtml?type=wizard" target="_blank" class="nui-btn" style="flex:1; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none; text-align:center;">🧙 SW</a>' +
+            '<a href="/safetydeposit.phtml" target="_blank" class="nui-btn" style="flex:1; padding:8px 4px; font-size:12.5px; background:var(--nui-surface-2); border:1px solid var(--nui-border); color:var(--nui-text); text-decoration:none; text-align:center;">📦 SDB</a>';
         wrapper.appendChild(actionBar);
-        actionBar.querySelector('#nui-kad-ssw').addEventListener('click', function () { NeoUI.openSSW(); });
 
-        // ---- Summary ----
-        const summary = document.createElement('div');
-        summary.style.cssText = 'font-size:13px; font-weight:700; color:var(--nui-text-muted); text-align:center; -webkit-user-select:none; user-select:none;';
-        summary.textContent = hungryCount + ' hungry · ' + fedCount + ' fed';
-        wrapper.appendChild(summary);
+        actionBar.querySelector('#nui-kad-ssw').addEventListener('click', function () { if(NeoUI.openSSW) NeoUI.openSSW(); });
 
-        // Hold down on the summary line for ~0.7s to flip the hidden
-        // item-auto-search flag. No visible affordance on purpose — this is
-        // an opt-in power-user shortcut, not something we want changing
-        // behaviour for people who never asked for it.
-        (function () {
+        const refreshBtn = actionBar.querySelector('#nui-kad-refresh');
+        refreshBtn.addEventListener('click', async function() {
+            refreshBtn.textContent = '⏳ ...';
+            try {
+                const res = await fetch('/games/kadoatery/');
+                const html = await res.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                const newKads = scrapeKadoaties(doc);
+                let feedHtml = null;
+                if (!newKads.length) {
+                    const centerDiv = doc.querySelector('td.content div[align="center"]');
+                    if (centerDiv) feedHtml = centerDiv.innerHTML;
+                }
+
+                // Export cache via localStorage & Dispatch event for Statdoatie
+                try {
+                    window.__NeoUI_KadScrapeCache = {
+                        timestamp: Date.now(),
+                        pageText: doc.body ? doc.body.textContent : html,
+                        kads: newKads.map(function (k) {
+                            return { name: k.name, itemName: k.itemName ? k.itemName.replace(/[.!?,]+$/, '').trim() : k.itemName, isFed: k.isFed, fedBy: k.fedBy };
+                        })
+                    };
+                    localStorage.setItem('nui_kad_cache_export', JSON.stringify(window.__NeoUI_KadScrapeCache));
+                } catch(e) {}
+
+                window.dispatchEvent(new CustomEvent('Statdoatie_SPA_Refresh'));
+
+                renderGridArea(newKads, feedHtml);
+                if (NeoUI.isKadWatchDashboardEnabled()) {
+                    KW.checkDrop(newKads);
+                    document.dispatchEvent(new CustomEvent('kw-update'));
+                }
+            } catch (e) {
+                showToast('Failed to refresh grid', true);
+            }
+            refreshBtn.textContent = '🔄 Refresh';
+        });
+
+        // ---- Layout Areas ----
+        const gridArea = document.createElement('div');
+        gridArea.style.cssText = 'display:flex; flex-direction:column; gap:12px;';
+        wrapper.appendChild(gridArea);
+
+        const timerArea = document.createElement('div');
+        wrapper.appendChild(timerArea);
+
+        // ---- Grid Renderer ----
+        function renderGridArea(kads, feedResultHtml) {
+            gridArea.innerHTML = '';
+
+            if (!kads.length) {
+                if (feedResultHtml) {
+                    const cleanHtml = feedResultHtml.replace(/<center>[\s\S]*?<\/center>/gi, '').replace(/<br\s*clear="all">/gi, '');
+                    gridArea.innerHTML = '<div class="nui-surface" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:30px 20px; text-align:center; font-size:15px; line-height:1.4;">' +
+                        cleanHtml + '<div style="margin-top:25px;"><button type="button" id="nui-kad-back" class="nui-btn nui-btn-primary" style="display:inline-flex; padding:10px 24px; font-weight:700; font-size:14px;">Back to Kadoatery</button></div></div>';
+
+                    gridArea.querySelector('#nui-kad-back').addEventListener('click', () => {
+                        // Update the address bar back to the index page before
+                        // triggering the grid refresh, so the URL reflects where
+                        // we actually are rather than still showing feed_kadoatie.phtml.
+                        try {
+                            const indexUrl = new URL('/games/kadoatery/index.phtml', location.href).href;
+                            if (location.href !== indexUrl) {
+                                history.pushState({ path: indexUrl }, '', indexUrl);
+                            }
+                        } catch (e) {}
+                        refreshBtn.click();
+                    });
+                } else {
+                    gridArea.innerHTML = '<div class="nui-surface" style="border:1px solid var(--nui-border); border-radius:var(--nui-radius-md); padding:20px; text-align:center; color:var(--nui-text-muted);">No kadoaties found.</div>';
+                }
+                return;
+            }
+
+            const hungryCount = kads.filter(k => !k.isFed).length;
+            const fedCount = kads.length - hungryCount;
+
+            const summary = document.createElement('div');
+            summary.style.cssText = 'font-size:13px; font-weight:700; color:var(--nui-text-muted); text-align:center; user-select:none;';
+            summary.textContent = hungryCount + ' hungry · ' + fedCount + ' fed';
+            gridArea.appendChild(summary);
+
+            // Auto-search bind
             let pressTimer = null;
             function cancelPress() { clearTimeout(pressTimer); pressTimer = null; }
             summary.addEventListener('pointerdown', function () {
@@ -15107,128 +14800,244 @@ return {
                 pressTimer = setTimeout(function () {
                     const next = !isAutoSearchOn();
                     setAutoSearch(next);
-                    showToast(next
-                        ? '🔍 Item auto-search: ON (reload to apply)'
-                        : '📋 Item auto-search: OFF (reload to apply)');
+                    showToast(next ? '🔍 Item auto-search: ON' : '📋 Item auto-search: OFF');
                     pressTimer = null;
                 }, 700);
             });
-            ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (evt) {
-                summary.addEventListener(evt, cancelPress);
-            });
-        })();
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt => summary.addEventListener(evt, cancelPress));
 
-        // ---- Grid — fixed 4 columns, matching the original 4x5 table layout ----
-        const grid = document.createElement('div');
-        grid.style.cssText = 'display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;';
-        wrapper.appendChild(grid);
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;';
+            gridArea.appendChild(grid);
 
+            const myUsername = (profile.username || '').toLowerCase().trim();
+            const autoSearchOn = isAutoSearchOn();
 
-        const myUsername = (profile.username || '').toLowerCase().trim();
-        const sorted = kads.slice().sort(function (a, b) { return (a.isFed === b.isFed) ? 0 : (a.isFed ? 1 : -1); });
-        const autoSearchOn = isAutoSearchOn();
+            kads.forEach(function (k) {
+                const fedByMe = !!(k.isFed && k.fedBy && myUsername && k.fedBy.toLowerCase().trim() === myUsername);
+                const fedByOther = !!(k.isFed && k.fedBy && !fedByMe);
+                const tile = document.createElement('div');
+                tile.className = 'nui-surface';
+                tile.style.cssText = 'border-radius:var(--nui-radius-md); overflow:hidden; text-align:center; ' +
+                    (fedByMe ? 'border:2px solid var(--nui-accent);' : k.isFed ? 'border:1px solid var(--nui-border); opacity:0.55;' : 'border:2px solid var(--nui-warning);');
 
-        sorted.forEach(function (k) {
-            const fedByMe = !!(k.isFed && k.fedBy && myUsername && k.fedBy.toLowerCase().trim() === myUsername);
-            const vibe = (k.isFed && k.fedBy && window.VibeRater && typeof window.VibeRater.getVibe === 'function')
-                ? window.VibeRater.getVibe(k.fedBy) : null;
+                const nameHtml = '<div style="font-size:10.5px; font-weight:800; padding:3px 2px 0; color:var(--nui-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(k.name) + '</div>';
+                const imgHtml = '<a href="' + escapeHtml(k.feedHref) + '" style="display:block;"><img src="' + escapeHtml(k.imgSrc) + '" width="56" height="56" style="display:block; margin:2px auto; object-fit:contain;" alt="' + escapeHtml(k.name) + '"></a>';
 
-            const tile = document.createElement('div');
-            tile.className = 'nui-surface';
-            tile.style.cssText = 'border-radius:var(--nui-radius-md); overflow:hidden; text-align:center; ' +
-                (fedByMe
-                    ? 'border:2px solid var(--nui-accent);'
-                    : k.isFed
-                        ? 'border:1px solid var(--nui-border); opacity:0.55;'
-                        : 'border:2px solid var(--nui-warning);');
-
-            const nameHtml = '<div style="font-size:10.5px; font-weight:800; padding:3px 2px 0; color:var(--nui-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(k.name) + '</div>';
-
-            const imgHtml = '<a href="' + escapeHtml(k.feedHref) + '" style="display:block;" title="Feed ' + escapeHtml(k.name) + '">' +
-                '<img src="' + escapeHtml(k.imgSrc) + '" width="56" height="56" style="display:block; margin:2px auto; width:56px; height:56px; object-fit:contain;" alt="' + escapeHtml(k.name) + '">' +
-            '</a>';
-
-            let statusHtml;
-            if (!k.isFed) {
-                const itemBtn = '<button type="button" class="nui-kad-copy-item nui-reset" data-item="' + escapeHtml(k.itemName) + '" style="flex:1; min-width:0; font-size:10px; font-weight:800; color:#fff; background:var(--nui-warning); border:none; padding:3px 4px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + (autoSearchOn ? 'Tap to search SSW' : 'Tap to copy item name') + '">' + escapeHtml(k.itemName) + '</button>';
-                // SDB shortcut only shows up when the hidden auto-search
-                // flag is on — it's the same flag, just a second way to act
-                // on the item besides the SSW-search tap.
-                const sdbBtn = autoSearchOn
-                    ? '<a href="/safetydeposit.phtml?obj_name=' + encodeURIComponent(k.itemName) + '&category=0" target="_blank" rel="noopener" class="nui-reset" title="Open in Safety Deposit Box" style="flex-shrink:0; display:flex; align-items:center; justify-content:center; width:20px; background:var(--nui-warning); filter:brightness(0.85); color:#fff; text-decoration:none; font-size:10px;">📦</a>'
-                    : '';
-                statusHtml = '<div style="display:flex; width:100%;">' + itemBtn + sdbBtn + '</div>';
-            } else if (fedByMe) {
-                // Fed by the current user — flag it clearly so there's no
-                // temptation to feed it again (it can't be fed twice anyway,
-                // but this makes that obvious at a glance).
-                statusHtml = '<div style="font-size:9.5px; font-weight:800; color:#fff; background:var(--nui-accent); padding:3px 4px;" title="You already fed this one">✓ You fed this</div>';
-            } else {
-                const userStyle = vibe
-                    ? 'border-left:3px solid ' + vibe.color + '; background:' + hexToRgba(vibe.color, 0.14) + '; color:var(--nui-text);'
-                    : 'color:var(--nui-text-muted);';
-                const titleAttr = vibe ? (escapeHtml(k.fedBy) + ' — ' + escapeHtml(vibe.label)) : escapeHtml(k.fedBy || '');
-                statusHtml = '<div style="font-size:9.5px; font-weight:700; padding:3px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; ' + userStyle + '" title="' + titleAttr + '">✓ ' + escapeHtml(k.fedBy || 'Fed') + '</div>';
-            }
-
-            tile.innerHTML = nameHtml + imgHtml + statusHtml;
-            grid.appendChild(tile);
-        });
-
-        grid.querySelectorAll('.nui-kad-copy-item').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.preventDefault();
-                const item = this.getAttribute('data-item');
-                if (isAutoSearchOn()) {
-                    if (NeoUI.openSSW) NeoUI.openSSW(item);
+                let statusHtml;
+                if (!k.isFed) {
+                    const itemBtn = '<button type="button" class="nui-kad-copy-item nui-reset" data-item="' + escapeHtml(k.itemName) + '" style="flex:1; min-width:0; font-size:10px; font-weight:800; color:#fff; background:var(--nui-warning); border:none; padding:3px 4px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(k.itemName) + '</button>';
+                    const sdbBtn = autoSearchOn ? '<a href="/safetydeposit.phtml?obj_name=' + encodeURIComponent(k.itemName) + '&category=0" target="_blank" class="nui-reset" style="flex-shrink:0; display:flex; align-items:center; justify-content:center; width:20px; background:var(--nui-warning); filter:brightness(0.85); color:#fff; text-decoration:none; font-size:10px;">📦</a>' : '';
+                    statusHtml = '<div style="display:flex; width:100%;">' + itemBtn + sdbBtn + '</div>';
+                } else if (fedByMe) {
+                    statusHtml = '<div style="font-size:9.5px; font-weight:800; color:#fff; background:var(--nui-accent); padding:3px 4px;">✓ You fed this</div>';
                 } else {
-                    copyToClipboard(item, function () { showToast('Copied "' + item + '"'); });
+                    // Vibe-rateable: tappable "fed by" row with a live vibe
+                    // dot, same interaction pattern as Neomail/Neoboards.
+                    statusHtml = '<button type="button" class="nui-kad-fedby nui-reset" style="display:flex; align-items:center; justify-content:center; gap:3px; width:100%; font-size:9.5px; font-weight:700; padding:3px 4px; color:var(--nui-text-muted); background:none; border:none; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+                        '<span class="nui-kad-vibe-dot" style="width:6px; height:6px; border-radius:50%; background:var(--nui-border); opacity:0.4; flex-shrink:0;"></span>' +
+                        '✓ ' + escapeHtml(k.fedBy || 'Fed') + '</button>';
+                }
+                tile.innerHTML = nameHtml + imgHtml + statusHtml;
+                grid.appendChild(tile);
+
+                // Vibe tint + click-to-rate, only for tiles fed by someone
+                // other than you (your own "You fed this" badge keeps its
+                // dedicated accent style). Guarded so it no-ops gracefully
+                // on pages where VibeRater hasn't initialised yet.
+                if (fedByOther) {
+                    const fedByName = k.fedBy;
+                    const vibeKey = fedByName.toLowerCase().trim();
+                    const fedByBtn = tile.querySelector('.nui-kad-fedby');
+                    const dot = tile.querySelector('.nui-kad-vibe-dot');
+
+                    function applyKadVibeTint() {
+                        if (!window.VibeRater) return;
+                        const vibe = window.VibeRater.getVibe(fedByName);
+                        if (vibe) {
+                            tile.style.border = '1px solid ' + vibe.color;
+                            tile.style.background = 'linear-gradient(135deg, ' + vibe.color + '22, transparent 70%)';
+                            tile.style.opacity = '0.95';
+                            if (dot) { dot.style.background = vibe.color; dot.style.opacity = '1'; }
+                        } else {
+                            tile.style.border = '1px solid var(--nui-border)';
+                            tile.style.background = '';
+                            tile.style.opacity = '0.55';
+                            if (dot) { dot.style.background = 'var(--nui-border)'; dot.style.opacity = '0.4'; }
+                        }
+                    }
+                    applyKadVibeTint();
+                    if (window.VibeRater) {
+                        window.VibeRater.onChange(function (changed) {
+                            if (changed === vibeKey || changed === '__all__') applyKadVibeTint();
+                        });
+                    } else {
+                        // VibeRater loads in a later IIFE — poll briefly then
+                        // apply once it's ready so tiles aren't stuck untinted.
+                        let attempts = 0;
+                        const poll = setInterval(function () {
+                            attempts++;
+                            if (window.VibeRater) {
+                                clearInterval(poll);
+                                applyKadVibeTint();
+                                window.VibeRater.onChange(function (changed) {
+                                    if (changed === vibeKey || changed === '__all__') applyKadVibeTint();
+                                });
+                            } else if (attempts > 20) {
+                                clearInterval(poll);
+                            }
+                        }, 100);
+                    }
+
+                    if (fedByBtn) {
+                        fedByBtn.addEventListener('click', function (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openKadVibePop(fedByBtn, fedByName);
+                        });
+                    }
                 }
             });
-        });
 
-        // ---- Kad Timer panel (condensed KadWatch), bottom of page ----
-        // Toggleable independently of the Kadoatery module itself via the
-        // "Kad Mode (Timer)" switch in Settings. Auto-detects a new drop by
-        // diffing this load's hungry-kad snapshot against the last one
-        // (same signal KadWatch watches for), then tracks the ~35min quiet
-        // period + ~60s-every-7min window cycle that follows.
-        if (NeoUI.isModuleEnabled('kad-timer')) {
-            const KT = NeoUI.KadTimer;
-            const drop = KT.detectRefresh(kads);
+            grid.querySelectorAll('.nui-kad-copy-item').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const item = this.getAttribute('data-item');
+                    if (isAutoSearchOn() && NeoUI.openSSW) NeoUI.openSSW(item);
+                    else copyToClipboard(item, () => showToast('Copied "' + item + '"'));
+                });
+            });
+        }
 
-            const ktPanel = document.createElement('div');
-            ktPanel.id = 'nui-kad-timer-panel';
-            ktPanel.className = 'nui-surface';
-            ktPanel.style.cssText = 'border-radius:var(--nui-radius-md); border:1px solid var(--nui-border); padding:10px 12px; text-align:center; margin-top:2px;';
-            wrapper.appendChild(ktPanel);
+        renderGridArea(initialKads, initialFeedResult);
 
-            const ktLabel = document.createElement('div');
-            ktLabel.style.cssText = 'font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.02em; color:var(--nui-text-faint); margin-bottom:4px;';
-            ktLabel.textContent = '🐱 Kad Timer';
-            ktPanel.appendChild(ktLabel);
+        // ---- Embed KadWatch Dashboard ----
+        // Own toggle now (Settings → KadWatch → Kadoatery Dashboard),
+        // independent of the "Kadoatery" module toggle and independent of
+        // the Home widget's toggle too.
+        if (NeoUI.isKadWatchDashboardEnabled()) {
+            KW.checkDrop(initialKads);
 
-            const ktBody = document.createElement('div');
-            ktBody.style.cssText = 'font-size:13px; font-weight:600;';
-            ktPanel.appendChild(ktBody);
+            const dashboard = document.createElement('div');
+            dashboard.className = 'nui-surface';
+            dashboard.style.cssText = 'border-radius:var(--nui-radius-md); border:1px solid var(--nui-border); padding:12px; margin-top:2px; display:flex; flex-direction:column; gap:8px;';
+            timerArea.appendChild(dashboard);
 
-            function renderKtPanel() {
-                if (!ktBody.isConnected) return;
-                const state = KT.getState();
-                if (state.status === 'expired') {
-                    ktBody.innerHTML = '<span style="color:var(--nui-text-muted);">No window logged yet — feed a hungry kad to start tracking.</span>';
-                } else if (state.status === 'active') {
-                    ktBody.innerHTML = '<span style="color:var(--nui-success); font-weight:800;">🟢 WINDOW ACTIVE</span> — closes in <b>' + Math.ceil(state.timeRemaining / 1000) + 's</b>';
+            dashboard.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--nui-border); padding-bottom:8px; gap:8px;">
+                    <div style="font-weight:800; color:var(--nui-text); font-size:14px; text-transform:uppercase; letter-spacing:0.5px;">🐱 KadWatch</div>
+                    <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
+                        <input type="text" id="kw-input" class="nui-input" placeholder="HH:MM:SS" style="width:75px; padding:4px 6px; font-size:12px; text-align:center;">
+                        <button type="button" id="kw-add-main" class="nui-btn nui-btn-secondary" style="padding:4px 8px; font-size:11px;">Main</button>
+                        <button type="button" id="kw-add-mini" class="nui-btn nui-btn-secondary" style="padding:4px 8px; font-size:11px;">Mini</button>
+                        <button type="button" id="kw-copy" class="nui-btn nui-btn-primary" style="padding:4px 8px; font-size:11px;">📋 Copy</button>
+                    </div>
+                </div>
+                <div id="kw-alert" style="display:none; background:var(--nui-warning-soft); color:var(--nui-warning); padding:8px; border-radius:var(--nui-radius-sm); font-size:12px; font-weight:700; text-align:center;"></div>
+                <div id="kw-main"></div>
+                <div id="kw-minis" style="display:flex; flex-direction:column; gap:6px;"></div>
+            `;
+
+            const btnMain = dashboard.querySelector('#kw-add-main');
+            const btnMini = dashboard.querySelector('#kw-add-mini');
+            const inputTime = dashboard.querySelector('#kw-input');
+            const alertBox = dashboard.querySelector('#kw-alert');
+
+            btnMain.addEventListener('click', () => {
+                let d = KW.parseInput(inputTime.value);
+                if (d) { KW.setMain(d.getTime()); inputTime.value = ''; updateUI(); }
+            });
+
+            btnMini.addEventListener('click', () => {
+                let d = KW.parseInput(inputTime.value);
+                if (d) {
+                    let m = KW.getMinis(); m.push({time: d.getTime()}); KW.setMinis(m);
+                    inputTime.value = ''; updateUI();
+                }
+            });
+
+            dashboard.querySelector('#kw-copy').addEventListener('click', function() {
+                let now = Date.now();
+                let blocks = [];
+                let main = KW.getMain();
+                if (main > 0 && KW.getState(main, now).status !== 'expired') {
+                    blocks.push({t: main, text: KW.genBoardStr("Main", main, now)});
+                }
+                KW.getMinis().forEach((m, i) => {
+                    if (KW.getState(m.time, now).status !== 'expired') {
+                        blocks.push({t: m.time, text: KW.genBoardStr(`Mini ${i+1}`, m.time, now)});
+                    }
+                });
+                if (!blocks.length) return;
+                blocks.sort((a,b) => b.t - a.t);
+                copyToClipboard(blocks.map(b => b.text).join('\n\n'), () => {
+                    let old = this.textContent;
+                    this.textContent = "✅";
+                    setTimeout(() => this.textContent = old, 1500);
+                });
+            });
+
+            function renderBlock(title, ms, now, isMain, miniIndex) {
+                if (!ms) return '';
+                let state = KW.getState(ms, now);
+                if (state.status === 'expired') return '';
+
+                let timeHtml = state.status === 'active'
+                    ? `<span style="color:var(--nui-success); font-size:15px; font-weight:800;">ACTIVE!</span> <span style="opacity:0.5; margin:0 6px;">|</span> <span>Closes in: ${Math.round(state.remain/1000)}s</span>`
+                    : `<span style="font-size:11px; color:var(--nui-text-faint); text-transform:uppercase;">Next:</span>&nbsp;<span style="font-size:12px; font-weight:600;">${KW.formatTime(state.next)}</span> <span style="opacity:0.4; margin:0 6px;">|</span> <span style="font-size:11px; color:var(--nui-text-faint); text-transform:uppercase;">In:</span>&nbsp;<span style="color:var(--nui-danger); font-size:15px; font-weight:800; font-variant-numeric:tabular-nums;">${KW.formatCd(state.cd)}</span>`;
+
+                return `
+                    <div style="background:var(--nui-surface-2); border:1px solid var(--nui-border); border-left:3px solid ${isMain ? 'var(--nui-accent)' : 'var(--nui-border)'}; border-radius:var(--nui-radius-sm); padding:6px 10px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                        <div style="display:flex; flex-direction:column; gap:2px;">
+                            <div style="display:flex; align-items:baseline; gap:6px;">
+                                <span style="font-weight:800; font-size:11px; color:var(--nui-text-muted); text-transform:uppercase; letter-spacing:0.5px;">${title}</span>
+                                <span style="font-size:10px; color:var(--nui-text-faint);">Refreshed: ${KW.formatTime(ms)}</span>
+                            </div>
+                            <div style="display:flex; align-items:center;">${timeHtml}</div>
+                        </div>
+                        <button type="button" class="nui-btn nui-btn-danger nui-reset" style="padding:3px 6px; font-size:10px; flex-shrink:0;" onclick="document.dispatchEvent(new CustomEvent('kw-del', {detail: {isMain: ${isMain}, idx: ${miniIndex}} }))">✕</button>
+                    </div>
+                `;
+            }
+
+            document.addEventListener('kw-del', (e) => {
+                if (e.detail.isMain) KW.setMain(0);
+                else { let m = KW.getMinis(); m.splice(e.detail.idx, 1); KW.setMinis(m); }
+                updateUI();
+            });
+
+            function updateUI() {
+                let now = Date.now();
+                let main = KW.getMain();
+                let minis = KW.getMinis();
+                dashboard.querySelector('#kw-main').innerHTML = renderBlock('Main', main, now, true, null) || '<div style="font-size:12px; color:var(--nui-text-muted); text-align:center; padding:6px;">No Main logged.</div>';
+                dashboard.querySelector('#kw-minis').innerHTML = minis.map((m, i) => renderBlock(`Mini ${i+1}`, m.time, now, false, i)).join('');
+
+                let pend = KW.getPending();
+                if (pend.time) {
+                    alertBox.innerHTML = `🐱 Drop detected!
+                        <button type="button" class="nui-btn nui-btn-secondary" style="padding:3px 6px; font-size:10px; margin-left:6px;" onclick="document.dispatchEvent(new CustomEvent('kw-merge', {detail:'main'}))">→ Main</button>
+                        <button type="button" class="nui-btn nui-btn-secondary" style="padding:3px 6px; font-size:10px; margin-left:4px;" onclick="document.dispatchEvent(new CustomEvent('kw-merge', {detail:'mini'}))">→ Mini</button>
+                        <button type="button" class="nui-btn nui-btn-danger" style="padding:3px 6px; font-size:10px; margin-left:4px;" onclick="document.dispatchEvent(new CustomEvent('kw-merge', {detail:'discard'}))">✕</button>
+                    `;
+                    alertBox.style.display = 'block';
                 } else {
-                    ktBody.innerHTML = 'Next window <b>' + KT.formatClock(state.nextStart) + '</b> · in <b style="color:var(--nui-accent);">' + KT.formatCountdown(state.countdown) + '</b>';
+                    alertBox.style.display = 'none';
                 }
             }
-            renderKtPanel();
-            setInterval(renderKtPanel, 1000);
 
-            if (drop) {
-                showToast('🐱 New drop detected (' + drop.count + ' kad' + (drop.count > 1 ? 's' : '') + ') — timer reset');
-            }
+            document.addEventListener('kw-merge', (e) => {
+                let pend = KW.getPending();
+                if (e.detail === 'main') KW.setMain(pend.time);
+                else if (e.detail === 'mini') { let m = KW.getMinis(); m.push({time: pend.time}); KW.setMinis(m); }
+                KW.setPending({});
+                updateUI();
+            });
+
+            document.addEventListener('kw-update', updateUI);
+
+            setInterval(updateUI, 1000);
+            updateUI();
         }
     }
 
