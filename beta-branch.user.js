@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.62
+// @version      1.1.56
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -50,46 +50,40 @@
  *
  * CHANGELOG  (last 5 versions)
  *
+ * v1.1.56
+ *   - Module toggles: removed from the sidebar settings drawer entirely.
+ *     They now live as a full-width card at the bottom of the home screen
+ *     dashboard, which is the only place you'd ever need to reach them.
+ *     No more drawer refresh dance.
+ *   - Module toggles: collapsing now works. Replaced the <details>/<summary>
+ *     approach (which had a WebKit animation race) and the plain-section
+ *     approach (which had no collapse at all) with a JS-driven toggle:
+ *     a styled header button flips a collapsed class on the body div, which
+ *     transitions max-height between 0 and a large value. The chevron rotates
+ *     on collapse. State (open/closed) is saved to localStorage so it
+ *     persists across home-screen loads. Toggle button state still mutates
+ *     in-place (no re-render).
+ *
  * v1.1.55
- *   - KadWatch: removed the dead "NeoUI.KadTimer" auto-detect engine added
- *     last version and replaced it with the real thing — the Kadoatery
- *     page's manually-logged Main/Mini timer (previously a private `KW`
- *     object scoped to that page alone) is now NeoUI.KadWatch, shared
- *     between the Kadoatery dashboard and the Home widget. The Home widget
- *     now shows the actual next Main/Mini countdown instead of a separate
- *     timer that was never fed any data.
- *   - Settings: new dedicated "KadWatch" section with two independent
- *     toggles — "Home Widget" and "Kadoatery Dashboard" — replacing the old
- *     "Kad Mode (Timer)" entry in the generic Modules list. The Home
- *     widget's visibility is no longer tied to the Kadoatery module toggle
- *     at all; it's its own switch, and the Kadoatery-page dashboard has its
- *     own switch too.
+ *   - Kadoatery: sidebar nav couldn't open. Root cause: buildDrawer() guards
+ *     itself with `if (drawerBuilt) return` — but the kad module wipes
+ *     document.body.innerHTML before calling NeoUI.init(), which destroys the
+ *     previously-built drawer node while leaving drawerBuilt=true. Every
+ *     subsequent hamburger tap hits the guard and tries to show a detached
+ *     DOM node. Fix: added NeoUI.resetDrawer() to Core's export, which clears
+ *     drawerBuilt and drawerEl so the next buildDrawer()/openDrawer() call
+ *     rebuilds into the clean body. The kadoatery boot now calls
+ *     NeoUI.resetDrawer() immediately after the body wipe.
  *
  * v1.1.54
- *   - Kadoatery: VibeRater compatibility. Kads fed by someone else now tint
- *     their tile border/background to that user's vibe color and show a
- *     live vibe dot next to their name; tapping the "fed by" row opens the
- *     same preset popover used sitewide (sidebar, Neomail, Neoboards) to
- *     set/change it right from the grid. This was documented back in
- *     v1.1.49 but never actually wired up — the grid never touched
- *     window.VibeRater at all. Fixed now.
- *   - Settings: the "Modules" section is collapsible again (native
- *     <details>/<summary>, open by default), so it can be closed instead of
- *     being permanently expanded. The v1.1.52 fix for the open/close race
- *     removed the <details> wrapper entirely rather than just fixing the
- *     race; restored the wrapper while keeping the race-free in-place
- *     button mutation (toggling a module still never touches this
- *     section's innerHTML), so it can't reintroduce the original bug.
- *   - Home / Kadoatery: the "Kad Timer" card was reading NeoUI.KadTimer,
- *     but nothing ever called its detectRefresh() — the Kadoatery page's
- *     embedded dashboard runs on a separate, manually-entered timer (KW)
- *     instead. The two never synced, so the Home card sat on "No window
- *     logged yet" indefinitely. The Kadoatery module now calls
- *     NeoUI.KadTimer.detectRefresh() on every real scrape (initial load and
- *     manual refresh), so the Home card reflects genuine detected drops.
- *     It's also moved to the top of the Home dashboard (full-width, above
- *     the pet card) instead of being buried after Quick Links, and still
- *     only renders when "Kad Mode (Timer)" is toggled on.
+ *   - All Events: rebuilt to work with the new Neopets Vue SPA. Instead of
+ *     scraping form[name="eventform"] (which no longer exists), the module
+ *     now reads from window.__allEventsData, which the server pre-populates
+ *     with the parsed event list before the Vue app mounts. Delete calls go
+ *     to /np-templates/ajax/allevents/delete.php via fetch with JSON, using
+ *     refCk from __allEventsData. The native #allevents-vue-app is hidden
+ *     and NeoUI's own list UI renders in its place — tap a row to select,
+ *     "Delete selected" / "Delete all" in the toolbar, live count updates.
  *
  * v1.1.53
  *   - Kadoatery: "Back to Kadoatery" button on the feed result screen now
@@ -1566,25 +1560,12 @@
 
     const CUSTOM_NAV_KEY = 'neoui_custom_nav_v1';
 
-    function isValidSiteNav(parsed) {
-        return Array.isArray(parsed) && parsed.length > 0 && parsed.every(function (section) {
-            return section && typeof section.title === 'string' && Array.isArray(section.items) &&
-                section.items.every(function (item) {
-                    return item && typeof item.label === 'string';
-                });
-        });
-    }
-
     function loadSiteNav() {
         try {
             const raw = localStorage.getItem(CUSTOM_NAV_KEY);
             if (raw) {
                 const parsed = JSON.parse(raw);
-                // A malformed save (missing/non-array `items`, missing `title`,
-                // items without a `label`, etc.) must never reach buildNavHtml —
-                // that used to throw mid-build and permanently wedge the drawer,
-                // since drawerBuilt was already flipped true before the crash.
-                if (isValidSiteNav(parsed)) return parsed;
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
             }
         } catch (e) {}
         return DEFAULT_SITE_NAV;
@@ -1752,17 +1733,10 @@
             const profileDropdown = document.querySelector('[id^="navprofiledropdown__"]');
             const petImgDiv = document.querySelector('[id^="navProfilePet__"]');
 
-            // H5-converted pages ("Welcome, <a>user</a>" / "Active Pet: <a
-            // class='profile-dropdown-link'>pet</a>") don't sit inside an
-            // id="navprofiledropdown__..." wrapper at all, so those need
-            // their own fallback selectors alongside the legacy ones.
             const userLink = (profileDropdown && profileDropdown.querySelector('a[href^="/userlookup.phtml?user="]'))
-                || document.querySelector('.user a[href^="/userlookup.phtml?user="]')
-                || document.querySelector('.nav-profile-dropdown-text a[href^="/userlookup.phtml?user="]');
+                || document.querySelector('.user a[href^="/userlookup.phtml?user="]');
 
-            const petLink = (profileDropdown && profileDropdown.querySelector('a[href^="/petlookup.phtml?pet="]'))
-                || document.querySelector('a.profile-dropdown-link[href^="/petlookup.phtml?pet="]')
-                || document.querySelector('.nav-profile-dropdown-text a[href^="/petlookup.phtml?pet="]');
+            const petLink = profileDropdown && profileDropdown.querySelector('a[href^="/petlookup.phtml?pet="]');
             const legacyPetName = document.querySelector('.sidebarHeader a b');
 
             let petImage = null;
@@ -1981,6 +1955,7 @@
         { id: 'coincidence',    label: 'The Coincidence',            desc: 'Coincidence SPA' },
         { id: 'buried-treasure',label: 'Buried Treasure',            desc: 'Map SPA' },
         { id: 'kadoatery',      label: 'Kadoatery',                  desc: 'Mobile grid + tap-to-copy items' },
+        { id: 'kad-timer',      label: 'Kad Mode (Timer)',           desc: 'Kadoatery window timer, on Kadoatery page + Home' },
         { id: 'fruit-machine',  label: 'Fruit Machine',              desc: 'Spin SPA' },
         { id: 'coconut-shy',    label: 'Coconut Shy',                desc: 'Coconut Shy wrapper' },
         { id: 'faerie-quests',  label: 'Faerie Quests',              desc: 'Quest watcher + page' },
@@ -2007,67 +1982,15 @@
         return !getDisabledModules().has(id);
     }
 
+    // Expose to home screen module card so it can render toggles without
+    // needing to duplicate the list.
+    window.__NUI_TOGGLEABLE_MODULES__ = TOGGLEABLE_MODULES;
+
     // Each section is {id, title, render(container)}. Theme picker ships
     // built-in; consuming apps can push more via NeoUI.registerSettingsSection.
     const settingsSections = [];
 
-    // Register the Modules settings section in Core
-    registerSettingsSection({
-        id: 'module_toggles',
-        title: 'Modules',
-        render: function (container) {
-            // Build the section once; mutate button state in-place on toggle
-            // so we never fight <details> open/close animation races.
-            const disabled = getDisabledModules();
-
-            const rows = TOGGLEABLE_MODULES.map(mod => {
-                const on = !disabled.has(mod.id);
-                return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--nui-border);gap:8px;">
-                    <div style="min-width:0;">
-                        <div style="font-size:13px;font-weight:700;color:var(--nui-text);">${mod.label}</div>
-                        <div style="font-size:11px;color:var(--nui-text-muted);">${mod.desc}</div>
-                    </div>
-                    <button type="button" data-mod-toggle="${mod.id}" data-mod-on="${on ? '1' : '0'}" style="flex-shrink:0;padding:4px 12px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;background:${on ? 'var(--nui-accent)' : 'var(--nui-surface-2)'};color:${on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)'};border-color:${on ? 'var(--nui-accent)' : 'var(--nui-border)'};">${on ? 'On' : 'Off'}</button>
-                </div>`;
-            }).join('');
-
-            // Collapsible like every other settings section (native
-            // <details>/<summary> — closing/opening it doesn't touch this
-            // container's innerHTML at all, so it can't race with the
-            // toggle buttons below, which still just mutate their own
-            // style in-place. That in-place mutation is what actually
-            // fixed the v1.1.52 race; the section itself just needed to be
-            // wrapped back in <details> so it can be closed.
-            container.innerHTML = `
-                <details class="nui-drawer-section" style="margin:var(--nui-space-3) 0;" open>
-                    <summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
-                        Modules <span style="font-size:10px;opacity:0.5;">▼</span>
-                    </summary>
-                    <div style="margin-top:12px;display:flex;flex-direction:column;gap:0;">
-                        <div style="font-size:12px;color:var(--nui-text-muted);margin-bottom:10px;line-height:1.5;">Toggle modules on or off. Changes take effect on next page load.</div>
-                        ${rows}
-                    </div>
-                </details>
-            `;
-
-            container.querySelectorAll('[data-mod-toggle]').forEach(btn => {
-                btn.addEventListener('click', e => {
-                    e.stopPropagation();
-                    const id = btn.getAttribute('data-mod-toggle');
-                    const d = getDisabledModules();
-                    const nowOn = d.has(id); // currently disabled → toggling ON
-                    if (nowOn) { d.delete(id); } else { d.add(id); }
-                    setDisabledModules(d);
-                    // Mutate this button's appearance in-place — no re-render needed
-                    btn.setAttribute('data-mod-on', nowOn ? '1' : '0');
-                    btn.textContent = nowOn ? 'On' : 'Off';
-                    btn.style.background = nowOn ? 'var(--nui-accent)' : 'var(--nui-surface-2)';
-                    btn.style.color = nowOn ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)';
-                    btn.style.borderColor = nowOn ? 'var(--nui-accent)' : 'var(--nui-border)';
-                });
-            });
-        }
-    });
+    // Module toggles moved to home screen dashboard card (v1.1.56).
 
     const DAILY_TIMERS_KEY = 'neoui_daily_timers_v1';
 
@@ -3482,26 +3405,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     }
 
     function buildDrawer() {
-        try {
-            if (drawerBuilt && drawerEl && drawerEl.isConnected) {
-                return { open: openDrawer, close: closeDrawer };
-            }
-            return buildDrawerUnsafe();
-        } catch (e) {
-            // Something in nav/theme data was unexpectedly broken, or the
-            // connectivity check itself failed for some reason. Reset the
-            // flag so the NeoGo button isn't permanently dead for the rest of
-            // the page's life — the next tap gets a fresh attempt instead of
-            // silently doing nothing forever, and callers (e.g. the Home
-            // Dashboard's own run()) never see this throw.
-            drawerBuilt = false;
-            drawerEl = null;
-            try { console.error('NeoUI: buildDrawer failed', e); } catch (e2) {}
-            return null;
-        }
-    }
-
-    function buildDrawerUnsafe() {
+        if (drawerBuilt) return;
         drawerBuilt = true;
 
         const nav = loadSiteNav();
@@ -3694,24 +3598,6 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             if (imgEl) imgEl.src = info.petImage;
         }
 
-        // Persist any real values back to the profile cache so that accurate
-        // data captured on one page (e.g. the Home carousel on H5) is
-        // available to every other page that can only fall back to cache.
-        try {
-            const DEFAULTS = { username: 'Neopian', petname: 'Unknown Pet', petImage: 'https://images.neopets.com/themes/h5/basic/images/mystery-icon.png', np: '0', nc: '0' };
-            let cache = {};
-            try { cache = JSON.parse(localStorage.getItem('nui_profile_cache')) || {}; } catch (e) {}
-            let changed = false;
-            ['username', 'petname', 'petImage', 'np', 'nc'].forEach(function (key) {
-                const val = info[key];
-                if (val && val !== DEFAULTS[key] && val !== cache[key]) {
-                    cache[key] = val;
-                    changed = true;
-                }
-            });
-            if (changed) localStorage.setItem('nui_profile_cache', JSON.stringify(cache));
-        } catch (e) {}
-
         // Refresh the sidebar vibe dot now that the username slot is populated.
         // VibeRater may already be ready (same-page), or may not be yet (poll
         // in wireDrawerVibe will catch it); only act if it's already present.
@@ -3744,197 +3630,98 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     }
 
     // ---- Public init ----
-    // ── KadWatch engine ─────────────────────────────────────────────────────
-    // This is the actual main/mini feed-window tracker (manually logged by
-    // the user tapping "Main"/"Mini" after a refresh) — previously defined
-    // as a private `KW` object inside the Kadoatery page module, with the
-    // Home dashboard reading from an entirely separate, never-actually-wired
-    // "NeoUI.KadTimer" auto-detect engine instead. The two never synced.
-    // Moved here so both the Kadoatery page panel and the Home widget read
-    // the exact same source of truth via NeoUI.KadWatch.
-    const KW_MAIN_KEY = 'nui_kw_mainTime';
-    const KW_MINIS_KEY = 'nui_kw_minisArr';
-    const KW_PENDING_KEY = 'nui_kw_pendingDrop';
-    // Separate from the Kadoatery module's own "kadoatery" / dashboard
-    // toggles — this only controls whether the Home dashboard shows a
-    // KadWatch countdown card at all. Lives in its own "KadWatch" settings
-    // section rather than the generic Modules list. Defaults on so existing
-    // users see no change until they choose to turn it off.
-    const KW_HOME_WIDGET_KEY = 'nui_kw_home_widget_enabled';
-    const KW_KADOATERY_DASHBOARD_KEY = 'nui_kw_kadoatery_dashboard_enabled';
+    // ── Kad Timer engine (condensed KadWatch) ──────────────────────────────
+    // Shared by the Kadoatery module (panel at the bottom of the grid) and
+    // the Home module ("Kad Mode" homepage widget). Lives here in Core so
+    // both page-specific IIFEs can reach it via NeoUI.KadTimer without
+    // duplicating the timing math. Storage is plain localStorage (this
+    // script runs with @grant none), keyed separately from KadWatch's own
+    // GM_-backed keys so the two can coexist without clobbering each other.
+    const KT_LAST_REFRESH_KEY = 'nui_kadtimer_last_refresh';
+    const KT_PREV_STATES_KEY = 'nui_kadtimer_prev_states';
+    const KT_FIRST_RUN_KEY = 'nui_kadtimer_first_run';
+    const KT_LAST_COUNT_KEY = 'nui_kadtimer_last_count';
+    // Same cadence as the real Kadoatery drop cycle: ~35 min quiet period,
+    // then a ~60s window every 7 minutes until the next drop.
+    const KT_MAIN_DELAY_MS = 2100000;
+    const KT_WINDOW_MS = 60000;
+    const KT_INTERVAL_MS = 420000;
+    const KT_DEBOUNCE_MS = 300000; // ignore re-detections within 5 min of the last logged refresh
 
-    function isKadWatchHomeWidgetEnabled() {
-        try { return localStorage.getItem(KW_HOME_WIDGET_KEY) !== '0'; } catch (e) { return true; }
+    function ktGet(key, def) {
+        try {
+            const raw = localStorage.getItem(key);
+            return raw === null ? def : JSON.parse(raw);
+        } catch (e) { return def; }
     }
-    function setKadWatchHomeWidgetEnabled(on) {
-        try { localStorage.setItem(KW_HOME_WIDGET_KEY, on ? '1' : '0'); } catch (e) {}
-    }
-    function isKadWatchDashboardEnabled() {
-        try { return localStorage.getItem(KW_KADOATERY_DASHBOARD_KEY) !== '0'; } catch (e) { return true; }
-    }
-    function setKadWatchDashboardEnabled(on) {
-        try { localStorage.setItem(KW_KADOATERY_DASHBOARD_KEY, on ? '1' : '0'); } catch (e) {}
+    function ktSet(key, val) {
+        try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
     }
 
-    const KadWatch = {
-        getMain: () => parseInt(localStorage.getItem(KW_MAIN_KEY) || '0', 10),
-        setMain: (ms) => localStorage.setItem(KW_MAIN_KEY, ms.toString()),
-        getMinis: () => JSON.parse(localStorage.getItem(KW_MINIS_KEY) || '[]'),
-        setMinis: (arr) => localStorage.setItem(KW_MINIS_KEY, JSON.stringify(arr)),
-        getPending: () => JSON.parse(localStorage.getItem(KW_PENDING_KEY) || '{}'),
-        setPending: (obj) => localStorage.setItem(KW_PENDING_KEY, JSON.stringify(obj)),
+    function ktGetTimerState(lastRefreshTime, now) {
+        if (!lastRefreshTime) return { status: 'expired' };
+        const mainStart = lastRefreshTime + KT_MAIN_DELAY_MS;
+        const sinceStart = now - mainStart;
+        if (sinceStart < 0) return { status: 'waiting', nextStart: mainStart, countdown: mainStart - now };
+        const cycle = Math.floor(sinceStart / KT_INTERVAL_MS);
+        const winStart = mainStart + cycle * KT_INTERVAL_MS;
+        const winEnd = winStart + KT_WINDOW_MS;
+        if (now >= winStart && now < winEnd) return { status: 'active', timeRemaining: winEnd - now };
+        const nextStart = mainStart + (cycle + 1) * KT_INTERVAL_MS;
+        return { status: 'waiting', nextStart: nextStart, countdown: nextStart - now };
+    }
 
-        getState: (lastRefreshMs, nowMs) => {
-            if (!lastRefreshMs || lastRefreshMs === 0) return { status: 'expired' };
-            const start = lastRefreshMs + 2100000;
-            const diff = nowMs - start;
-            if (diff < 0) return { status: 'waiting', next: start, cd: start - nowMs };
+    function ktFormatCountdown(ms) {
+        const totalSec = Math.max(0, Math.floor(ms / 1000));
+        const m = Math.floor(totalSec / 60), s = totalSec % 60;
+        return (m < 10 ? '0' + m : '' + m) + ':' + (s < 10 ? '0' + s : '' + s);
+    }
+    function ktFormatClock(ms) {
+        try { return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+        catch (e) { return ''; }
+    }
 
-            const cycle = Math.floor(diff / 420000);
-            const cStart = start + (cycle * 420000);
-            const cEnd = cStart + 60000;
+    // kads: array of { name, isFed } (subset of what Kadoatery module already
+    // scrapes). Compares against the previous snapshot by index/name to spot
+    // newly-sad kads — the same "a batch just dropped" signal KadWatch uses —
+    // and, if it looks like a genuine new drop (not the first load, not
+    // within the debounce window of the last logged refresh), stamps
+    // KT_LAST_REFRESH_KEY with now and returns a summary. Returns null when
+    // nothing new was detected.
+    function ktDetectRefresh(kads) {
+        const currentState = {};
+        (kads || []).forEach(function (k, i) {
+            currentState[i] = { name: k.name || '', status: k.isFed ? 'fed' : 'sad' };
+        });
+        const prevState = ktGet(KT_PREV_STATES_KEY, {});
+        const isFirst = ktGet(KT_FIRST_RUN_KEY, true);
+        ktSet(KT_FIRST_RUN_KEY, false);
 
-            if (nowMs >= cStart && nowMs < cEnd) return { status: 'active', remain: cEnd - nowMs };
-            const nStart = start + ((cycle + 1) * 420000);
-            return { status: 'waiting', next: nStart, cd: nStart - nowMs };
-        },
-
-        // Picks the single most relevant timer across Main + all Minis: an
-        // already-open window wins (soonest-closing if more than one
-        // somehow overlaps), otherwise the soonest upcoming window. Returns
-        // null when nothing's logged or everything's expired — this is what
-        // the Home widget's "next feed countdown" reads.
-        getNextEvent: () => {
-            const now = Date.now();
-            const candidates = [];
-            const main = KadWatch.getMain();
-            if (main) candidates.push({ label: 'Main', state: KadWatch.getState(main, now) });
-            KadWatch.getMinis().forEach((m, i) => {
-                if (m && m.time) candidates.push({ label: 'Mini ' + (i + 1), state: KadWatch.getState(m.time, now) });
-            });
-            const active = candidates.filter((c) => c.state.status === 'active');
-            if (active.length) {
-                active.sort((a, b) => a.state.remain - b.state.remain);
-                return active[0];
+        let minIdx = null, maxIdx = null, newCount = 0;
+        Object.keys(currentState).forEach(function (i) {
+            if (currentState[i].status === 'sad') {
+                const p = prevState[i];
+                const isNew = !p || p.status !== 'sad' || p.name !== currentState[i].name;
+                if (isNew) {
+                    newCount++;
+                    const idx = +i;
+                    if (minIdx === null || idx < minIdx) minIdx = idx;
+                    if (maxIdx === null || idx > maxIdx) maxIdx = idx;
+                }
             }
-            const waiting = candidates.filter((c) => c.state.status === 'waiting');
-            if (waiting.length) {
-                waiting.sort((a, b) => a.state.cd - b.state.cd);
-                return waiting[0];
-            }
-            return null;
-        },
+        });
+        ktSet(KT_PREV_STATES_KEY, currentState);
 
-        parseInput: (val) => {
-            if (!val) return null;
-            let clean = val.replace(/[a-z\s]/gi, '');
-            let parts = clean.split(":");
-            if (parts.length < 2) return null;
-            let h = parseInt(parts[0], 10), m = parseInt(parts[1], 10), s = parts.length > 2 ? parseInt(parts[2], 10) : 0;
-            if (isNaN(h) || isNaN(m)) return null;
-            let now = new Date();
-            let nstStr = new Date().toLocaleString("en-US", {timeZone: "America/Los_Angeles"});
-            let target = new Date(nstStr);
-            target.setHours(h, m, s, 0);
-            if (target.getHours() <= 1 && h >= 22) target.setDate(target.getDate() - 1);
-            else if (target.getHours() >= 22 && h <= 1) target.setDate(target.getDate() + 1);
-            return new Date(now.getTime() + (target.getTime() - new Date(nstStr).getTime()));
-        },
+        if (isFirst || newCount === 0) return null;
 
-        formatTime: (ms) => {
-            if (!ms) return '';
-            return new Date(ms).toLocaleString("en-US", {timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true}).replace(/ /g, '').toLowerCase();
-        },
+        const now = Date.now();
+        const lastRefresh = ktGet(KT_LAST_REFRESH_KEY, 0);
+        if (now - lastRefresh < KT_DEBOUNCE_MS) return null;
 
-        formatCd: (ms) => {
-            const totalSec = Math.max(0, Math.floor(ms / 1000));
-            const m = Math.floor(totalSec / 60);
-            const s = totalSec % 60;
-            return (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
-        },
-
-        genBoardStr: (label, ms, now) => {
-            if (!ms) return null;
-            let mainStart = ms + 2100000;
-            let cycle = Math.floor((now - mainStart) / 420000);
-            if (cycle < 0) cycle = 0;
-            let times = [];
-            for (let i = cycle; i <= cycle + 10; i++) {
-                let ws = mainStart + (i * 420000);
-                if (now < ws + 60000) times.push(new Date(ws));
-                if (times.length >= 6) break;
-            }
-            if (!times.length) return null;
-
-            let lastStr = KadWatch.formatTime(ms);
-            let nextStr = KadWatch.formatTime(times[0].getTime());
-            let pends = [];
-            for(let i = 1; i < times.length; i++) {
-                let m = times[i].getMinutes();
-                pends.push(":" + (m < 10 ? '0'+m : m));
-            }
-            let pendsStr = pends.length > 0 ? " / " + pends.join(" / ") : "";
-            return `${label} @ ${lastStr}\nNext ${nextStr}${pendsStr}`;
-        },
-
-        checkDrop: (kads) => {
-            let states = {};
-            let prev = JSON.parse(localStorage.getItem('nui_kw_states') || '{}');
-            let hasNew = false;
-            kads.forEach((k, i) => {
-                states[i] = { fed: k.isFed };
-                if (!k.isFed && (!prev[i] || prev[i].fed)) hasNew = true;
-            });
-            localStorage.setItem('nui_kw_states', JSON.stringify(states));
-            if (hasNew) KadWatch.setPending({ time: Date.now() });
-        }
-    };
-
-    // ---- KadWatch settings section (separate from the generic Modules
-    // list — a dedicated home for KadWatch's own visibility toggles) ----
-    registerSettingsSection({
-        id: 'kadwatch',
-        title: 'KadWatch',
-        render: function (container) {
-            function row(label, desc, on, key) {
-                return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--nui-border);gap:8px;">
-                    <div style="min-width:0;">
-                        <div style="font-size:13px;font-weight:700;color:var(--nui-text);">${label}</div>
-                        <div style="font-size:11px;color:var(--nui-text-muted);">${desc}</div>
-                    </div>
-                    <button type="button" data-kw-toggle="${key}" data-kw-on="${on ? '1' : '0'}" style="flex-shrink:0;padding:4px 12px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;background:${on ? 'var(--nui-accent)' : 'var(--nui-surface-2)'};color:${on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)'};border-color:${on ? 'var(--nui-accent)' : 'var(--nui-border)'};">${on ? 'On' : 'Off'}</button>
-                </div>`;
-            }
-
-            container.innerHTML = `
-                <details class="nui-drawer-section" style="margin:var(--nui-space-3) 0;" open>
-                    <summary class="nui-drawer-section-title" style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
-                        KadWatch <span style="font-size:10px;opacity:0.5;">▼</span>
-                    </summary>
-                    <div style="margin-top:12px;display:flex;flex-direction:column;gap:0;">
-                        <div style="font-size:12px;color:var(--nui-text-muted);margin-bottom:10px;line-height:1.5;">Manually-logged Main/Mini feed-window tracker. These control where its countdown shows up — independent of the Kadoatery module itself.</div>
-                        ${row('Home Widget', 'Next feed countdown card at the top of the homepage', isKadWatchHomeWidgetEnabled(), 'home')}
-                        ${row('Kadoatery Dashboard', 'Main/Mini tracker panel at the bottom of the Kadoatery grid', isKadWatchDashboardEnabled(), 'dashboard')}
-                    </div>
-                </details>
-            `;
-
-            container.querySelectorAll('[data-kw-toggle]').forEach(btn => {
-                btn.addEventListener('click', e => {
-                    e.stopPropagation();
-                    const key = btn.getAttribute('data-kw-toggle');
-                    const nowOn = btn.getAttribute('data-kw-on') !== '1';
-                    if (key === 'home') setKadWatchHomeWidgetEnabled(nowOn);
-                    else if (key === 'dashboard') setKadWatchDashboardEnabled(nowOn);
-                    btn.setAttribute('data-kw-on', nowOn ? '1' : '0');
-                    btn.textContent = nowOn ? 'On' : 'Off';
-                    btn.style.background = nowOn ? 'var(--nui-accent)' : 'var(--nui-surface-2)';
-                    btn.style.color = nowOn ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)';
-                    btn.style.borderColor = nowOn ? 'var(--nui-accent)' : 'var(--nui-border)';
-                });
-            });
-        }
-    });
+        ktSet(KT_LAST_REFRESH_KEY, now);
+        ktSet(KT_LAST_COUNT_KEY, newCount);
+        return { count: newCount, time: now };
+    }
 
     let initialized = false;
     function init(opts) {
@@ -3960,6 +3747,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         mount: mount,
         neoGoButton: buildNeoGoButton,
         openDrawer: openDrawer,
+        resetDrawer: function () { drawerBuilt = false; drawerEl = null; },
         setProfileInfo: setProfileInfo,
         scrapeLegacyProfile: scrapeLegacyProfile,
         buildTopbar: buildTopbar,
@@ -3984,9 +3772,17 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         },
         addCustomTheme: function(key, def) { THEMES[key] = def; saveCustomTheme(key, def); },
         deleteCustomTheme: function(key) { delete THEMES[key]; deleteCustomTheme(key); },
-        KadWatch: KadWatch,
-        isKadWatchHomeWidgetEnabled: isKadWatchHomeWidgetEnabled,
-        isKadWatchDashboardEnabled: isKadWatchDashboardEnabled,
+        KadTimer: {
+            MAIN_DELAY_MS: KT_MAIN_DELAY_MS,
+            WINDOW_MS: KT_WINDOW_MS,
+            INTERVAL_MS: KT_INTERVAL_MS,
+            getLastRefresh: function () { return ktGet(KT_LAST_REFRESH_KEY, 0); },
+            getLastCount: function () { return ktGet(KT_LAST_COUNT_KEY, 0); },
+            getState: function (now) { return ktGetTimerState(ktGet(KT_LAST_REFRESH_KEY, 0), now || Date.now()); },
+            detectRefresh: ktDetectRefresh,
+            formatCountdown: ktFormatCountdown,
+            formatClock: ktFormatClock,
+        },
     };
 
 })(window);
@@ -6044,12 +5840,289 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 (function () {
     'use strict';
 
-    // Module retired v1.1.53. Neopets rebuilt /allevents.phtml as a Vue SPA
-    // with native bulk-select and delete. Our old module scraped
-    // form[name="eventform"] which no longer exists, causing it to render an
-    // empty "All caught up!" screen incorrectly. We exit immediately and let
-    // the native page render untouched. Sitewide Chrome applies our topbar
-    // on top as usual since no module builds #nui-page-topbar here anymore.
+    if (!/\/allevents\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('allevents')) return;
+
+    // ── Data source ──────────────────────────────────────────────────────────
+    // Neopets v2 page pre-populates window.__allEventsData with:
+    //   { events: [{eventId, dateLabel, timeLabel, title, iconUrl, url,
+    //               descHtml}], atMax: bool, refCk: string }
+    // We read from that instead of scraping the DOM.
+
+    function getPageData() {
+        const d = window.__allEventsData || {};
+        return {
+            events: Array.isArray(d.events) ? d.events.slice() : [],
+            atMax:  !!d.atMax,
+            refCk:  d.refCk || '',
+        };
+    }
+
+    async function deleteEvents(refCk, type, ids) {
+        const body = Object.assign({ _ref_ck: refCk, type }, type === 'selected' ? { event_ids: ids } : {});
+        const resp = await fetch('/np-templates/ajax/allevents/delete.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
+            body: JSON.stringify(body),
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'delete_failed');
+        return data;
+    }
+
+    // ── Render ───────────────────────────────────────────────────────────────
+
+    function buildUI() {
+        // Suppress the native Vue app — we take over the whole page body.
+        const nativeApp = document.getElementById('allevents-vue-app');
+        if (nativeApp) nativeApp.style.display = 'none';
+
+        // Also suppress the native page's own stylesheets from conflicting
+        // with NeoUI vars (the Vue app CSS uses its own class names so this
+        // is safe — we just don't want its layout bleeding into ours).
+        document.querySelectorAll('link[href*="allevents"]').forEach(l => l.disabled = true);
+
+        const { events: initialEvents, atMax, refCk } = getPageData();
+
+        // State
+        let events = initialEvents.slice();
+        let selected = new Set();
+        let busy = false;
+
+        // ── Shell ─────────────────────────────────────────────────────────
+        const shell = NeoUI.buildPageShell({
+            title: 'Event Inbox',
+            subtitle: events.length
+                ? (atMax ? `${events.length} events (page max)` : `${events.length} event${events.length !== 1 ? 's' : ''}`)
+                : 'All caught up!',
+            backUrl: '/',
+        });
+
+        const body = shell.body;
+        body.style.cssText += 'display:flex;flex-direction:column;gap:0;padding:0;';
+
+        // ── Toolbar ───────────────────────────────────────────────────────
+        const toolbar = document.createElement('div');
+        toolbar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px var(--nui-space-4);border-bottom:1px solid var(--nui-border);flex-shrink:0;flex-wrap:wrap;';
+
+        const selectAllLabel = document.createElement('label');
+        selectAllLabel.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--nui-text);cursor:pointer;user-select:none;';
+        const selectAllCb = document.createElement('input');
+        selectAllCb.type = 'checkbox';
+        selectAllCb.style.cssText = 'width:16px;height:16px;accent-color:var(--nui-accent);cursor:pointer;';
+        selectAllLabel.appendChild(selectAllCb);
+        selectAllLabel.appendChild(document.createTextNode('Select all'));
+
+        const selCount = document.createElement('span');
+        selCount.style.cssText = 'font-size:12px;color:var(--nui-text-muted);margin-left:2px;';
+
+        const spacer = document.createElement('div');
+        spacer.style.flex = '1';
+
+        const deleteSelBtn = document.createElement('button');
+        deleteSelBtn.type = 'button';
+        deleteSelBtn.textContent = 'Delete selected';
+        deleteSelBtn.style.cssText = 'padding:6px 14px;border-radius:var(--nui-radius-pill);border:none;background:var(--nui-accent);color:var(--nui-accent-ink);font-size:12px;font-weight:700;cursor:pointer;opacity:0.4;pointer-events:none;transition:opacity 0.15s;';
+
+        const deleteAllBtn = document.createElement('button');
+        deleteAllBtn.type = 'button';
+        deleteAllBtn.textContent = 'Delete all';
+        deleteAllBtn.style.cssText = 'padding:6px 14px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-danger);font-size:12px;font-weight:700;cursor:pointer;transition:opacity 0.15s;';
+
+        toolbar.append(selectAllLabel, selCount, spacer, deleteSelBtn, deleteAllBtn);
+
+        // ── List ──────────────────────────────────────────────────────────
+        const list = document.createElement('div');
+        list.style.cssText = 'flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+
+        const statusBar = document.createElement('div');
+        statusBar.style.cssText = 'padding:10px var(--nui-space-4);font-size:12px;color:var(--nui-accent);font-weight:700;display:none;text-align:center;';
+
+        body.append(toolbar, list, statusBar);
+
+        // ── State → DOM ───────────────────────────────────────────────────
+
+        function updateToolbar() {
+            const n = selected.size;
+            selCount.textContent = n > 0 ? `(${n} selected)` : '';
+            selectAllCb.checked = events.length > 0 && n === events.length;
+            selectAllCb.indeterminate = n > 0 && n < events.length;
+            if (n > 0) {
+                deleteSelBtn.style.opacity = '1';
+                deleteSelBtn.style.pointerEvents = '';
+            } else {
+                deleteSelBtn.style.opacity = '0.4';
+                deleteSelBtn.style.pointerEvents = 'none';
+            }
+            const noEvents = events.length === 0;
+            deleteAllBtn.style.opacity = noEvents ? '0.4' : '1';
+            deleteAllBtn.style.pointerEvents = noEvents ? 'none' : '';
+        }
+
+        function updateSubtitle() {
+            const sub = shell.el.querySelector('.nui-page-subtitle');
+            if (!sub) return;
+            sub.textContent = events.length
+                ? (atMax ? `${events.length} events (page max)` : `${events.length} event${events.length !== 1 ? 's' : ''}`)
+                : 'All caught up!';
+        }
+
+        function renderList() {
+            list.innerHTML = '';
+
+            if (events.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.cssText = 'padding:40px var(--nui-space-4);text-align:center;color:var(--nui-text-muted);font-size:14px;line-height:1.6;';
+                empty.innerHTML = '<div style="font-size:32px;margin-bottom:12px;">🎉</div><div style="font-weight:700;color:var(--nui-text);margin-bottom:4px;">All caught up!</div><div>You have no events queued up.</div>';
+                list.appendChild(empty);
+                return;
+            }
+
+            events.forEach((ev, i) => {
+                const row = document.createElement('div');
+                const isOdd = i % 2 === 0;
+                row.style.cssText = `display:flex;align-items:center;gap:10px;padding:10px var(--nui-space-4);border-bottom:1px solid var(--nui-border);background:${isOdd ? 'var(--nui-surface)' : 'var(--nui-surface-2)'};transition:background 0.1s;cursor:pointer;`;
+
+                // Checkbox
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.style.cssText = 'flex-shrink:0;width:16px;height:16px;accent-color:var(--nui-accent);cursor:pointer;';
+                cb.checked = selected.has(ev.eventId);
+
+                // Icon
+                const iconWrap = document.createElement('a');
+                iconWrap.href = ev.url || '#';
+                iconWrap.style.cssText = 'flex-shrink:0;width:36px;height:36px;border-radius:var(--nui-radius-sm);overflow:hidden;background:var(--nui-surface-3);display:flex;align-items:center;justify-content:center;';
+                iconWrap.addEventListener('click', e => e.stopPropagation());
+                if (ev.iconUrl) {
+                    const img = document.createElement('img');
+                    img.src = ev.iconUrl;
+                    img.alt = ev.title || '';
+                    img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+                    img.onerror = () => { img.style.display = 'none'; };
+                    iconWrap.appendChild(img);
+                }
+
+                // Text block
+                const text = document.createElement('div');
+                text.style.cssText = 'flex:1;min-width:0;';
+
+                const titleLink = document.createElement('a');
+                titleLink.href = ev.url || '#';
+                titleLink.style.cssText = 'font-size:13px;font-weight:700;color:var(--nui-text);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:none;';
+                titleLink.textContent = ev.title || 'Event';
+                titleLink.addEventListener('click', e => e.stopPropagation());
+
+                const desc = document.createElement('div');
+                desc.style.cssText = 'font-size:11px;color:var(--nui-text-muted);margin-top:2px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;';
+                desc.innerHTML = ev.descHtml || '';
+
+                const time = document.createElement('div');
+                time.style.cssText = 'font-size:10px;color:var(--nui-text-faint);margin-top:3px;';
+                time.textContent = [ev.dateLabel, ev.timeLabel].filter(Boolean).join(' · ');
+
+                text.append(titleLink, desc, time);
+                row.append(cb, iconWrap, text);
+
+                // Highlight selected state
+                function applySelected() {
+                    row.style.background = selected.has(ev.eventId)
+                        ? 'color-mix(in srgb, var(--nui-accent) 12%, var(--nui-surface))'
+                        : (isOdd ? 'var(--nui-surface)' : 'var(--nui-surface-2)');
+                    cb.checked = selected.has(ev.eventId);
+                }
+                applySelected();
+
+                row.addEventListener('click', () => {
+                    if (busy) return;
+                    if (selected.has(ev.eventId)) selected.delete(ev.eventId);
+                    else selected.add(ev.eventId);
+                    applySelected();
+                    updateToolbar();
+                });
+
+                list.appendChild(row);
+            });
+        }
+
+        function setBusy(state) {
+            busy = state;
+            deleteSelBtn.disabled = state;
+            deleteAllBtn.disabled = state;
+            selectAllCb.disabled = state;
+            list.style.opacity = state ? '0.5' : '1';
+            list.style.pointerEvents = state ? 'none' : '';
+        }
+
+        function showStatus(msg, isError) {
+            statusBar.textContent = msg;
+            statusBar.style.display = 'block';
+            statusBar.style.color = isError ? 'var(--nui-danger)' : 'var(--nui-accent)';
+            clearTimeout(statusBar._t);
+            statusBar._t = setTimeout(() => { statusBar.style.display = 'none'; }, 3000);
+        }
+
+        // ── Actions ───────────────────────────────────────────────────────
+
+        selectAllCb.addEventListener('change', () => {
+            if (selectAllCb.checked) events.forEach(ev => selected.add(ev.eventId));
+            else selected.clear();
+            renderList();
+            updateToolbar();
+        });
+
+        deleteSelBtn.addEventListener('click', async () => {
+            if (busy || selected.size === 0) return;
+            const ids = Array.from(selected);
+            setBusy(true);
+            try {
+                const data = await deleteEvents(refCk, 'selected', ids);
+                const removed = new Set(ids);
+                events = events.filter(ev => !removed.has(ev.eventId));
+                selected.clear();
+                renderList();
+                updateToolbar();
+                updateSubtitle();
+                showStatus(`Deleted ${data.deleted || ids.length} event${ids.length !== 1 ? 's' : ''}.`);
+            } catch (e) {
+                showStatus('Could not delete events — please try again.', true);
+            } finally {
+                setBusy(false);
+            }
+        });
+
+        deleteAllBtn.addEventListener('click', async () => {
+            if (busy || events.length === 0) return;
+            setBusy(true);
+            try {
+                await deleteEvents(refCk, 'all', []);
+                events = [];
+                selected.clear();
+                renderList();
+                updateToolbar();
+                updateSubtitle();
+                showStatus('All events deleted.');
+            } catch (e) {
+                showStatus('Could not delete events — please try again.', true);
+            } finally {
+                setBusy(false);
+            }
+        });
+
+        // ── Initial render ────────────────────────────────────────────────
+        renderList();
+        updateToolbar();
+    }
+
+    // Wait for __allEventsData to be populated (it's set by an inline <script>
+    // before the Vue app mounts, so DOMContentLoaded is early enough).
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildUI);
+    } else {
+        buildUI();
+    }
+
 })();
 // ==============================================================================
 // MODULE 6: THE COINCIDENCE (TRUE SPA + CUSTOM SSW MODAL)
@@ -13031,14 +13104,7 @@ return {
         // 3. INIT TOPBAR
         NeoUI.init();
         NeoUI.buildTopbar({ stats: activeStats, username: username, hasNotification: profile.hasNotification || false });
-        // The sidebar should reflect the same active pet the page itself is
-        // built from (the H5 carousel), not the raw legacy dropdown scrape —
-        // the two can disagree, e.g. right after switching active pets.
-        NeoUI.setProfileInfo(Object.assign({}, profile, {
-            username: username,
-            petname: activePet ? activePet.name : profile.petname,
-            petImage: activePet ? activePet.image : profile.petImage
-        }));
+        NeoUI.setProfileInfo(profile);
 
         // 4. BUILD LAYOUT
         const pageWrapper = document.createElement('div');
@@ -13168,42 +13234,6 @@ return {
         const gridContainer = document.createElement('div');
         gridContainer.style.cssText = 'width:100%;max-width:960px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--nui-space-4);align-items:start;';
 
-        // --- KADWATCH: PINNED AT THE TOP ---
-        // Rendered first (and spanning the full grid width) so it reads as a
-        // banner at the top of the dashboard instead of getting buried below
-        // the pet/dailies/links cards. Shows the same Main/Mini feed-window
-        // countdowns as the Kadoatery page's own KadWatch dashboard — both
-        // read NeoUI.KadWatch, so there's one source of truth instead of two
-        // separate timers that never agreed with each other. Visibility is
-        // its own dedicated toggle (Settings → KadWatch → Home Widget),
-        // independent of the Kadoatery module toggle — checked here every
-        // load, so flipping it off makes this card disappear entirely
-        // rather than just hiding it.
-        if (NeoUI.isKadWatchHomeWidgetEnabled()) {
-            const KW = NeoUI.KadWatch;
-            const kadCard = nuiCard('grid-column:1 / -1;');
-            kadCard.innerHTML = cardHeader('🐱 KadWatch', '<a href="/games/kadoatery/index.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:2px 8px;font-size:11px;text-decoration:none;">Open</a>') +
-                '<div id="nui-home-kad-timer" style="text-align:center; padding:6px 0; font-size:13px; font-weight:600;">Loading…</div>';
-            gridContainer.appendChild(kadCard);
-
-            (function () {
-                const el = kadCard.querySelector('#nui-home-kad-timer');
-                function tick() {
-                    if (!el || !el.isConnected) return;
-                    const next = KW.getNextEvent();
-                    if (!next) {
-                        el.innerHTML = '<span style="color:var(--nui-text-muted);">No Main/Mini logged yet — log one from the Kadoatery page to start tracking.</span>';
-                    } else if (next.state.status === 'active') {
-                        el.innerHTML = '<span style="color:var(--nui-success); font-weight:800;">🟢 ' + next.label + ' ACTIVE!</span> closes in <b>' + Math.ceil(next.state.remain / 1000) + 's</b>';
-                    } else {
-                        el.innerHTML = '<b>' + next.label + '</b> in <b style="color:var(--nui-accent);">' + KW.formatCd(next.state.cd) + '</b> (' + KW.formatTime(next.state.next) + ')';
-                    }
-                    setTimeout(tick, 1000);
-                }
-                tick();
-            })();
-        }
-
         // --- PET CARD ---
         const petCard = nuiCard();
 
@@ -13317,7 +13347,124 @@ return {
         linksCard.innerHTML = linksHtml;
         gridContainer.appendChild(linksCard);
 
+        // --- KAD MODE: HOMEPAGE TIMEKEEPER ---
+        // Same engine the Kadoatery page panel uses (NeoUI.KadTimer), just a
+        // smaller readout so the window/countdown is visible without having
+        // to be on the Kadoatery page. Only appears when "Kad Mode (Timer)"
+        // is switched on in Settings.
+        if (NeoUI.isModuleEnabled('kad-timer')) {
+            const KT = NeoUI.KadTimer;
+            const kadCard = nuiCard('height:fit-content;');
+            kadCard.innerHTML = cardHeader('🐱 Kad Timer', '<a href="/games/kadoatery/index.phtml" class="nui-btn nui-btn-secondary nui-btn-sm" style="padding:2px 8px;font-size:11px;text-decoration:none;">Open</a>') +
+                '<div id="nui-home-kad-timer" style="text-align:center; padding:6px 0; font-size:13px; font-weight:600;">Loading…</div>';
+            gridContainer.appendChild(kadCard);
+
+            (function () {
+                const el = kadCard.querySelector('#nui-home-kad-timer');
+                function tick() {
+                    if (!el || !el.isConnected) return;
+                    const state = KT.getState();
+                    if (state.status === 'expired') {
+                        el.innerHTML = '<span style="color:var(--nui-text-muted);">No window logged yet — visit the Kadoatery to start tracking.</span>';
+                    } else if (state.status === 'active') {
+                        el.innerHTML = '<span style="color:var(--nui-success); font-weight:800;">🟢 WINDOW ACTIVE!</span> closes in <b>' + Math.ceil(state.timeRemaining / 1000) + 's</b>';
+                    } else {
+                        el.innerHTML = 'Next window in <b style="color:var(--nui-accent);">' + KT.formatCountdown(state.countdown) + '</b> (' + KT.formatClock(state.nextStart) + ')';
+                    }
+                    setTimeout(tick, 1000);
+                }
+                tick();
+            })();
+        }
+
         pageWrapper.appendChild(gridContainer);
+
+        // ── Modules card (full-width, below the grid) ────────────────────────
+        // This is the only place module toggles live — no sidebar settings entry.
+        // Collapse state is persisted in localStorage so it survives page loads.
+        (function () {
+            const MOD_COLLAPSED_KEY = 'neoui_home_modules_collapsed';
+            let collapsed;
+            try { collapsed = localStorage.getItem(MOD_COLLAPSED_KEY) === '1'; } catch (e) { collapsed = false; }
+
+            const modCard = nuiCard();
+            modCard.style.cssText += 'width:100%;max-width:960px;';
+
+            // Header row with collapse toggle
+            const modHeader = document.createElement('div');
+            modHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;padding-bottom:8px;border-bottom:1px solid var(--nui-border);';
+            modHeader.innerHTML = `
+                <div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">⚙️ Modules</div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:11px;color:var(--nui-text-muted);font-weight:600;">Changes apply on next page load</span>
+                    <span id="nui-mod-chevron" style="font-size:13px;color:var(--nui-text-muted);transition:transform 0.2s;display:inline-block;transform:${collapsed ? 'rotate(-90deg)' : 'rotate(0deg)'};">▾</span>
+                </div>
+            `;
+
+            // Body with all toggle rows
+            const modBody = document.createElement('div');
+            modBody.id = 'nui-mod-body';
+            modBody.style.cssText = `overflow:hidden;transition:max-height 0.25s ease;max-height:${collapsed ? '0' : '2000px'};`;
+
+            const inner = document.createElement('div');
+            inner.style.cssText = 'padding-top:12px;display:flex;flex-direction:column;gap:0;';
+
+            function getDisabled() {
+                try { return new Set(JSON.parse(localStorage.getItem('neoui_disabled_modules') || '[]')); } catch (e) { return new Set(); }
+            }
+            function setDisabled(s) {
+                try { localStorage.setItem('neoui_disabled_modules', JSON.stringify([...s])); } catch (e) {}
+            }
+
+            // Read TOGGLEABLE_MODULES from window.NeoUI if available, else fall back
+            // to the modules we know about from Core at runtime via the public key.
+            const mods = (window.__NUI_TOGGLEABLE_MODULES__ || []);
+
+            if (mods.length === 0) {
+                inner.innerHTML = '<div style="font-size:13px;color:var(--nui-text-muted);padding:8px 0;">No toggleable modules found — try reloading.</div>';
+            } else {
+                const disabled = getDisabled();
+                mods.forEach(mod => {
+                    const on = !disabled.has(mod.id);
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--nui-border);gap:8px;';
+                    row.innerHTML = `
+                        <div style="min-width:0;">
+                            <div style="font-size:13px;font-weight:700;color:var(--nui-text);">${mod.label}</div>
+                            <div style="font-size:11px;color:var(--nui-text-muted);">${mod.desc}</div>
+                        </div>
+                        <button type="button" style="flex-shrink:0;padding:5px 14px;border-radius:var(--nui-radius-pill);border:1px solid;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s;background:${on ? 'var(--nui-accent)' : 'var(--nui-surface-2)'};color:${on ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)'};border-color:${on ? 'var(--nui-accent)' : 'var(--nui-border)'};">${on ? 'On' : 'Off'}</button>
+                    `;
+                    const btn = row.querySelector('button');
+                    btn.addEventListener('click', () => {
+                        const d = getDisabled();
+                        const nowOn = d.has(mod.id);
+                        if (nowOn) d.delete(mod.id); else d.add(mod.id);
+                        setDisabled(d);
+                        btn.textContent = nowOn ? 'On' : 'Off';
+                        btn.style.background = nowOn ? 'var(--nui-accent)' : 'var(--nui-surface-2)';
+                        btn.style.color = nowOn ? 'var(--nui-accent-ink)' : 'var(--nui-text-muted)';
+                        btn.style.borderColor = nowOn ? 'var(--nui-accent)' : 'var(--nui-border)';
+                    });
+                    inner.appendChild(row);
+                });
+            }
+
+            modBody.appendChild(inner);
+
+            // Collapse toggle
+            modHeader.addEventListener('click', () => {
+                collapsed = !collapsed;
+                try { localStorage.setItem(MOD_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) {}
+                modBody.style.maxHeight = collapsed ? '0' : '2000px';
+                const chevron = modHeader.querySelector('#nui-mod-chevron');
+                if (chevron) chevron.style.transform = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+            });
+
+            modCard.appendChild(modHeader);
+            modCard.appendChild(modBody);
+            pageWrapper.appendChild(modCard);
+        })();
         document.body.appendChild(pageWrapper);
     }
 
@@ -14567,58 +14714,6 @@ return {
         }
     }
 
-    // ── VibeRater compatibility ─────────────────────────────────────────────
-    // Opens the same preset popover used sitewide (sidebar, Neomail,
-    // Neoboards) anchored to a tile's "fed by" button, so a kad-feeder's
-    // vibe can be set/changed right from the grid. No-ops gracefully if
-    // VibeRater hasn't initialised yet (it loads in a later IIFE).
-    function openKadVibePop(anchorEl, username) {
-        if (!window.VibeRater || !username) return;
-        document.querySelectorAll('.nui-vibe-pop').forEach(function (el) { el.remove(); });
-
-        const pop = document.createElement('div');
-        pop.className = 'nui-vibe-pop';
-        pop.style.cssText = 'position:fixed;z-index:999999;background:var(--nui-surface);border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:8px;display:flex;flex-direction:column;gap:4px;box-shadow:0 4px 16px var(--nui-shadow);min-width:130px;';
-
-        const label = document.createElement('div');
-        label.style.cssText = 'font-size:10px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;letter-spacing:0.5px;padding:2px 6px 6px;border-bottom:1px solid var(--nui-border);margin-bottom:2px;';
-        label.textContent = username;
-        pop.appendChild(label);
-
-        window.VibeRater.PRESETS.forEach(function (preset) {
-            const opt = document.createElement('button');
-            opt.type = 'button';
-            opt.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:none;border-radius:6px;background:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--nui-text);text-align:left;transition:background 0.1s;';
-            opt.innerHTML = '<span style="width:10px;height:10px;border-radius:50%;background:' + preset.color + ';flex-shrink:0;"></span>' + escapeHtml(preset.label);
-            opt.addEventListener('mouseenter', function () { opt.style.background = preset.color + '22'; });
-            opt.addEventListener('mouseleave', function () { opt.style.background = 'none'; });
-            opt.addEventListener('click', function () { window.VibeRater.setVibe(username, preset.id); pop.remove(); });
-            pop.appendChild(opt);
-        });
-
-        const clearOpt = document.createElement('button');
-        clearOpt.type = 'button';
-        clearOpt.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:none;border-radius:6px;background:none;cursor:pointer;font-size:12px;font-weight:700;color:var(--nui-danger);text-align:left;border-top:1px solid var(--nui-border);margin-top:2px;padding-top:7px;transition:background 0.1s;';
-        clearOpt.textContent = '✕  Clear vibe';
-        clearOpt.addEventListener('mouseenter', function () { clearOpt.style.background = 'var(--nui-danger-soft)'; });
-        clearOpt.addEventListener('mouseleave', function () { clearOpt.style.background = 'none'; });
-        clearOpt.addEventListener('click', function () { window.VibeRater.clearVibe(username); pop.remove(); });
-        pop.appendChild(clearOpt);
-
-        document.body.appendChild(pop);
-        const r = anchorEl.getBoundingClientRect();
-        const pw = pop.offsetWidth, ph = pop.offsetHeight;
-        const left = Math.min(r.left, window.innerWidth - pw - 8);
-        const top = (r.bottom + 6 + ph > window.innerHeight) ? (r.top - ph - 6) : (r.bottom + 6);
-        pop.style.left = Math.max(8, left) + 'px';
-        pop.style.top = Math.max(8, top) + 'px';
-
-        const dismiss = function (ev) {
-            if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('click', dismiss, true); }
-        };
-        setTimeout(function () { document.addEventListener('click', dismiss, true); }, 0);
-    }
-
     function scrapeKadoaties(docContext = document) {
         const kads = [];
         docContext.querySelectorAll('a[href^="feed_kadoatie.phtml"]').forEach(function (a) {
@@ -14653,10 +14748,97 @@ return {
     }
 
     // ---- KadWatch Logic ----
-    // Now lives in Core as NeoUI.KadWatch (shared with the Home dashboard
-    // widget, which reads the exact same Main/Mini timers). Aliased to the
-    // local name `KW` so the rest of this module needs no other changes.
-    const KW = NeoUI.KadWatch;
+    const KW_MAIN_KEY = 'nui_kw_mainTime';
+    const KW_MINIS_KEY = 'nui_kw_minisArr';
+    const KW_PENDING_KEY = 'nui_kw_pendingDrop';
+
+    const KW = {
+        getMain: () => parseInt(localStorage.getItem(KW_MAIN_KEY) || '0', 10),
+        setMain: (ms) => localStorage.setItem(KW_MAIN_KEY, ms.toString()),
+        getMinis: () => JSON.parse(localStorage.getItem(KW_MINIS_KEY) || '[]'),
+        setMinis: (arr) => localStorage.setItem(KW_MINIS_KEY, JSON.stringify(arr)),
+        getPending: () => JSON.parse(localStorage.getItem(KW_PENDING_KEY) || '{}'),
+        setPending: (obj) => localStorage.setItem(KW_PENDING_KEY, JSON.stringify(obj)),
+
+        getState: (lastRefreshMs, nowMs) => {
+            if (!lastRefreshMs || lastRefreshMs === 0) return { status: 'expired' };
+            const start = lastRefreshMs + 2100000;
+            const diff = nowMs - start;
+            if (diff < 0) return { status: 'waiting', next: start, cd: start - nowMs };
+
+            const cycle = Math.floor(diff / 420000);
+            const cStart = start + (cycle * 420000);
+            const cEnd = cStart + 60000;
+
+            if (nowMs >= cStart && nowMs < cEnd) return { status: 'active', remain: cEnd - nowMs };
+            const nStart = start + ((cycle + 1) * 420000);
+            return { status: 'waiting', next: nStart, cd: nStart - nowMs };
+        },
+
+        parseInput: (val) => {
+            if (!val) return null;
+            let clean = val.replace(/[a-z\s]/gi, '');
+            let parts = clean.split(":");
+            if (parts.length < 2) return null;
+            let h = parseInt(parts[0], 10), m = parseInt(parts[1], 10), s = parts.length > 2 ? parseInt(parts[2], 10) : 0;
+            if (isNaN(h) || isNaN(m)) return null;
+            let now = new Date();
+            let nstStr = new Date().toLocaleString("en-US", {timeZone: "America/Los_Angeles"});
+            let target = new Date(nstStr);
+            target.setHours(h, m, s, 0);
+            if (target.getHours() <= 1 && h >= 22) target.setDate(target.getDate() - 1);
+            else if (target.getHours() >= 22 && h <= 1) target.setDate(target.getDate() + 1);
+            return new Date(now.getTime() + (target.getTime() - new Date(nstStr).getTime()));
+        },
+
+        formatTime: (ms) => {
+            if (!ms) return '';
+            return new Date(ms).toLocaleString("en-US", {timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true}).replace(/ /g, '').toLowerCase();
+        },
+
+        formatCd: (ms) => {
+            const totalSec = Math.max(0, Math.floor(ms / 1000));
+            const m = Math.floor(totalSec / 60);
+            const s = totalSec % 60;
+            return (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
+        },
+
+        genBoardStr: (label, ms, now) => {
+            if (!ms) return null;
+            let mainStart = ms + 2100000;
+            let cycle = Math.floor((now - mainStart) / 420000);
+            if (cycle < 0) cycle = 0;
+            let times = [];
+            for (let i = cycle; i <= cycle + 10; i++) {
+                let ws = mainStart + (i * 420000);
+                if (now < ws + 60000) times.push(new Date(ws));
+                if (times.length >= 6) break;
+            }
+            if (!times.length) return null;
+
+            let lastStr = KW.formatTime(ms);
+            let nextStr = KW.formatTime(times[0].getTime());
+            let pends = [];
+            for(let i = 1; i < times.length; i++) {
+                let m = times[i].getMinutes();
+                pends.push(":" + (m < 10 ? '0'+m : m));
+            }
+            let pendsStr = pends.length > 0 ? " / " + pends.join(" / ") : "";
+            return `${label} @ ${lastStr}\nNext ${nextStr}${pendsStr}`;
+        },
+
+        checkDrop: (kads) => {
+            let states = {};
+            let prev = JSON.parse(localStorage.getItem('nui_kw_states') || '{}');
+            let hasNew = false;
+            kads.forEach((k, i) => {
+                states[i] = { fed: k.isFed };
+                if (!k.isFed && (!prev[i] || prev[i].fed)) hasNew = true;
+            });
+            localStorage.setItem('nui_kw_states', JSON.stringify(states));
+            if (hasNew) KW.setPending({ time: Date.now() });
+        }
+    };
 
     function init() {
         const profile = NeoUI.scrapeLegacyProfile ? NeoUI.scrapeLegacyProfile() : { np: '0', nc: '0', username: '' };
@@ -14684,6 +14866,12 @@ return {
         document.body.className = 'nui-reset nui-spa-active';
         document.documentElement.style.background = 'var(--nui-bg)';
         document.body.style.background = 'var(--nui-bg)';
+
+        // The body wipe above destroys any previously-built drawer node, but
+        // drawerBuilt is still true inside Core, so buildDrawer()'s guard
+        // prevents a rebuild. Reset the flags so the next openDrawer() call
+        // (from the hamburger) rebuilds cleanly into the new body.
+        if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
 
         if (typeof NeoUI.init === 'function') NeoUI.init();
         if (typeof NeoUI.setProfileInfo === 'function') NeoUI.setProfileInfo(profile);
@@ -14738,7 +14926,7 @@ return {
                 window.dispatchEvent(new CustomEvent('Statdoatie_SPA_Refresh'));
 
                 renderGridArea(newKads, feedHtml);
-                if (NeoUI.isKadWatchDashboardEnabled()) {
+                if (NeoUI.isModuleEnabled('kad-timer')) {
                     KW.checkDrop(newKads);
                     document.dispatchEvent(new CustomEvent('kw-update'));
                 }
@@ -14815,7 +15003,6 @@ return {
 
             kads.forEach(function (k) {
                 const fedByMe = !!(k.isFed && k.fedBy && myUsername && k.fedBy.toLowerCase().trim() === myUsername);
-                const fedByOther = !!(k.isFed && k.fedBy && !fedByMe);
                 const tile = document.createElement('div');
                 tile.className = 'nui-surface';
                 tile.style.cssText = 'border-radius:var(--nui-radius-md); overflow:hidden; text-align:center; ' +
@@ -14832,71 +15019,10 @@ return {
                 } else if (fedByMe) {
                     statusHtml = '<div style="font-size:9.5px; font-weight:800; color:#fff; background:var(--nui-accent); padding:3px 4px;">✓ You fed this</div>';
                 } else {
-                    // Vibe-rateable: tappable "fed by" row with a live vibe
-                    // dot, same interaction pattern as Neomail/Neoboards.
-                    statusHtml = '<button type="button" class="nui-kad-fedby nui-reset" style="display:flex; align-items:center; justify-content:center; gap:3px; width:100%; font-size:9.5px; font-weight:700; padding:3px 4px; color:var(--nui-text-muted); background:none; border:none; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
-                        '<span class="nui-kad-vibe-dot" style="width:6px; height:6px; border-radius:50%; background:var(--nui-border); opacity:0.4; flex-shrink:0;"></span>' +
-                        '✓ ' + escapeHtml(k.fedBy || 'Fed') + '</button>';
+                    statusHtml = '<div style="font-size:9.5px; font-weight:700; padding:3px 4px; color:var(--nui-text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">✓ ' + escapeHtml(k.fedBy || 'Fed') + '</div>';
                 }
                 tile.innerHTML = nameHtml + imgHtml + statusHtml;
                 grid.appendChild(tile);
-
-                // Vibe tint + click-to-rate, only for tiles fed by someone
-                // other than you (your own "You fed this" badge keeps its
-                // dedicated accent style). Guarded so it no-ops gracefully
-                // on pages where VibeRater hasn't initialised yet.
-                if (fedByOther) {
-                    const fedByName = k.fedBy;
-                    const vibeKey = fedByName.toLowerCase().trim();
-                    const fedByBtn = tile.querySelector('.nui-kad-fedby');
-                    const dot = tile.querySelector('.nui-kad-vibe-dot');
-
-                    function applyKadVibeTint() {
-                        if (!window.VibeRater) return;
-                        const vibe = window.VibeRater.getVibe(fedByName);
-                        if (vibe) {
-                            tile.style.border = '1px solid ' + vibe.color;
-                            tile.style.background = 'linear-gradient(135deg, ' + vibe.color + '22, transparent 70%)';
-                            tile.style.opacity = '0.95';
-                            if (dot) { dot.style.background = vibe.color; dot.style.opacity = '1'; }
-                        } else {
-                            tile.style.border = '1px solid var(--nui-border)';
-                            tile.style.background = '';
-                            tile.style.opacity = '0.55';
-                            if (dot) { dot.style.background = 'var(--nui-border)'; dot.style.opacity = '0.4'; }
-                        }
-                    }
-                    applyKadVibeTint();
-                    if (window.VibeRater) {
-                        window.VibeRater.onChange(function (changed) {
-                            if (changed === vibeKey || changed === '__all__') applyKadVibeTint();
-                        });
-                    } else {
-                        // VibeRater loads in a later IIFE — poll briefly then
-                        // apply once it's ready so tiles aren't stuck untinted.
-                        let attempts = 0;
-                        const poll = setInterval(function () {
-                            attempts++;
-                            if (window.VibeRater) {
-                                clearInterval(poll);
-                                applyKadVibeTint();
-                                window.VibeRater.onChange(function (changed) {
-                                    if (changed === vibeKey || changed === '__all__') applyKadVibeTint();
-                                });
-                            } else if (attempts > 20) {
-                                clearInterval(poll);
-                            }
-                        }, 100);
-                    }
-
-                    if (fedByBtn) {
-                        fedByBtn.addEventListener('click', function (e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            openKadVibePop(fedByBtn, fedByName);
-                        });
-                    }
-                }
             });
 
             grid.querySelectorAll('.nui-kad-copy-item').forEach(function (btn) {
@@ -14912,10 +15038,7 @@ return {
         renderGridArea(initialKads, initialFeedResult);
 
         // ---- Embed KadWatch Dashboard ----
-        // Own toggle now (Settings → KadWatch → Kadoatery Dashboard),
-        // independent of the "Kadoatery" module toggle and independent of
-        // the Home widget's toggle too.
-        if (NeoUI.isKadWatchDashboardEnabled()) {
+        if (NeoUI.isModuleEnabled('kad-timer')) {
             KW.checkDrop(initialKads);
 
             const dashboard = document.createElement('div');
