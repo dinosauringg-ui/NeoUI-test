@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.70
+// @version      1.1.71
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -36,10 +36,10 @@
  *                      (collapsible categories, board favourites), vibe tints,
  *                      nicknames, history push/pop state, board URL persistence
  *   Neopian Times    — article/comic/editorial reader, home/list view, pagination
- *   Food Club        — pirates, bet, my-bets, collect, history, Trophy Run tabs;
+ *   Food Club        — pirates, bet, my-bets, collect, history tabs;
  *                      NeoFoodClub bet-string importer; odds calc; max-bet
- *                      enforced; Trophy Run holds winnings across rounds with
- *                      per-day 7-day expiry labels (localStorage only)
+ *                      enforced; Collect tab has Trophy Run mode toggle —
+ *                      log & hold batches with per-batch 7-day expiry labels
  *   Buried Treasure  — mobile-friendly pick-a-spot map (scaled clicks), cooldown
  *                      synced to daily timer hub
  *   Fruit Machine    — headless SPA wrapper for the daily spin (ready/cooldown/
@@ -58,6 +58,16 @@
  *                      Scratchcard Kiosks, each rebuilt as its own mobile SPA
  *
  * CHANGELOG  (last 5 versions)
+ *
+ * v1.1.71
+ *   - Food Club: removed the dedicated Trophy Run tab. Trophy Run is now a
+ *     toggle on the Collect tab itself. When ON, the "Collect All Winnings"
+ *     button is replaced by "Log & Hold — X NP (do NOT collect)" which saves
+ *     the batch to localStorage without touching the game. The top of the tab
+ *     shows all held batches with per-batch 7-day expiry countdowns (green →
+ *     yellow → red) and a soonest-expiry urgent banner when a batch is ≤2 days
+ *     from falling off. An emergency collect button remains for abort cases.
+ *     The toggle state persists in localStorage across visits.
  *
  * v1.1.70
  *   - Food Club: Trophy Run tab is now fully implemented (v1.1.69 only added
@@ -10275,7 +10285,6 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
             { id: 'mybets',   label: '📋 My Bets'    },
             { id: 'collect',  label: '💰 Collect'    },
             { id: 'history',  label: '📜 History'    },
-            { id: 'trophy',   label: '🏆 Trophy Run' },
         ];
 
         const urlType = new URLSearchParams(location.search).get('type') || '';
@@ -10332,7 +10341,6 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 else if (id === 'mybets')  await renderMyBets();
                 else if (id === 'collect') await renderCollect();
                 else if (id === 'history') await renderHistory();
-                else if (id === 'trophy')  await renderTrophy();
             } catch (err) {
                 contentInner.innerHTML = `<div style="color:var(--nui-danger);font-weight:600;text-align:center;padding:var(--nui-space-4);">Failed to load: ${err.message}</div>`;
             }
@@ -10928,22 +10936,133 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // RENDER: COLLECT TAB
+        // RENDER: COLLECT TAB  (includes integrated Trophy Run mode toggle)
         // ─────────────────────────────────────────────────────────────────────
+
+        // Persisted across renders within this page session
+        const FC_TROPHY_MODE_KEY = 'neoui_fc_trophy_mode';
+        function isTrophyMode() {
+            try { return localStorage.getItem(FC_TROPHY_MODE_KEY) === '1'; } catch(e) { return false; }
+        }
+        function setTrophyMode(on) {
+            try { localStorage.setItem(FC_TROPHY_MODE_KEY, on ? '1' : '0'); } catch(e) {}
+        }
+
+        function trophyExpiryLabel(entry) {
+            if (entry.collected) {
+                return { text: `✔ Collected ${new Date(entry.collectedAt).toLocaleDateString()}`, color: 'var(--nui-text-faint)' };
+            }
+            const expiresAt = entry.loggedAt + TROPHY_EXPIRY_DAYS * 86400000;
+            const msLeft = expiresAt - Date.now();
+            const daysLeft = Math.ceil(msLeft / 86400000);
+            if (daysLeft <= 0) return { text: '⛔ Expired — winnings are gone', color: 'var(--nui-danger)' };
+            if (daysLeft <= 2) return { text: `⚠ Collect now — expires in ${daysLeft}d`, color: 'var(--nui-danger)' };
+            if (daysLeft <= 4) return { text: `⏳ Expires in ${daysLeft}d`, color: 'var(--nui-warning)' };
+            return { text: `🟢 Safe to hold — ${daysLeft}d left`, color: 'var(--nui-success)' };
+        }
+
         async function renderCollect() {
             const { doc } = await fetchFC('collect');
             const { hasWinnings, rows } = scrapeCollect(doc);
+            const trophyOn = isTrophyMode();
 
             contentInner.innerHTML = '';
 
+            // ── Trophy Run toggle row (always shown) ─────────────────────────
+            const toggleRow = document.createElement('div');
+            toggleRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-radius:var(--nui-radius-md);margin-bottom:var(--nui-space-3);background:' + (trophyOn ? 'var(--nui-warning-soft,rgba(255,200,0,0.12))' : 'var(--nui-surface-2)') + ';border:1px solid ' + (trophyOn ? 'var(--nui-warning,#f5a623)' : 'var(--nui-border)') + ';';
+            toggleRow.innerHTML = `
+                <div>
+                    <div style="font-weight:800;font-size:13px;color:${trophyOn ? 'var(--nui-warning,#f5a623)' : 'var(--nui-text)'};display:flex;align-items:center;gap:6px;">🏆 Trophy Run Mode</div>
+                    <div style="font-size:11px;color:var(--nui-text-faint);margin-top:2px;">${trophyOn ? 'Log & hold winnings — do NOT collect yet' : 'Off — collect winnings normally'}</div>
+                </div>
+            `;
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = trophyOn ? 'nui-btn nui-btn-primary' : 'nui-btn nui-btn-secondary';
+            toggleBtn.style.cssText = 'flex-shrink:0;font-size:12px;padding:6px 14px;';
+            toggleBtn.textContent = trophyOn ? 'ON' : 'OFF';
+            toggleBtn.addEventListener('click', () => { setTrophyMode(!trophyOn); renderCollect(); });
+            toggleRow.appendChild(toggleBtn);
+            contentInner.appendChild(toggleRow);
+
+            // ── Held entries panel (only in trophy mode) ──────────────────────
+            if (trophyOn) {
+                let run = loadTrophyRun();
+                if (!run) run = startTrophyRun();
+
+                const activeEntries = run.entries.filter(e => !e.collected);
+                const totalHeld = activeEntries.reduce((s, e) => s + (e.amount || 0), 0);
+                const soonestDays = activeEntries
+                    .map(e => { const ea = e.loggedAt + TROPHY_EXPIRY_DAYS * 86400000; return Math.ceil((ea - Date.now()) / 86400000); })
+                    .filter(d => !isNaN(d)).sort((a, b) => a - b)[0];
+
+                const heldHeader = document.createElement('div');
+                heldHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:var(--nui-space-2);';
+                heldHeader.innerHTML = `
+                    <div style="font-family:var(--nui-font-display);font-size:15px;font-weight:800;color:var(--nui-text);">Currently Held</div>
+                    <div style="font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-warning,#f5a623);">${totalHeld.toLocaleString()} NP</div>
+                `;
+                contentInner.appendChild(heldHeader);
+
+                if (soonestDays !== undefined && soonestDays <= 2) {
+                    const urgentBanner = document.createElement('div');
+                    urgentBanner.style.cssText = 'padding:8px 12px;background:var(--nui-danger-soft);border:1px solid var(--nui-danger);border-radius:var(--nui-radius-md);color:var(--nui-danger);font-weight:700;font-size:13px;margin-bottom:var(--nui-space-2);';
+                    urgentBanner.textContent = soonestDays <= 0
+                        ? '⛔ One or more held batches have expired!'
+                        : `⚠ Oldest batch expires in ${soonestDays} day${soonestDays === 1 ? '' : 's'} — collect soon!`;
+                    contentInner.appendChild(urgentBanner);
+                }
+
+                if (activeEntries.length === 0) {
+                    const emptyHeld = document.createElement('div');
+                    emptyHeld.style.cssText = 'font-size:12px;color:var(--nui-text-faint);padding:6px 0 10px;';
+                    emptyHeld.textContent = 'No batches held yet — log today\'s winnings below after you don\'t collect.';
+                    contentInner.appendChild(emptyHeld);
+                } else {
+                    // Show held entries newest→oldest, each with expiry label
+                    const entriesByNewest = activeEntries.slice().sort((a, b) => b.loggedAt - a.loggedAt);
+                    entriesByNewest.forEach(entry => {
+                        const { text: exText, color: exColor } = trophyExpiryLabel(entry);
+                        const eRow = document.createElement('div');
+                        eRow.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:8px 12px;background:var(--nui-surface-2);margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
+                        eRow.innerHTML = `
+                            <div style="flex:1;min-width:100px;">
+                                <div style="font-size:11px;color:var(--nui-text-faint);font-weight:700;">${new Date(entry.loggedAt).toLocaleDateString()}${entry.note ? ' · ' + entry.note.replace(/</g,'&lt;') : ''}</div>
+                                <div style="font-weight:800;color:var(--nui-text);font-size:14px;">${(entry.amount || 0).toLocaleString()} NP</div>
+                            </div>
+                            <div style="font-size:12px;font-weight:700;color:${exColor};">${exText}</div>
+                        `;
+                        const rmBtn = document.createElement('button');
+                        rmBtn.type = 'button';
+                        rmBtn.className = 'nui-btn nui-btn-secondary';
+                        rmBtn.textContent = '✕';
+                        rmBtn.title = 'Remove entry';
+                        rmBtn.style.cssText = 'flex-shrink:0;font-size:11px;padding:4px 8px;';
+                        rmBtn.addEventListener('click', () => {
+                            run.entries = run.entries.filter(e => e.id !== entry.id);
+                            saveTrophyRun(run);
+                            renderCollect();
+                        });
+                        eRow.appendChild(rmBtn);
+                        contentInner.appendChild(eRow);
+                    });
+                }
+
+                const divider = document.createElement('div');
+                divider.style.cssText = 'border-top:1px solid var(--nui-border);margin:var(--nui-space-3) 0;';
+                contentInner.appendChild(divider);
+            }
+
+            // ── Winnings available section ─────────────────────────────────
             if (!hasWinnings) {
-                contentInner.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">💰</span>No winning bets to collect right now.</div>`;
+                contentInner.insertAdjacentHTML('beforeend', `<div class="nui-empty"><span class="nui-empty-emoji">💰</span>No winning bets to collect right now.</div>`);
                 return;
             }
 
             const heading = document.createElement('div');
             heading.style.cssText = 'font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-text);margin-bottom:var(--nui-space-3);';
-            heading.textContent = `Winnings Available!`;
+            heading.textContent = 'Winnings Available!';
             contentInner.appendChild(heading);
 
             let totalWin = 0;
@@ -10985,63 +11104,100 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 contentInner.appendChild(card);
             });
 
-            const collectBtn = document.createElement('button');
-collectBtn.type = 'button';
-collectBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
-collectBtn.style.marginTop = 'var(--nui-space-3)';
-collectBtn.textContent = 'Collect All Winnings';
-collectBtn.addEventListener('click', async () => {
-    collectBtn.disabled = true;
-    collectBtn.textContent = 'Collecting…';
-    const fd = new FormData();
-    fd.append('type', 'collect');
-    try {
-        const res = await fetch('/pirates/process_foodclub.phtml', {
-            method: 'POST',
-            credentials: 'include',
-            body: fd,
-        });
-        const html = await res.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-
-        // SUCCESS SIGNAL: after a successful collect, Neopets shows a confirmation
-        // page. Look for an NP amount in the response (e.g. "You have collected X NP")
-        // or a cleared bets state. Either way, if there's no explicit error element
-        // we treat it as success — the winnings have been collected.
-        const errorEl = doc.querySelector('.errorMessage, #errorMessage, .error_msg, p.error, .neopets-error');
-        if (errorEl) {
-            const msg = errorEl.textContent.replace(/\s+/g, ' ').trim().slice(0, 80);
-            collectBtn.textContent = '⚠ ' + msg;
-            collectBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
-        } else {
-            // Extract collected amount if visible in the page
-            const fullText = doc.body ? doc.body.textContent : '';
-            const npMatch = fullText.match(/(\d[\d,]+)\s*NP/i);
-            collectBtn.textContent = npMatch ? '✓ Collected ' + npMatch[1] + ' NP!' : '✓ Collected!';
-            collectBtn.className = 'nui-btn nui-btn-success nui-btn-block';
-            setTimeout(() => renderCollect(), 1500);
-        }
-    } catch (e) {
-        collectBtn.textContent = '⚠ Network error';
-        collectBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
-    }
-});
-contentInner.appendChild(collectBtn);
-
-            if (totalWin > 0) {
-                const trophyBtn = document.createElement('button');
-                trophyBtn.type = 'button';
-                trophyBtn.className = 'nui-btn nui-btn-secondary nui-btn-block';
-                trophyBtn.style.marginTop = 'var(--nui-space-2)';
-                trophyBtn.textContent = `🏆 Hold Instead — Log ${totalWin.toLocaleString()} NP to Trophy Run`;
-                trophyBtn.addEventListener('click', () => {
+            if (trophyOn) {
+                // Trophy mode: log & hold instead of collecting
+                const holdBtn = document.createElement('button');
+                holdBtn.type = 'button';
+                holdBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
+                holdBtn.style.marginTop = 'var(--nui-space-3)';
+                holdBtn.textContent = `🏆 Log & Hold — ${totalWin.toLocaleString()} NP (do NOT collect)`;
+                holdBtn.addEventListener('click', () => {
                     let run = loadTrophyRun();
                     if (!run) run = startTrophyRun();
                     addTrophyEntry(run, totalWin, `Round ${rows.map(r => r.round).join(', ')}`);
-                    trophyBtn.textContent = '✔ Logged — see Trophy Run tab';
-                    trophyBtn.disabled = true;
+                    holdBtn.textContent = `✔ Logged — ${totalWin.toLocaleString()} NP added to held total`;
+                    holdBtn.disabled = true;
+                    // Refresh after a moment to show updated held entries
+                    setTimeout(() => renderCollect(), 900);
                 });
-                contentInner.appendChild(trophyBtn);
+                contentInner.appendChild(holdBtn);
+
+                const warningNote = document.createElement('div');
+                warningNote.style.cssText = 'text-align:center;font-size:11px;color:var(--nui-text-faint);margin-top:8px;';
+                warningNote.textContent = '⚠ Do not use "Collect All Winnings" on Neopets while Trophy Run is active.';
+                contentInner.appendChild(warningNote);
+
+                // Secondary: still allow emergency collect
+                const emergencyBtn = document.createElement('button');
+                emergencyBtn.type = 'button';
+                emergencyBtn.className = 'nui-btn nui-btn-secondary nui-btn-block';
+                emergencyBtn.style.marginTop = 'var(--nui-space-2)';
+                emergencyBtn.textContent = 'Collect All Winnings (emergency — ends run intent)';
+                emergencyBtn.addEventListener('click', async () => {
+                    if (!confirm('Collect winnings now? This will end your trophy run for this cycle if uncollected NP is being held.')) return;
+                    emergencyBtn.disabled = true;
+                    emergencyBtn.textContent = 'Collecting…';
+                    const fd = new FormData();
+                    fd.append('type', 'collect');
+                    try {
+                        const res = await fetch('/pirates/process_foodclub.phtml', { method: 'POST', credentials: 'include', body: fd });
+                        const html = await res.text();
+                        const rdoc = new DOMParser().parseFromString(html, 'text/html');
+                        const errorEl = rdoc.querySelector('.errorMessage, #errorMessage, .error_msg, p.error, .neopets-error');
+                        if (errorEl) {
+                            emergencyBtn.textContent = '⚠ ' + errorEl.textContent.replace(/\s+/g, ' ').trim().slice(0, 80);
+                            emergencyBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+                        } else {
+                            const npMatch = (rdoc.body ? rdoc.body.textContent : '').match(/(\d[\d,]+)\s*NP/i);
+                            emergencyBtn.textContent = npMatch ? '✓ Collected ' + npMatch[1] + ' NP!' : '✓ Collected!';
+                            emergencyBtn.className = 'nui-btn nui-btn-success nui-btn-block';
+                            setTimeout(() => renderCollect(), 1500);
+                        }
+                    } catch (e) {
+                        emergencyBtn.textContent = '⚠ Network error';
+                        emergencyBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+                    }
+                });
+                contentInner.appendChild(emergencyBtn);
+
+            } else {
+                // Normal mode: collect immediately
+                const collectBtn = document.createElement('button');
+                collectBtn.type = 'button';
+                collectBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
+                collectBtn.style.marginTop = 'var(--nui-space-3)';
+                collectBtn.textContent = 'Collect All Winnings';
+                collectBtn.addEventListener('click', async () => {
+                    collectBtn.disabled = true;
+                    collectBtn.textContent = 'Collecting…';
+                    const fd = new FormData();
+                    fd.append('type', 'collect');
+                    try {
+                        const res = await fetch('/pirates/process_foodclub.phtml', {
+                            method: 'POST',
+                            credentials: 'include',
+                            body: fd,
+                        });
+                        const html = await res.text();
+                        const rdoc = new DOMParser().parseFromString(html, 'text/html');
+                        const errorEl = rdoc.querySelector('.errorMessage, #errorMessage, .error_msg, p.error, .neopets-error');
+                        if (errorEl) {
+                            const msg = errorEl.textContent.replace(/\s+/g, ' ').trim().slice(0, 80);
+                            collectBtn.textContent = '⚠ ' + msg;
+                            collectBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+                        } else {
+                            const fullText = rdoc.body ? rdoc.body.textContent : '';
+                            const npMatch = fullText.match(/(\d[\d,]+)\s*NP/i);
+                            collectBtn.textContent = npMatch ? '✓ Collected ' + npMatch[1] + ' NP!' : '✓ Collected!';
+                            collectBtn.className = 'nui-btn nui-btn-success nui-btn-block';
+                            setTimeout(() => renderCollect(), 1500);
+                        }
+                    } catch (e) {
+                        collectBtn.textContent = '⚠ Network error';
+                        collectBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+                    }
+                });
+                contentInner.appendChild(collectBtn);
             }
         }
 
@@ -11093,21 +11249,9 @@ contentInner.appendChild(collectBtn);
             contentInner.appendChild(card);
         }
 
-        // ─────────────────────────────────────────────────────────────────────
-        // RENDER: TROPHY RUN TAB
-        // ─────────────────────────────────────────────────────────────────────
-        function trophyStatusLabel(entry) {
-            if (entry.collected) {
-                return { text: `✔ Collected ${new Date(entry.collectedAt).toLocaleDateString()}`, color: 'var(--nui-text-faint)' };
-            }
-            const { daysLeft, expired } = expiryInfoFor(entry);
-            if (expired) return { text: '⛔ Expired — winnings are gone', color: 'var(--nui-danger)' };
-            if (daysLeft <= 2) return { text: `⚠ Collect now — expires in ${daysLeft}d`, color: 'var(--nui-danger)' };
-            if (daysLeft <= 4) return { text: `⏳ Expires in ${daysLeft}d`, color: 'var(--nui-warning)' };
-            return { text: `🟢 Safe to hold — expires in ${daysLeft}d`, color: 'var(--nui-success)' };
-        }
-
-        async function renderTrophy() {
+        // (Trophy Run tab removed — trophy mode is now a toggle on the Collect tab)
+        // Dead code placeholder to preserve line structure; functions below are gone.
+        if (false) { async function renderTrophy() { // eslint-disable-line
             contentInner.innerHTML = '';
             let run = loadTrophyRun();
 
@@ -11246,7 +11390,7 @@ contentInner.appendChild(collectBtn);
                 renderTrophy();
             });
             contentInner.appendChild(endBtn);
-        }
+        } } // end dead-code block
 
         switchTab(activeTab);
     }
@@ -15006,336 +15150,674 @@ return {
     // Retired — native Neopets page takes over.
 })();
 
-// ==============================================================================
-// MODULE: PROFILES & LOOKUPS (CLEAN RESPONSIVE UI)
-// ==============================================================================
-// PLACEMENT: this module MUST be positioned earlier in the file than
-// "MODULE 20: SITEWIDE CHROME (UNIVERSAL FALLBACK)". Sitewide Chrome only
-// backs off a page if #nui-page-topbar already exists by the time it runs;
-// this module now builds that topbar as the very first synchronous thing it
-// does, so Sitewide Chrome's own guard skips userlookup/petlookup/pet pages
-// entirely. If this module runs AFTER Sitewide Chrome, Sitewide Chrome will
-// already have hidden #header/#footer/.sidebar/ad rows via its own permanent
-// <style> tag and re-parented every body child into #nui-sitewide-content-
-// wrap — edits this module's "View Original Layout" toggle has no way to
-// reverse, since they live outside the .nui-clean-mode class this toggle
-// controls. That was the actual cause of "original layout" not showing the
-// real original HTML — Sitewide Chrome's changes were never touched.
-// ==============================================================================
+// ============================================================================
+// MODULE 9: PROFILES & LOOKUPS
+// ============================================================================
 
 (function () {
     'use strict';
 
-    // Target User Lookups, Pet Lookups, and Petpages (~Petname)
-    const isUserLookup = /\/userlookup\.phtml/.test(location.pathname);
-    const isPetLookup = /\/petlookup\.phtml/.test(location.pathname);
-    const isPetPage = /\/~[A-Za-z0-9_-]+/.test(location.pathname);
+    const currentUrl = window.location.href;
 
-    if (!isUserLookup && !isPetLookup && !isPetPage) return;
-    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('lookups')) return;
-    if (!window.NeoUI.__ready) return;
+    // --- Global Helper: Standardized NeoUI Card Builder ---
+    function buildCard(title, innerHTML, gridClass = false) {
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 2px 8px var(--nui-shadow); overflow: hidden; width: 100%; box-sizing: border-box; margin-bottom: 20px;';
 
-    const NeoUI = window.NeoUI;
+        const details = document.createElement('details');
+        details.open = true;
 
-    // Claim this page for Sitewide Chrome's guard BEFORE doing anything else —
-    // see the PLACEMENT note above. Building the topbar first is what makes
-    // the "leave native HTML alone" approach actually work.
-    const profile = NeoUI.scrapeLegacyProfile();
-    NeoUI.setProfileInfo(profile);
-    NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+        const summary = document.createElement('summary');
+        summary.style.cssText = 'padding:12px 16px; border-bottom:1px solid var(--nui-border); font-family:var(--nui-font-display); font-size:16px; font-weight:800; color:var(--nui-text); background:var(--nui-surface-2); text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; list-style:none;';
+        summary.textContent = title;
+        summary.innerHTML += '<style>summary::-webkit-details-marker { display: none; }</style>';
 
-    let isCleanMode = true; // Default state
-    let customStyleNodes = [];
+        const content = document.createElement('div');
+        content.className = 'nui-card-content';
+        content.style.padding = 'var(--nui-space-4)';
+        content.style.boxSizing = 'border-box';
 
-    function init() {
-        // 1. Identify and capture specifically User-Injected stylesheets.
-        // Targeting the content area prevents us from accidentally disabling core NeoUI styles.
-        document.querySelectorAll('.content style, td.content style, #content style').forEach(el => {
-            customStyleNodes.push(el);
+        if (gridClass) {
+            content.style.display = 'grid';
+            content.style.gridTemplateColumns = gridClass;
+            content.style.gap = '8px';
+            content.style.alignItems = 'center';
+            content.style.justifyItems = 'center';
+        }
+
+        content.innerHTML = innerHTML;
+
+        details.appendChild(summary);
+        details.appendChild(content);
+        card.appendChild(details);
+
+        return card;
+    }
+
+    // ==========================================
+    // ROUTE 1: USERLOOKUP POPUPS
+    // ==========================================
+    if (currentUrl.includes("userlookup.phtml")) {
+        if (!window.NeoUI || !window.NeoUI.isModuleEnabled('lookups')) return;
+
+        let isCleanMode = true;
+        let customStyleNodes = [];
+
+        // ── 1. DATA EXTRACTION ────────────────────
+        function extractLookupData() {
+            const data = {
+                username: new URLSearchParams(location.search).get('user') || 'User',
+                shield: '', stats: '', actions: [], collections: [], shopGallery: '', pets: [], trophies: [], aboutMe: ''
+            };
+
+            document.querySelectorAll('style').forEach(s => {
+                if (!s.id?.startsWith('nui-') && !s.textContent.includes('var(--nui')) customStyleNodes.push(s);
+            });
+
+            document.querySelectorAll('.contentModule').forEach(mod => {
+                const headerEl = mod.querySelector('.contentModuleHeader, .contentModuleHeaderAlt');
+                if (!headerEl) return;
+                const headerText = headerEl.textContent.trim().toLowerCase();
+                const content = mod.querySelector('.contentModuleContent');
+                if (!content) return;
+
+                if (headerText.includes('user info')) {
+                    const shield = content.querySelector('img[src*="shields"]');
+                    if (shield) data.shield = shield.src;
+
+                    const statsTd = content.querySelector('td.medText');
+                    if (statsTd) {
+                        let clone = statsTd.cloneNode(true);
+                        if (clone.querySelector('img[src*="shields"]')) clone.querySelector('img[src*="shields"]').remove();
+                        clone.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+                        data.stats = clone.innerHTML.trim();
+                    }
+
+                    content.querySelectorAll('a').forEach(a => {
+                        const img = a.querySelector('img');
+                        if (img && (a.href.includes('tradingpost') || a.href.includes('genie') || a.href.includes('wishlist') || a.href.includes('neomessages') || a.href.includes('process_neofriend'))) {
+                            let label = a.textContent.trim().replace('Send a Message', 'Neomail');
+                            if (!label) label = img.alt || 'Action';
+                            data.actions.push({ url: a.href, icon: img.src, label: label });
+                        }
+                    });
+                }
+                else if (headerText.includes('collections')) {
+                    content.querySelectorAll('li').forEach(li => {
+                        li.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+                        data.collections.push(li.innerHTML);
+                    });
+                }
+                else if (headerText.includes('shop')) {
+                    let clone = content.cloneNode(true);
+                    clone.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+                    data.shopGallery = clone.innerHTML;
+                }
+                else if (headerText.includes('neopets')) {
+                    let petNodes = content.querySelectorAll('#bxlist li');
+                    if (petNodes.length === 0) petNodes = content.querySelectorAll('td.medText');
+
+                    petNodes.forEach(node => {
+                        const a = node.querySelector('a[href*="petlookup"]');
+                        if (!a) return;
+                        const img = a.querySelector('img');
+
+                        let clone = node.cloneNode(true);
+                        let aClone = clone.querySelector('a[href*="petlookup"]');
+                        if (aClone) aClone.remove();
+                        clone.querySelectorAll('hr').forEach(hr => hr.remove());
+                        clone.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+
+                        data.pets.push({
+                            name: new URLSearchParams(a.search).get('pet') || 'Pet',
+                            url: a.href,
+                            image: img ? img.src : '',
+                            info: clone.innerHTML.trim()
+                        });
+                    });
+                }
+                else if (headerText.includes('trophies')) {
+                    content.querySelectorAll('.trophy_cell').forEach(cell => {
+                        let clone = cell.cloneNode(true);
+                        clone.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+                        data.trophies.push(clone.innerHTML);
+                    });
+                }
+            });
+
+            const mainContent = document.querySelector('#content') || document.querySelector('td.content');
+            if (mainContent) {
+                let clone = mainContent.cloneNode(true);
+                clone.querySelectorAll('.contentModule, script, style, link, center > form, #ban').forEach(e => e.remove());
+                clone.querySelectorAll('#header, #footer, .sidebar, .user, .eventIcon').forEach(e => e.remove());
+                clone.querySelectorAll('.bumper, #dimBackground, [id^="layer"]').forEach(e => e.remove());
+                clone.querySelectorAll('[id^="nph"], [class*="nph"]').forEach(e => e.remove());
+                clone.querySelectorAll('div').forEach(d => {
+                    if (d.textContent.includes('User Lookup:') && d.querySelector('img[src*="question_mark"]')) d.remove();
+                });
+                clone.querySelectorAll('.bx-wrapper, .bx-controls, .bx-viewport, .bx-has-controls-direction').forEach(e => e.remove());
+                clone.querySelectorAll('*').forEach(e => e.removeAttribute('style'));
+                clone.querySelectorAll('*').forEach(e => {
+                    if (e.tagName !== 'IMG' && e.tagName !== 'BR' && e.tagName !== 'HR' && e.textContent.trim() === '' && e.children.length === 0) e.remove();
+                });
+
+                let text = clone.innerHTML.trim();
+                if (text.replace(/<[^>]+>/g, '').trim().length > 0) data.aboutMe = text;
+            }
+            return data;
+        }
+
+        // ── 2. ASYNC MODAL FETCHER ─────────────────────────────────────────────
+        window.openPetModal = async function(petName, modalId) {
+            const modal = document.getElementById(modalId);
+            modal.style.display = 'flex';
+
+            const statsBox = modal.querySelector('.nui-pet-stats');
+            const petpetBox = modal.querySelector('.nui-petpet-box');
+
+            if (statsBox.dataset.loaded === 'true') return;
+
+            try {
+                let res = await fetch(`/petlookup.phtml?pet=${petName}`);
+                let html = await res.text();
+
+                const getMatch = (regex) => {
+                    let m = html.match(regex);
+                    return m ? m[1].replace(/<\/?[^>]+(>|$)/g, "").trim() : '?';
+                };
+
+                let hp = getMatch(/<b>Hit Points:<\/b>\s*<[^>]+><b>([^<]+)<\/b><\/font>/i) || getMatch(/<b>Hit Points:<\/b>\s*([^<]+)<br/i);
+                let lvl = getMatch(/<b>Level:<\/b>\s*([^<]+)<br/i);
+                let str = getMatch(/<b>Strength:<\/b>\s*([^<]+)<br/i);
+                let def = getMatch(/<b>Defence:<\/b>\s*([^<]+)<br/i);
+                let mov = getMatch(/<b>Movement:<\/b>\s*([^<]+)<br/i);
+                let int = getMatch(/<b>Intelligence:<\/b>\s*([^<]+)<br/i);
+
+                statsBox.innerHTML = `
+                    <b>Level:</b> <span>${lvl}</span>
+                    <b>Health:</b> <span>${hp}</span>
+                    <b>Str:</b> <span>${str}</span>
+                    <b>Def:</b> <span>${def}</span>
+                    <b>Move:</b> <span>${mov}</span>
+                    <b>Int:</b> <span>${int}</span>
+                `;
+                statsBox.dataset.loaded = 'true';
+
+                let p2Html = '';
+                if (html.includes('has a Petpet!')) {
+                    let imgMatches = [...html.matchAll(/<img src="([^"]+)"[^>]*width="80"/gi)];
+                    let textMatch = html.match(/<b>([^<]+)<\/b>(?:\s+the\s+([A-Za-z0-9 ]+?))?(?:\s+and its\s+<b>([^<]+)<\/b>)?\s*<br>\(([^)]+)\)/i);
+
+                    if (imgMatches.length > 0 && textMatch) {
+                        let p3Html = '';
+                        if (imgMatches.length > 1 && textMatch[3]) {
+                            p3Html = `<img src="${imgMatches[1][1]}" style="width: 25px; height: 25px; border-radius: 50%; border: 1px solid var(--nui-border); position: absolute; bottom: -5px; right: -5px; background: var(--nui-surface); z-index: 10;">`;
+                        }
+
+                        p2Html = `
+                            <div style="display: flex; align-items: center; gap: 12px; background: var(--nui-surface-1); padding: 10px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); text-align: left;">
+                                <div style="position: relative; flex-shrink: 0;">
+                                    <img src="${imgMatches[0][1]}" style="width: 50px; height: 50px; border-radius: var(--nui-radius-sm); border: 1px solid var(--nui-border); background: var(--nui-surface-2);">
+                                    ${p3Html}
+                                </div>
+                                <div style="font-size: 12px; line-height: 1.4;">
+                                    <b>${textMatch[1].trim()}</b><br>
+                                    <span style="font-size: 10px; opacity: 0.8;">${(textMatch[2] || 'Petpet').trim()} ${textMatch[3] ? '& ' + textMatch[3].trim() : ''} | ${textMatch[4].trim()}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                petpetBox.innerHTML = p2Html;
+
+            } catch (e) {
+                statsBox.innerHTML = '<span style="grid-column: span 2; text-align:center;">Failed to load stats.</span>';
+            }
+        };
+
+        // ── 3. BUILD THE SPA REWRITE ───────────────────────────────────────────
+        function buildUI() {
+            const data = extractLookupData();
+
+            const cleanCSS = document.createElement('style');
+            cleanCSS.id = 'nui-clean-overrides';
+            cleanCSS.textContent = `
+                body.nui-clean-mode { background: var(--nui-bg) !important; margin: 0 !important; padding: 0 !important; }
+                body.nui-clean-mode > *:not([id^="nui-"]):not(.nui-drawer-backdrop) { display: none !important; }
+
+                #nui-clean-lookup .nui-about-me * {
+                    position: static !important; float: none !important; width: auto !important; height: auto !important; max-width: 100% !important;
+                    background: transparent !important; color: var(--nui-text) !important; font-size: 14px !important; line-height: 1.6 !important; text-align: left !important;
+                }
+                #nui-clean-lookup .nui-about-me img { border-radius: var(--nui-radius-sm); box-shadow: 0 2px 8px var(--nui-shadow); }
+                #nui-clean-lookup a { color: var(--nui-accent); font-weight: bold; text-decoration: none; }
+                #nui-clean-lookup a:hover { text-decoration: underline; }
+                #nui-clean-lookup img { max-width: 100%; height: auto; }
+                #nui-clean-lookup center { display: block; text-align: center; width: 100%; }
+
+                .nui-trophy-grid img, .nui-collection-grid img { width: 60px !important; height: auto !important; object-fit: contain; }
+                .nui-trophy-grid div, .nui-collection-grid div { font-size: 11px !important; line-height: 1.3 !important; }
+            `;
+            document.head.appendChild(cleanCSS);
+
+            const profile = NeoUI.scrapeLegacyProfile();
+            if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+            NeoUI.init();
+            NeoUI.setProfileInfo(profile);
+            NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+            const pageWrapper = document.createElement('div');
+            pageWrapper.id = 'nui-page-wrapper';
+            pageWrapper.className = 'nui-reset nui-spa-active';
+            pageWrapper.style.cssText = 'min-height: 100vh; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; width: 100%;';
+
+            const cleanWrap = document.createElement('div');
+            cleanWrap.id = 'nui-clean-lookup';
+            cleanWrap.style.cssText = 'width: 100%; max-width: 800px; margin: 0 auto; padding: calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) calc(var(--nui-space-5) + 80px); display: flex; flex-direction: column; gap: var(--nui-space-4); box-sizing: border-box; overflow-x: hidden;';
+
+            if (data.actions.length > 0) {
+                let actionsHtml = data.actions.map(a => `
+                    <a href="${a.url}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 5px; background: var(--nui-surface-2); border: 1px solid var(--nui-border); border-radius: var(--nui-radius-sm); text-decoration: none; color: var(--nui-text); font-weight: 700; font-size: 9px; text-transform: uppercase; text-align: center; height: 50px; box-sizing: border-box; width: 100%;">
+                        <img src="${a.icon}" style="width: 40px; height: 40px; object-fit: contain; box-shadow: none;">
+                    </a>
+                `).join('');
+                cleanWrap.appendChild(buildCard('Actions', actionsHtml, 'repeat(auto-fit, minmax(75px, 1fr))'));
+            }
+
+            const profileHtml = `
+                <h2 style="margin: 0 10px 0 0; font-size: 22px; color: var(--nui-accent); text-align: center;">${data.username}</h2>
+                <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: 16px;">
+                    ${data.shield ? `<img src="${data.shield}" style="width: 125px; height: auto; margin-top: 10px; object-fit: contain; border-radius: var(--nui-radius-md); box-shadow: 0 2px 8px var(--nui-shadow); background: var(--nui-surface-2); border: 1px solid var(--nui-border);">` : ''}
+                    <div style="flex: 1; min-width: 200px; display: flex; flex-direction: column; align-items: center;">
+                        <div style="text-align: right; font-size: 12px; width: 100%;">
+                            ${data.stats}
+                        </div>
+                    </div>
+                </div>
+            `;
+            cleanWrap.appendChild(buildCard('User Profile', profileHtml));
+
+            if (data.shopGallery) cleanWrap.appendChild(buildCard('Shop & Gallery', `<div style="text-align: center; font-size: 12px;">${data.shopGallery}</div>`));
+            if (data.aboutMe) cleanWrap.appendChild(buildCard('About Me', `<div class="nui-about-me">${data.aboutMe}</div>`));
+
+            if (data.pets.length > 0) {
+                let petsHtml = data.pets.map((p, index) => {
+                    let fullSizeImg = p.image.replace('/2.png', '/5.png');
+
+                    return `
+                    <div style="position: relative; padding: 8px; display: flex; flex-direction: column; align-items: center;">
+                        <img src="${p.image}" onclick="openPetModal('${p.name}', 'modal-${index}')" style="cursor: pointer; width: 90px; height: 90px; border-radius: 50%; box-shadow: 0 4px 8px var(--nui-shadow); background: var(--nui-bg); border: 2px solid var(--nui-border);">
+                        <div style="font-size: 11px; line-height: 1.2; margin-top: -10px; pointer-events: none;">${p.info}</div>
+
+                        <div id="modal-${index}" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2147483647; align-items: center; justify-content: center;" onclick="this.style.display='none'">
+                            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--nui-shadow, rgba(0,0,0,0.7));"></div>
+
+                            <div style="background: var(--nui-surface-2); color: var(--nui-text); padding: 15px; border-radius: var(--nui-radius-lg); width: 85%; max-width: 400px; text-align: center; border: 2px solid var(--nui-border); display: flex; flex-direction: column; align-items: center; gap: 15px; position: relative; box-shadow: 0 10px 25px var(--nui-shadow);" onclick="event.stopPropagation()">
+
+                                <img src="${fullSizeImg}" style="max-width: 100%; height: auto; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border);">
+
+                                <div style="font-size: 14px; margin-top: 0px; margin-bottom: 0px; background: var(--nui-surface-1); padding: 4px 12px; border-radius: var(--nui-radius-pill); border: 1px solid var(--nui-border);">${p.name}</div>
+
+                                <div class="nui-pet-stats" data-loaded="false" style="display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; text-align: left; font-size: 13px; background: var(--nui-surface-1); padding: 12px 16px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); width: 100%; box-sizing: border-box;">
+                                    <span style="grid-column: span 2; text-align:center; font-style: italic; opacity: 0.7;">Fetching combat stats...</span>
+                                </div>
+
+                                <div class="nui-petpet-box" style="width: 100%; box-sizing: border-box;"></div>
+
+                                <a href="${p.url}" style="width: 100%; padding: 12px; background: var(--nui-accent); color: white; text-decoration: none; border-radius: var(--nui-radius-md); font-weight: bold; box-sizing: border-box;">View Full Petlookup</a>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+                cleanWrap.appendChild(buildCard('Neopets', petsHtml, 'repeat(auto-fill, minmax(100px, 1fr))'));
+            }
+
+            if (data.collections.length > 0) {
+                let collHtml = data.collections.map(c => `<div class="nui-collection-item" style="text-align: center; width: 100%;">${c}</div>`).join('');
+                const gridWrapper = `<style>.nui-collection-item img { height: 50px; width: auto; object-fit: contain; display: block; margin: 0 auto 6px auto; } .nui-collection-item { font-size: 11px; line-height: 1.3; }</style><div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 16px 8px; align-items: start;">${collHtml}</div>`;
+                cleanWrap.appendChild(buildCard('Collections', gridWrapper));
+            }
+
+            if (data.trophies.length > 0) {
+                let trophiesHtml = data.trophies.map(t => `<div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; gap: 4px;">${t}</div>`).join('');
+                cleanWrap.appendChild(buildCard('Trophies', `<div class="nui-trophy-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px;">${trophiesHtml}</div>`));
+            }
+
+            pageWrapper.appendChild(cleanWrap);
+            document.body.appendChild(pageWrapper);
+
+            // ── TOGGLE BUTTON ──────────────────────────────────────────
+            const toggleBtn = document.createElement('button');
+            toggleBtn.id = 'nui-lookup-toggle';
+            toggleBtn.style.cssText = `position: fixed; bottom: 24px; right: 24px; z-index: 2147483647; padding: 12px 20px; border-radius: var(--nui-radius-pill); font-family: var(--nui-font-display); font-weight: 800; font-size: 14px; border: none; box-shadow: 0 4px 16px var(--nui-shadow); cursor: pointer; transition: transform 0.2s, background 0.2s; display: flex; align-items: center; gap: 8px;`;
+
+            toggleBtn.onmouseenter = () => toggleBtn.style.transform = 'scale(1.05) translateY(-2px)';
+            toggleBtn.onmouseleave = () => toggleBtn.style.transform = 'scale(1) translateY(0)';
+
+            toggleBtn.onclick = () => {
+                isCleanMode = !isCleanMode;
+                if (isCleanMode) {
+                    document.body.classList.add('nui-clean-mode');
+                    pageWrapper.style.display = 'flex';
+                    customStyleNodes.forEach(el => el.disabled = true);
+                    toggleBtn.innerHTML = '✨ View Original Layout';
+                    toggleBtn.style.background = 'var(--nui-accent)';
+                    toggleBtn.style.color = 'var(--nui-accent-ink)';
+                } else {
+                    document.body.classList.remove('nui-clean-mode');
+                    pageWrapper.style.display = 'none';
+                    customStyleNodes.forEach(el => el.disabled = false);
+                    toggleBtn.innerHTML = '📱 Force Clean Mobile View';
+                    toggleBtn.style.background = 'var(--nui-surface-2)';
+                    toggleBtn.style.color = 'var(--nui-text)';
+                    toggleBtn.style.border = '1px solid var(--nui-border)';
+                }
+            };
+
+            document.body.appendChild(toggleBtn);
+
+            document.body.classList.add('nui-clean-mode');
+            customStyleNodes.forEach(el => el.disabled = true);
+            toggleBtn.innerHTML = '✨ View Original Layout';
+            toggleBtn.style.background = 'var(--nui-accent)';
+            toggleBtn.style.color = 'var(--nui-accent-ink)';
+        }
+
+        if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', buildUI); } else { buildUI(); }
+
+    // ==========================================
+    // ROUTE 2: THE FULL PETLOOKUP OVERHAUL
+    // ==========================================
+    } else if (currentUrl.includes("petlookup.phtml")) {
+
+        if (!window.NeoUI || !window.NeoUI.isModuleEnabled('lookups')) return;
+
+        let isCleanMode = true;
+        let customStyleNodes = [];
+
+        // 1. EXTRACT THE CANVAS FIRST
+        const originalRender = document.getElementById('CustomNeopetView');
+        if (originalRender) {
+            document.body.appendChild(originalRender);
+        }
+
+        // 2. DISABLE CUSTOM STYLES & NUKE PAGE
+        document.querySelectorAll('style').forEach(s => {
+            if (!s.id?.startsWith('nui-') && !s.textContent.includes('var(--nui')) customStyleNodes.push(s);
         });
 
-        // 2. Build the Surgical Normalization CSS
-        const cleanStyles = document.createElement('style');
-        cleanStyles.id = 'nui-clean-overrides';
-        cleanStyles.textContent = `
-            /* 1. Viewport & Overflow Locks */
-            body.nui-clean-mode {
-                background: var(--nui-bg) !important;
-                cursor: default !important;
-                overflow-x: hidden !important;
-                max-width: 100vw !important;
-            }
+        document.documentElement.classList.add('nui-spa-active');
 
-            /* 2. Neutralize rogue user absolute/fixed elements */
-            body.nui-clean-mode .content [style*="position: fixed"],
-            body.nui-clean-mode .content [style*="position:fixed"],
-            body.nui-clean-mode .content [style*="position: absolute"],
-            body.nui-clean-mode .content [style*="position:absolute"] {
-                display: none !important;
-            }
-            body.nui-clean-mode .bumper { display: none !important; }
+        const contentDiv = document.querySelector('#content');
+        if (contentDiv) {
+            Array.from(contentDiv.children).forEach(child => {
+                if (child.id !== 'CustomNeopetView') child.style.display = 'none';
+            });
+        }
 
-            /* 3. Force the Main Containers to fit the mobile screen */
-            body.nui-clean-mode #main,
-            body.nui-clean-mode #content {
-                width: 100% !important;
-                max-width: 100vw !important;
-                margin: 0 auto !important;
-                padding: 0 !important;
-                background: transparent !important;
-                border: none !important;
-                position: static !important;
-                box-sizing: border-box !important;
-            }
-            body.nui-clean-mode #main {
-                padding-top: calc(var(--nui-topbar-h) + var(--nui-space-4)) !important;
-            }
-            body.nui-clean-mode #content {
-                padding: 0 var(--nui-space-3) calc(var(--nui-space-5) + 60px) !important;
-                max-width: 560px !important;
-                margin: 0 auto !important;
-            }
+        document.querySelectorAll('table').forEach(t => t.style.display = 'none');
 
-            /* 4. Flatten Neopets layout tables, but only ONE level of card
-               chrome — nested tables inside a cell stay flat/transparent so
-               you don't get a stack of shadowed boxes inside shadowed boxes.
+        // 3. BUILD THE RESPONSIVE WRAPPER
+        const profile = NeoUI.scrapeLegacyProfile();
+        NeoUI.init();
+        NeoUI.buildTopbar({
+            stats: { np: profile.np, nc: profile.nc },
+            hasNotification: profile.hasNotification
+        });
 
-               Split into two passes on purpose. Real Neopets markup renders
-               .contentModule / .contentModuleHeader(Alt) / .contentModuleContent
-               as plain <td> elements (e.g. <td class="contentModule">), so a
-               single combined ".content td { background/border/padding: ... }"
-               rule would out-specify the class-only card selectors in section
-               6 below (an extra "td" type selector beats two classes even
-               under !important) and silently strip every card's background,
-               border, shadow, and header styling. Keeping the visual reset in
-               its own rule — with the card classes excluded — is what lets
-               section 6 actually paint the cards instead of losing a
-               specificity fight it can't see. */
-            body.nui-clean-mode .content table,
-            body.nui-clean-mode .content tbody,
-            body.nui-clean-mode .content tr,
-            body.nui-clean-mode .content td {
+        const cleanCSS = document.createElement('style');
+        cleanCSS.id = 'nui-clean-overrides-pet';
+        cleanCSS.textContent = `
+            body.nui-clean-mode { background: var(--nui-bg) !important; margin: 0 !important; padding: 0 !important; }
+            body.nui-clean-mode > *:not([id^="nui-"]):not(.nui-drawer-backdrop) { display: none !important; }
+
+            #nui-clean-petlookup .nui-about-me * {
+                position: static !important; float: none !important; width: auto !important; height: auto !important; max-width: 100% !important;
+                background: transparent !important; color: var(--nui-text) !important; font-size: 14px !important; line-height: 1.6 !important; text-align: left !important;
+            }
+            #nui-clean-petlookup .nui-about-me img { border-radius: var(--nui-radius-sm); box-shadow: 0 2px 8px var(--nui-shadow); }
+            #nui-clean-petlookup a { color: var(--nui-accent); font-weight: bold; text-decoration: none; }
+            #nui-clean-petlookup a:hover { text-decoration: underline; }
+
+            /* Ensure the base container acts as the relative anchor */
+            #CustomNeopetView {
+                position: relative !important;
                 display: block !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                box-sizing: border-box !important;
-                height: auto !important;
             }
-            body.nui-clean-mode .content table:not(.contentModuleTable),
-            body.nui-clean-mode .content tbody:not(.contentModuleTable),
-            body.nui-clean-mode .content tr:not(.contentModule):not(.contentModuleHeader):not(.contentModuleHeaderAlt),
-            body.nui-clean-mode .content td:not(.contentModule):not(.contentModuleHeader):not(.contentModuleHeaderAlt):not(.contentModuleContent) {
-                background: transparent !important;
-                border: none !important;
+
+            /* Lock all Neopets rendering engine wrappers securely to the container */
+            #anim_container,
+            #pet_anim,
+            .nppvma-petView,
+            .nppvma-petView-main-content,
+            .nppvma-avatarlayers {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
                 margin: 0 !important;
                 padding: 0 !important;
-            }
-            /* Only the OUTERMOST row of the page gets card spacing/dividers —
-               nested tables inherit transparent/no-border from the rule above
-               and don't add their own margin, so you get one clean stack
-               instead of a card-in-a-card-in-a-card mess. */
-            body.nui-clean-mode .content > table > tbody > tr > td {
-                margin-bottom: var(--nui-space-4) !important;
-            }
-            body.nui-clean-mode .content table table > tbody > tr > td {
-                margin-bottom: 0 !important;
+                transform: none !important;
             }
 
-            /* 5. Custom Text Blocks / Bios */
-            body.nui-clean-mode .content > div:not(.contentModule) {
+            /* Force the actual images and canvases to fill the box without drifting or stretching */
+            .nppvma-avatarlayers img,
+            .nppvma-avatarlayers canvas,
+            #CustomNeopetView canvas {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
                 width: 100% !important;
-                max-width: 100% !important;
-                text-align: left !important;
-                font-size: 14px !important;
-                line-height: 1.6 !important;
-                color: var(--nui-text) !important;
-                background: var(--nui-surface) !important;
-                padding: var(--nui-space-4) !important;
-                border-radius: var(--nui-radius-lg) !important;
-                border: 1px solid var(--nui-border) !important;
-                box-shadow: 0 1px 4px var(--nui-shadow) !important;
-                box-sizing: border-box !important;
-                word-wrap: break-word !important;
-                overflow-wrap: break-word !important;
-            }
-
-            /* 6. Content Modules (the Neopets native boxes) */
-            body.nui-clean-mode .contentModule {
-                width: 100% !important;
-                background: var(--nui-surface) !important;
-                border: 1px solid var(--nui-border) !important;
-                border-radius: var(--nui-radius-lg) !important;
-                padding: var(--nui-space-4) !important;
-                box-shadow: 0 1px 4px var(--nui-shadow) !important;
-                margin-bottom: var(--nui-space-4) !important;
-                box-sizing: border-box !important;
-            }
-            /* A module nested inside another module (rare, but happens on
-               some templates) shouldn't double up on border/shadow/radius. */
-            body.nui-clean-mode .contentModule .contentModule {
-                border: none !important;
-                box-shadow: none !important;
-                padding: 0 !important;
-                margin-bottom: var(--nui-space-3) !important;
-            }
-
-            body.nui-clean-mode .contentModuleHeader,
-            body.nui-clean-mode .contentModuleHeaderAlt {
-                display: block !important;
-                color: var(--nui-text) !important;
-                font-family: var(--nui-font-display) !important;
-                font-size: 16px !important;
-                font-weight: 800 !important;
-                border-bottom: 1px solid var(--nui-border) !important;
-                padding: 0 0 var(--nui-space-2) 0 !important;
-                margin-bottom: var(--nui-space-3) !important;
-                text-align: left !important;
-                letter-spacing: normal !important;
-            }
-
-            body.nui-clean-mode .contentModuleContent {
-                padding: 0 !important;
-                font-size: 13px !important;
-            }
-
-            /* 7. Action Icon Rows (Neofriend, Neomail, etc) — a real grid
-               instead of a flex row, so icons line up evenly on narrow
-               screens instead of wrapping raggedly. */
-            body.nui-clean-mode .contentModuleContent table tr {
-                display: grid !important;
-                grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)) !important;
-                gap: 10px !important;
-            }
-            body.nui-clean-mode .contentModuleContent table td {
-                width: auto !important;
-                text-align: center !important;
-                padding: 6px 2px !important;
-                font-size: 12px !important;
-            }
-
-            /* Float overrides for shields and elements */
-            body.nui-clean-mode .contentModuleContent img[align="right"],
-            body.nui-clean-mode .contentModuleContent img[align="left"] {
-                float: none !important;
-                display: block !important;
-                margin: 0 auto var(--nui-space-3) auto !important;
-            }
-
-            /* 8. Unroll Neopets bxSlider (Pets Carousel) */
-            body.nui-clean-mode .bx-viewport { height: auto !important; overflow: visible !important; }
-            body.nui-clean-mode .bx-clone { display: none !important; }
-            body.nui-clean-mode #bxlist {
-                display: flex !important; flex-wrap: wrap !important; justify-content: center !important;
-                gap: 12px !important; width: 100% !important; transform: none !important; padding: 0 !important;
-            }
-            body.nui-clean-mode #bxlist li {
-                width: 110px !important; position: static !important; margin: 0 !important;
-                float: none !important; display: block !important;
-            }
-            body.nui-clean-mode .bx-controls { display: none !important; }
-
-            /* 9. Trophies & Collections Grids */
-            body.nui-clean-mode .trophy_cell {
-                flex: 1 1 80px !important;
-                width: auto !important;
+                height: 100% !important;
                 margin: 0 !important;
-                padding: 6px !important;
+                transform: none !important;
+                object-fit: contain !important;
             }
-            body.nui-clean-mode .ul-collections {
-                display: flex !important; flex-wrap: wrap !important; justify-content: center !important;
-                gap: 10px !important; padding: 0 !important; margin: 0 !important; list-style: none !important;
-            }
-            body.nui-clean-mode .ul-collections li { width: 100px !important; text-align: center !important; margin: 0 !important; }
-
-            /* 10. Global Typography & Media Limits */
-            body.nui-clean-mode .medText, body.nui-clean-mode .medText * {
-                font-family: var(--nui-font-body) !important;
-                color: var(--nui-text) !important;
-                font-size: 13px !important;
-                line-height: 1.5 !important;
-                word-wrap: break-word !important;
-            }
-            body.nui-clean-mode a { color: var(--nui-accent) !important; font-weight: 600 !important; text-decoration: none !important; }
-            body.nui-clean-mode img { max-width: 100% !important; height: auto !important; object-fit: contain !important; }
-
-            /* Hide Native Chrome */
-            body.nui-clean-mode #header, body.nui-clean-mode #footer, body.nui-clean-mode #ban, body.nui-clean-mode .sidebar { display: none !important; }
         `;
-        document.head.appendChild(cleanStyles);
+        document.head.appendChild(cleanCSS);
 
-        // 3. Create the Floating Toggle Button
+        const pageWrapper = document.createElement('div');
+        pageWrapper.id = 'nui-page-wrapper';
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box; width: 100%;';
+        document.body.appendChild(pageWrapper);
+
+        const cleanWrap = document.createElement('div');
+        cleanWrap.id = 'nui-clean-petlookup';
+        cleanWrap.style.cssText = 'width: 100%; max-width: 800px; margin: 0 auto; padding: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; overflow-x: hidden;';
+        pageWrapper.appendChild(cleanWrap);
+
+        // 4. PARSE DATA
+        const html = document.body.innerHTML;
+        const getMatch = (regex, fallback = 'N/A') => {
+            let m = html.match(regex);
+            return m ? m[1].replace(/<\/?[^>]+(>|$)/g, "").trim() : fallback;
+        };
+
+        const petTitleNode = document.querySelector('div[style*="font-size: 18px"]');
+        const fullTitle = petTitleNode ? petTitleNode.textContent.trim() : 'Unknown Pet';
+
+        const petData = {
+            name: fullTitle.split(' the ')[0] || 'Unknown',
+            desc: fullTitle.split(' the ')[1] || 'Unknown Species',
+            owner: getMatch(/<b>Owner:<\/b>\s*([^<]+)/).replace('(You!)', '').trim(),
+            age: getMatch(/<b>Age:<\/b>\s*<b>([^<]+)<\/b>/),
+            birthday: getMatch(/<b>Birthday:<\/b>\s*([^<]+)<br>/),
+            level: getMatch(/<b>Level:<\/b>\s*([^<]+)<br/i),
+            gender: getMatch(/<b>Gender:<\/b>\s*<span[^>]*><b>([^<]+)<\/b>/i),
+            hp: getMatch(/<b>Hit Points:<\/b>\s*<[^>]+><b>([^<]+)<\/b><\/font>/i) || getMatch(/<b>Hit Points:<\/b>\s*([^<]+)<br/i),
+            str: getMatch(/<b>Strength:<\/b>\s*([^<]+)<br/i),
+            def: getMatch(/<b>Defence:<\/b>\s*([^<]+)<br/i),
+            mov: getMatch(/<b>Movement:<\/b>\s*([^<]+)<br/i),
+            intl: getMatch(/<b>Intelligence:<\/b>\s*([^<]+)<br/i),
+            fishing: getMatch(/<b>Fishing Skill:<\/b>\s*([^<]+)/i),
+            jobs: getMatch(/<b>Jobs Completed:<\/b>\s*([^<]+)<br/i),
+            rank: getMatch(/<b>Job Rank:<\/b>\s*([^<]+)/i)
+        };
+
+        // Advanced Petpet/Petpetpet Scraper
+        if (html.includes('has a Petpet!')) {
+            let imgMatches = [...html.matchAll(/<img src="([^"]+)"[^>]*width="80"/gi)];
+            let textMatch = html.match(/<b>([^<]+)<\/b>(?:\s+the\s+([A-Za-z0-9 ]+?))?(?:\s+and its\s+<b>([^<]+)<\/b>)?\s*<br>\(([^)]+)\)/i);
+
+            if (imgMatches.length > 0 && textMatch) {
+                petData.petpet = {
+                    img: imgMatches[0][1],
+                    name: textMatch[1].trim(),
+                    species: (textMatch[2] || 'Petpet').trim(),
+                    age: textMatch[4].trim()
+                };
+                if (imgMatches.length > 1 && textMatch[3]) {
+                    petData.p3 = {
+                        img: imgMatches[1][1],
+                        species: textMatch[3].trim()
+                    };
+                }
+            }
+        }
+
+        // Custom Description Scraper
+        let descHtml = '';
+        document.querySelectorAll('.contentModule').forEach(mod => {
+            const header = mod.querySelector('.contentModuleHeaderAlt, .contentModuleHeader');
+            if (header && header.textContent.includes('Description')) {
+                const content = mod.querySelector('.contentModuleContent');
+                if (content) {
+                    let clone = content.cloneNode(true);
+                    clone.querySelectorAll('style, script, link, iframe').forEach(e => e.remove());
+                    clone.querySelectorAll('img').forEach(img => { if (img.style.position === 'fixed' || img.id === 'bg') img.remove(); });
+                    clone.querySelectorAll('*').forEach(e => e.removeAttribute('style'));
+                    descHtml = clone.innerHTML.trim();
+                }
+            }
+        });
+
+        // 5. BUILD CARD 1: PROFILE + CANVAS
+        const profileHtml = `
+            <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; width: 100%; box-sizing: border-box;">
+
+                <div style="flex: 1 1 300px; max-width: 400px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center;">
+                    <div style="margin-bottom: 12px;">
+                        <h1 style="margin: 0 0 4px 0; font-size: 28px; color: var(--nui-accent); text-transform: capitalize; word-break: break-word; line-height: 1.1;">${petData.name}</h1>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: normal; color: var(--nui-text); opacity: 0.8; word-break: break-word;">the ${petData.desc}</h3>
+                    </div>
+
+                    <div id="nui-pet-render-target" style="width: 100%; aspect-ratio: 1 / 1; background: var(--nui-bg); border-radius: var(--nui-radius-lg); border: 2px solid var(--nui-border); overflow: hidden; box-shadow: inset 0 4px 8px var(--nui-shadow); position: relative;">
+                        <!-- Animated canvas drops here -->
+                    </div>
+                </div>
+
+                <div style="flex: 2 1 300px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; margin-top: 10px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; font-size: 13px; background: var(--nui-surface-2); padding: 16px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); box-sizing: border-box;">
+                        <div><b>Level:</b> ${petData.level}</div>
+                        <div><b>Health:</b> ${petData.hp}</div>
+                        <div><b>Strength:</b> ${petData.str}</div>
+                        <div><b>Defence:</b> ${petData.def}</div>
+                        <div><b>Movement:</b> ${petData.mov}</div>
+                        <div><b>Intelligence:</b> ${petData.intl}</div>
+                        <div style="grid-column: 1 / -1; border-top: 1px solid var(--nui-border); padding-top: 10px; margin-top: 4px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                            <span><b>Age:</b> ${petData.age}</span>
+                            <span><b>Gender:</b> ${petData.gender}</span>
+                            <span><b>Owner:</b> <a href="/userlookup.phtml?user=${petData.owner}" style="color: var(--nui-accent);">${petData.owner}</a></span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; box-sizing: border-box;">
+                        <a href="/battledome.phtml?type=challenge&pettochallenge=${petData.name}" style="flex: 1; text-align: center; padding: 12px 16px; background: var(--nui-accent); color: white; text-decoration: none; border-radius: var(--nui-radius-sm); font-weight: bold; font-size: 13px; box-sizing: border-box;">Challenge in BD</a>
+                        <a href="/customise/?view=${petData.name}" style="flex: 1; text-align: center; padding: 12px 16px; background: var(--nui-surface-2); color: var(--nui-text); border: 1px solid var(--nui-border); text-decoration: none; border-radius: var(--nui-radius-sm); font-weight: bold; font-size: 13px; box-sizing: border-box;">Customise</a>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        cleanWrap.appendChild(buildCard('Pet Profile', profileHtml));
+
+        // Execute the canvas transplant
+        if (originalRender) {
+            const renderTarget = document.getElementById('nui-pet-render-target');
+            renderTarget.appendChild(originalRender);
+            originalRender.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; overflow: hidden; margin: 0; padding: 0; border: none;';
+        }
+
+        // 6. BUILD CARD 2: PETPET & SKILLS
+        let extrasHtml = `<div style="display: flex; flex-wrap: wrap; gap: 16px; width: 100%; box-sizing: border-box;">`;
+
+        if (petData.petpet) {
+            let p3Html = petData.p3 ? `<img src="${petData.p3.img}" style="width: 35px; height: 35px; object-fit: contain; position: absolute; bottom: -8px; right: -8px; border-radius: 5%; background: var(--nui-surface-1); border: 2px solid var(--nui-border); z-index: 10;">` : '';
+
+            extrasHtml += `
+                <div style="flex: 1 1 250px; display: flex; align-items: center; gap: 16px; background: var(--nui-surface-2); padding: 16px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); box-sizing: border-box; text-align: left;">
+                    <div style="position: relative; flex-shrink: 0;">
+                        <img src="${petData.petpet.img}" style="width: 80px; height: 80px; object-fit: contain; background: var(--nui-bg); border-radius: var(--nui-radius-sm); border: 1px solid var(--nui-border);">
+                        ${p3Html}
+                    </div>
+                    <div style="min-width: 0;">
+                        <h3 style="margin: 0 0 4px 0; font-size: 16px; color: var(--nui-accent); word-break: break-word;">${petData.petpet.name} <span style="display: block; font-size: 12px; font-weight: normal; color: var(--nui-text); margin-top: 2px;">the ${petData.petpet.species}</span></h3>
+                        <div style="font-size: 12px; opacity: 0.8; word-break: break-word;">${petData.petpet.age}</div>
+                        ${petData.p3 ? `<div style="font-size: 11px; margin-top: 4px; font-weight: bold; opacity: 0.9;">+ ${petData.p3.species}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        extrasHtml += `
+            <div style="flex: 1 1 250px; background: var(--nui-surface-2); padding: 16px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); font-size: 13px; box-sizing: border-box;">
+                <div style="margin-bottom: 8px; border-bottom: 1px solid var(--nui-border); padding-bottom: 6px;"><b>Fishing Skill:</b> ${petData.fishing}</div>
+                <div style="margin-bottom: 8px; border-bottom: 1px solid var(--nui-border); padding-bottom: 6px;"><b>Jobs Completed:</b> ${petData.jobs}</div>
+                <div style="padding-top: 2px;"><b>Job Rank:</b> ${petData.rank}</div>
+            </div>
+        </div>`;
+
+        cleanWrap.appendChild(buildCard('Companions & Skills', extrasHtml));
+
+        // 7. BUILD CARD 3: PET DESCRIPTION
+        if (descHtml) {
+            cleanWrap.appendChild(buildCard('Description', `<div class="nui-about-me">${descHtml}</div>`));
+        }
+
+        // ── TOGGLE BUTTON ──────────────────────────────────────────
         const toggleBtn = document.createElement('button');
         toggleBtn.id = 'nui-lookup-toggle';
-        toggleBtn.style.cssText = `
-            position: fixed !important;
-            bottom: 24px !important;
-            right: 24px !important;
-            z-index: 2147483647 !important;
-            padding: 12px 20px !important;
-            border-radius: var(--nui-radius-pill) !important;
-            font-family: var(--nui-font-display) !important;
-            font-weight: 800 !important;
-            font-size: 13px !important;
-            border: none !important;
-            box-shadow: 0 4px 16px var(--nui-shadow) !important;
-            cursor: pointer !important;
-            transition: transform 0.2s, background 0.2s !important;
-            display: flex !important;
-            align-items: center !important;
-            gap: 8px !important;
-        `;
+        toggleBtn.style.cssText = `position: fixed; bottom: 24px; right: 24px; z-index: 2147483647; padding: 12px 20px; border-radius: var(--nui-radius-pill); font-family: var(--nui-font-display); font-weight: 800; font-size: 14px; border: none; box-shadow: 0 4px 16px var(--nui-shadow); cursor: pointer; transition: transform 0.2s, background 0.2s; display: flex; align-items: center; gap: 8px;`;
 
         toggleBtn.onmouseenter = () => toggleBtn.style.transform = 'scale(1.05) translateY(-2px)';
         toggleBtn.onmouseleave = () => toggleBtn.style.transform = 'scale(1) translateY(0)';
 
         toggleBtn.onclick = () => {
             isCleanMode = !isCleanMode;
-            applyState();
+            if (isCleanMode) {
+                document.body.classList.add('nui-clean-mode');
+                pageWrapper.style.display = 'flex';
+                customStyleNodes.forEach(el => el.disabled = true);
+                toggleBtn.innerHTML = '✨ View Original Layout';
+                toggleBtn.style.background = 'var(--nui-accent)';
+                toggleBtn.style.color = 'var(--nui-accent-ink)';
+            } else {
+                document.body.classList.remove('nui-clean-mode');
+                pageWrapper.style.display = 'none';
+                customStyleNodes.forEach(el => el.disabled = false);
+                toggleBtn.innerHTML = '📱 Force Clean Mobile View';
+                toggleBtn.style.background = 'var(--nui-surface-2)';
+                toggleBtn.style.color = 'var(--nui-text)';
+                toggleBtn.style.border = '1px solid var(--nui-border)';
+            }
         };
 
         document.body.appendChild(toggleBtn);
-
-        // Initialize State
-        applyState();
-    }
-
-    function applyState() {
-        const toggleBtn = document.getElementById('nui-lookup-toggle');
-        const topbar = document.getElementById('nui-page-topbar');
-
-        if (isCleanMode) {
-            // Enable Clean Mode
-            document.body.classList.add('nui-clean-mode');
-            customStyleNodes.forEach(el => el.disabled = true);
-
-            toggleBtn.innerHTML = '✨ View Original Layout';
-            toggleBtn.style.background = 'var(--nui-accent)';
-            toggleBtn.style.color = 'var(--nui-accent-ink)';
-
-            if (topbar) topbar.style.display = 'flex';
-
-        } else {
-            // Revert to Custom Layout
-            document.body.classList.remove('nui-clean-mode');
-            customStyleNodes.forEach(el => el.disabled = false);
-
-            toggleBtn.innerHTML = '📱 Force Clean Mobile View';
-            toggleBtn.style.background = 'var(--nui-surface-2)';
-            toggleBtn.style.color = 'var(--nui-text)';
-            toggleBtn.style.border = '1px solid var(--nui-border)';
-
-            // Hide the NeoUI topbar in original mode to prevent overlapping user art
-            if (topbar) topbar.style.display = 'none';
-        }
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
+        document.body.classList.add('nui-clean-mode');
+        customStyleNodes.forEach(el => el.disabled = true);
+        toggleBtn.innerHTML = '✨ View Original Layout';
+        toggleBtn.style.background = 'var(--nui-accent)';
+        toggleBtn.style.color = 'var(--nui-accent-ink)';
     }
 
 })();
+
+
+
+
 
 // ==============================================================================
 // MODULE 20: SITEWIDE CHROME (UNIVERSAL FALLBACK)
