@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.71
+// @version      1.1.73
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -58,6 +58,31 @@
  *                      Scratchcard Kiosks, each rebuilt as its own mobile SPA
  *
  * CHANGELOG  (last 5 versions)
+ *
+ * v1.1.73
+ *   - Kadoatery: fed tiles are now vibe-tinted (border + background) for
+ *     whoever fed them, matching the treatment already used on Neomail
+ *     bubbles and Neoboards posts — previously only a small dot next to the
+ *     feeder's name reflected their vibe. Updates live if the vibe is
+ *     changed from the tile's popover, or from anywhere else (drawer,
+ *     Neomail, Neoboards) via VibeRater.onChange.
+ *   - Stock Market: expanded portfolio cards now show Open Price, Avg. Cost
+ *     / Share, Total Paid, Market Value, Gain/Loss (colored), and Purchase
+ *     Lot count above the sell control, instead of just the sell input.
+ *   - Stock Market: fixed the Bargains page showing the same ticker several
+ *     times over. The live-price marquee repeats its whole ticker sequence
+ *     2-3x back-to-back for a seamless scroll loop; the scraper now dedupes
+ *     by ticker instead of taking every repeat as a separate stock.
+ *
+ * v1.1.72
+ *   - Homepage: "Make Active" pet switching now works. The home page doesn't
+ *     embed _ref_ck in its scripts, so the previous inline-scrape always came
+ *     up empty and showed an alert. nuiChangeActivePet() now falls back to
+ *     loading quickref.phtml in a 1px hidden same-origin iframe, scraping the
+ *     token from it, then discarding the iframe. The token is cached for the
+ *     rest of the page session so tapping multiple pets never fires a second
+ *     iframe load. Pages that already embed _ref_ck (quickref) still use the
+ *     fast inline path.
  *
  * v1.1.71
  *   - Food Club: removed the dedicated Trophy Run tab. Trophy Run is now a
@@ -11975,13 +12000,20 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         if (refInput) securityToken = refInput.value;
 
         // 2. Scrape Live Prices from Marquee
+        // The marquee repeats its whole ticker sequence 2-3x back-to-back so
+        // the scroll loop looks seamless, which without deduping caused the
+        // same ticker to show up multiple times (e.g. on the Bargains page).
         const marqueeLinks = doc.querySelectorAll('marquee a');
+        const seenTickers = new Set();
         marqueeLinks.forEach(a => {
             const text = a.textContent.trim();
             const parts = text.split(' ');
             if (parts.length >= 3) {
+                const ticker = parts[0];
+                if (seenTickers.has(ticker)) return;
+                seenTickers.add(ticker);
                 liveStocksData.push({
-                    ticker: parts[0],
+                    ticker: ticker,
                     price: parseInt(parts[1], 10),
                     change: parts[2]
                 });
@@ -12346,6 +12378,24 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     box-shadow: 0 2px 4px var(--nui-shadow);
                 `;
 
+                // Derive a few extra figures for the expanded detail view.
+                // paid/mktValue are scraped as formatted strings (e.g. "12,345"),
+                // so parse out the numbers to compute avg cost/share and gain/loss.
+                const paidNum = parseFloat(String(stock.paid).replace(/[^0-9.-]/g, '')) || 0;
+                const mktValueNum = parseFloat(String(stock.mktValue).replace(/[^0-9.-]/g, '')) || 0;
+                const avgCost = stock.qty > 0 ? (paidNum / stock.qty) : 0;
+                const gainLoss = mktValueNum - paidNum;
+                const gainLossColor = gainLoss > 0 ? 'var(--nui-success)' : gainLoss < 0 ? 'var(--nui-danger)' : 'var(--nui-text-muted)';
+                const gainLossStr = (gainLoss > 0 ? '+' : '') + Math.round(gainLoss).toLocaleString() + ' NP';
+                const lotCount = Array.isArray(stock.lots) ? stock.lots.length : 0;
+
+                function detailRow(label, value, valueColor) {
+                    return '<div style="display:flex; justify-content:space-between; align-items:center; width:100%; font-size:12px;">' +
+                        '<span style="color:var(--nui-text-muted); font-weight:600;">' + label + '</span>' +
+                        '<span style="color:' + (valueColor || 'var(--nui-text)') + '; font-weight:800;">' + value + '</span>' +
+                        '</div>';
+                }
+
                 card.innerHTML = `
                     <div style="font-size: 24px; font-family: var(--nui-font-display); font-weight: 800; color: var(--nui-text);">${stock.ticker}</div>
                     <div style="font-size: 20px; font-weight: 800; color: ${priceColor};">${stock.currPrice}</div>
@@ -12353,6 +12403,14 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                     <div style="font-size: 11px; font-weight: 700; color: var(--nui-text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px;">${stock.qty.toLocaleString()} Shares</div>
 
                     <div class="nui-stk-expand" style="display: none; width: 100%; margin-top: 12px; padding-top: 12px; border-top: 1px solid ${borderColor}; flex-direction: column; gap: 6px;">
+                        <div style="display:flex; flex-direction:column; gap:4px; width:100%; margin-bottom: 4px;">
+                            ${detailRow('Open Price', stock.open.toLocaleString() + ' NP')}
+                            ${detailRow('Avg. Cost / Share', Math.round(avgCost).toLocaleString() + ' NP')}
+                            ${detailRow('Total Paid', stock.paid + ' NP')}
+                            ${detailRow('Market Value', stock.mktValue + ' NP')}
+                            ${detailRow('Gain / Loss', gainLossStr, gainLossColor)}
+                            ${detailRow('Purchase Lots', lotCount.toLocaleString())}
+                        </div>
                         <input type="number" class="nui-input" value="${stock.qty}" min="1" max="${stock.qty}" style="width: 100%; text-align: center; padding: 6px; font-size: 13px;">
                         <button type="button" class="nui-btn nui-btn-primary nui-btn-block btn-sell" style="padding: 6px;">Sell</button>
                     </div>
@@ -13284,41 +13342,98 @@ return {
     }
 
     // --- GLOBAL ACTIONS ---
+
+    // Scrape _ref_ck from inline <script> tags in a given document root.
+    // The token is present on pages like quickref.phtml but absent on others (e.g. home).
+    function scrapeRefCkFrom(root) {
+        const scripts = root.getElementsByTagName('script');
+        for (let i = 0; i < scripts.length; i++) {
+            const c = scripts[i].innerHTML;
+            const m = c.match(/_ref_ck['"\]?\s*:\s*['"]([a-f0-9]+)['"]/i) ||
+                      c.match(/getCK\(\)\s*\{\s*return\s*['"]([a-f0-9]+)['"]/i);
+            if (m) return m[1];
+        }
+        return '';
+    }
+
+    // Load quickref.phtml in a 1px hidden iframe, scrape _ref_ck from it, discard.
+    // Same-origin so we have full DOM access. Resolves with the token or rejects.
+    function getRefCkViaIframe() {
+        return new Promise(function(resolve, reject) {
+            const prev = document.getElementById('nui-refck-iframe');
+            if (prev) prev.remove();
+
+            const iframe = document.createElement('iframe');
+            iframe.id = 'nui-refck-iframe';
+            iframe.src = '/quickref.phtml';
+            iframe.style.cssText = 'position:fixed;width:1px;height:1px;top:-9999px;left:-9999px;opacity:0;pointer-events:none;border:none;';
+            iframe.setAttribute('aria-hidden', 'true');
+
+            const tid = setTimeout(function() {
+                iframe.remove();
+                reject(new Error('_ref_ck iframe timed out'));
+            }, 8000);
+
+            iframe.addEventListener('load', function() {
+                clearTimeout(tid);
+                try {
+                    const ck = scrapeRefCkFrom(iframe.contentDocument || iframe.contentWindow.document);
+                    iframe.remove();
+                    if (ck) { resolve(ck); } else { reject(new Error('_ref_ck not found in iframe')); }
+                } catch (e) {
+                    iframe.remove();
+                    reject(e);
+                }
+            });
+            iframe.addEventListener('error', function() {
+                clearTimeout(tid);
+                iframe.remove();
+                reject(new Error('quickref iframe failed to load'));
+            });
+            document.body.appendChild(iframe);
+        });
+    }
+
+    // Cache the token within the page session to avoid re-loading the iframe
+    // every time the user taps a different pet.
+    let nuiRefCkCache = '';
+
     window.nuiChangeActivePet = function(petName) {
         if (!petName) return;
 
-        let refCk = '';
-        const scripts = document.getElementsByTagName('script');
-        for (let i = 0; i < scripts.length; i++) {
-            const content = scripts[i].innerHTML;
-            const ckMatch = content.match(/_ref_ck['"]?\s*:\s*['"]([a-f0-9]+)['"]/i) ||
-                            content.match(/getCK\(\)\s*\{\s*return\s*['"]([a-f0-9]+)['"]/i);
-            if (ckMatch) {
-                refCk = ckMatch[1];
-                break;
-            }
-        }
+        const doChange = function(refCk) {
+            return fetch('/np-templates/ajax/changepet.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Accept': 'application/json, text/javascript, */*; q=0.01',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: '_ref_ck=' + encodeURIComponent(refCk) + '&new_active_pet=' + encodeURIComponent(petName)
+            }).then(res => res.json()).then(data => {
+                if (data.status === 'success') window.location.reload();
+                else alert('Failed to change pet: ' + (data.error || 'Unknown error'));
+            }).catch(err => {
+                console.error('Pet change error:', err);
+                window.location.reload();
+            });
+        };
 
-        if (!refCk) {
-            alert('Could not find security token (_ref_ck).');
-            return;
+        // Fast path: token already on the current page (quickref) or cached from
+        // a previous iframe load earlier in this session.
+        const inline = scrapeRefCkFrom(document) || nuiRefCkCache;
+        if (inline) {
+            nuiRefCkCache = inline;
+            doChange(inline);
+        } else {
+            // Home page and others don't embed _ref_ck — fetch it via hidden iframe.
+            getRefCkViaIframe()
+                .then(function(ck) { nuiRefCkCache = ck; doChange(ck); })
+                .catch(function(err) {
+                    console.error('nuiChangeActivePet: could not obtain _ref_ck —', err);
+                    alert('Could not find security token. Try switching pets from the Quickref page.');
+                });
         }
-
-        fetch('/np-templates/ajax/changepet.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: '_ref_ck=' + encodeURIComponent(refCk) + '&new_active_pet=' + encodeURIComponent(petName)
-        }).then(res => res.json()).then(data => {
-            if (data.status === 'success') window.location.reload();
-            else alert('Failed to change pet: ' + (data.error || 'Unknown error'));
-        }).catch(err => {
-            console.error('Pet change error:', err);
-            window.location.reload();
-        });
     };
 
     // --- EDITOR MODAL SYSTEM ---
@@ -16043,6 +16158,22 @@ return {
         return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
     }
 
+    // Vibe tint for fed tiles — same border + background treatment used on
+    // Neomail bubbles and Neoboards posts. Only ever applied to tiles fed by
+    // someone else (tile.dataset.vibeUser is only set in that case).
+    function applyKadVibeTint(tileEl) {
+        const key = tileEl.dataset.vibeUser;
+        if (!key || !window.VibeRater || typeof window.VibeRater.getVibe !== 'function') return;
+        const vibe = window.VibeRater.getVibe(key);
+        if (vibe && vibe.color) {
+            tileEl.style.borderColor = vibe.color;
+            tileEl.style.background = hexToRgba(vibe.color, 0.16);
+        } else {
+            tileEl.style.borderColor = '';
+            tileEl.style.background = '';
+        }
+    }
+
     function copyToClipboard(text, onDone) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text).then(onDone, function () {});
@@ -16654,8 +16785,10 @@ return {
                     const feederName = k.fedBy || 'Fed';
                     const dot = vibeDot(feederName);
                     statusHtml = '<div class="nui-kad-feeder" data-feeder="' + escapeHtml(feederName) + '" style="display:flex;align-items:center;justify-content:center;gap:2px;font-size:9.5px; font-weight:700; padding:3px 4px; color:var(--nui-text-muted); white-space:nowrap; overflow:hidden; cursor:pointer;" title="Set vibe for ' + escapeHtml(feederName) + '">✓ <span style="overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(feederName) + '</span>' + dot + '</div>';
+                    tile.dataset.vibeUser = feederName.toLowerCase().trim();
                 }
                 tile.innerHTML = nameHtml + imgHtml + statusHtml;
+                if (tile.dataset.vibeUser) applyKadVibeTint(tile);
                 grid.appendChild(tile);
             });
 
@@ -16695,6 +16828,9 @@ return {
                                     el.appendChild(dot);
                                 }
                             });
+                            // Retint the tile(s) themselves (border + background)
+                            const tintKey = feederName.toLowerCase().trim();
+                            grid.querySelectorAll('.nui-surface[data-vibe-user="' + CSS.escape(tintKey) + '"]').forEach(applyKadVibeTint);
                         });
                         pop.appendChild(opt);
                     });
@@ -16707,6 +16843,8 @@ return {
                         window.VibeRater.clearVibe(feederName);
                         pop.remove();
                         grid.querySelectorAll('.nui-kad-feeder[data-feeder="' + feederName + '"] .nui-kad-vibe-dot').forEach(function (el) { el.remove(); });
+                        const tintKey = feederName.toLowerCase().trim();
+                        grid.querySelectorAll('.nui-surface[data-vibe-user="' + CSS.escape(tintKey) + '"]').forEach(applyKadVibeTint);
                     });
                     pop.appendChild(clearOpt);
 
@@ -16739,6 +16877,29 @@ return {
         }
 
         renderGridArea(initialKads, initialFeedResult);
+
+        // Reactive retint: pick up vibe changes made anywhere (drawer profile
+        // popover, Neomail, Neoboards, settings section) and reapply to any
+        // fed tiles currently on screen, without needing a grid refresh.
+        (function wireReactiveVibeTint() {
+            function bind() {
+                if (!window.VibeRater || typeof window.VibeRater.onChange !== 'function') return false;
+                window.VibeRater.onChange(function (changed) {
+                    const sel = (changed === '__all__' || changed === '__presets__')
+                        ? '.nui-surface[data-vibe-user]'
+                        : '.nui-surface[data-vibe-user="' + CSS.escape(String(changed).toLowerCase().trim()) + '"]';
+                    document.querySelectorAll(sel).forEach(applyKadVibeTint);
+                });
+                return true;
+            }
+            if (!bind()) {
+                let attempts = 0;
+                const poll = setInterval(function () {
+                    attempts++;
+                    if (bind() || attempts > 20) clearInterval(poll);
+                }, 100);
+            }
+        })();
 
         // ---- Embed KadWatch Dashboard ----
         if (NeoUI.isModuleEnabled('kad-timer')) {
