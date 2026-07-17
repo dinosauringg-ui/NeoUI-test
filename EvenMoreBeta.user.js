@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.73
+// @version      1.1.74
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -58,6 +58,24 @@
  *                      Scratchcard Kiosks, each rebuilt as its own mobile SPA
  *
  * CHANGELOG  (last 5 versions)
+ *
+ * v1.1.74
+ *   - Sitewide Chrome: fixed a double-gap under the topbar on unclaimed
+ *     pages. body already gets padding-top to clear the fixed topbar, but
+ *     #nui-sitewide-content-wrap was also adding its own top padding on top
+ *     of that — content sat noticeably lower than it should.
+ *   - Sitewide Chrome: fixed it wrongly taking over pages actually owned by
+ *     Kadoatery, Forgotten Shore, Guess the Marrow, Kiko Pop, Lunar Temple,
+ *     Negg Cave, Scratchcard Kiosks, and the Faerie Quests SPA (Modules
+ *     21-28). Those modules are declared later in the file, so in this one
+ *     synchronous script pass, Sitewide Chrome ran before any of them had a
+ *     chance to build their own topbar, saw nothing there yet, and treated
+ *     the page as unclaimed — hiding chrome and injecting its own stylesheet
+ *     that the real module's later full-page rebuild never cleaned up. That
+ *     leftover stylesheet (including the double-padding bug above) is what
+ *     was breaking those "classic" page conversions. Added an explicit
+ *     exclusion list of their URL patterns so Sitewide Chrome defers to them
+ *     instead of racing them.
  *
  * v1.1.73
  *   - Kadoatery: fed tiles are now vibe-tinted (border + background) for
@@ -15985,6 +16003,37 @@ return {
     // own topbar, or did a full SPA rebuild) — don't double up.
     if (document.getElementById('nui-page-topbar')) return;
 
+    // This module is declared as Module 20, but a handful of page-specific
+    // modules (Kadoatery, Forgotten Shore, Guess the Marrow, Kiko Pop, Lunar
+    // Temple, Negg Cave, Scratchcard Kiosks, and the Faerie Quests full SPA)
+    // are declared *after* it in the file — Modules 21-28. Since this is one
+    // synchronous top-to-bottom script pass, this module would otherwise run
+    // on those pages before any of them get a chance to build #nui-page-topbar,
+    // see nothing there yet, and wrongly treat the page as unclaimed: hiding
+    // chrome and injecting its own stylesheet. The real module's later full
+    // document.body rebuild doesn't clean that stylesheet up (only Module 20
+    // itself removed its own work, and only when it's the one in control), so
+    // the leftover rules (including topbar-clearance padding) kept fighting
+    // with the real conversion — the "classic pages not converting properly"
+    // and "gap at the top" reports were the same root cause on these pages.
+    // Explicitly deferring to those modules here fixes it without relying on
+    // file order. Any new page-specific module added after this point in the
+    // file needs its URL pattern added here too.
+    const CLAIMED_LATER_PATTERNS = [
+        /\/games\/kadoatery\//,          // Module 21: Kadoatery
+        /\/pirates\/forgottenshore\.phtml/, // Module 22: Forgotten Shore
+        /\/medieval\/guessmarrow\.phtml/,  // Module 23: Guess the Weight of the Marrow
+        /\/worlds\/kiko\/kpop/,          // Module 24: Kiko Pop
+        /\/shenkuu\/lunar/,              // Module 25: Lunar Temple
+        /\/shenkuu\/neggcave/,           // Module 26: Mysterious Negg Cave
+        /\/quests\.phtml/,               // Module 28: Faerie Quests (full SPA)
+    ];
+    if (CLAIMED_LATER_PATTERNS.some(function (re) { return re.test(location.pathname); })) return;
+    // Module 27: Scratchcard Kiosks — matched by area + page type rather than
+    // one fixed path (Desert, Haunted Fairgrounds, and Ice Caves kiosks).
+    if ((location.pathname.includes('/halloween/') || location.pathname.includes('/winter/') || location.pathname.includes('/desert/')) &&
+        (location.pathname.includes('scratch') || location.pathname.includes('kiosk'))) return;
+
     // ---- Selector coverage ----
     // Classic template chrome + nav2020 bars + sidebar chrome + ad rails.
     // Deliberately excludes real content elements like #main, #container__2020.
@@ -16049,11 +16098,14 @@ return {
         #nui-sitewide-content-wrap table {
             height: auto !important;
         }
-        /* Give unclaimed page content breathing room and readable width */
+        /* Give unclaimed page content breathing room and readable width.
+           NOTE: no top padding here — body's own padding-top (above) already
+           reserves space for the fixed topbar. Adding top padding here too
+           was stacking a second gap underneath it. */
         #nui-sitewide-content-wrap {
             max-width: 760px;
             margin: 0 auto;
-            padding: var(--nui-space-4) var(--nui-space-4) var(--nui-space-5);
+            padding: 0 var(--nui-space-4) var(--nui-space-5);
             box-sizing: border-box;
             width: 100%;
             overflow-x: hidden;
