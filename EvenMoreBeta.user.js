@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.74
+// @version      1.1.75
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
@@ -58,6 +58,23 @@
  *                      Scratchcard Kiosks, each rebuilt as its own mobile SPA
  *
  * CHANGELOG  (last 5 versions)
+ *
+ * v1.1.75
+ *   - Sitewide Chrome: found the actual bug behind classic pages (the ones
+ *     with no dedicated module — Module 20's real target) failing to
+ *     convert. When re-parenting page content into #nui-sitewide-content-
+ *     wrap, the sweep only excluded the topbar by id — it didn't know about
+ *     the nav drawer, which NeoUI.init() (called just above it) already
+ *     appends straight to <body> as .nui-drawer-backdrop. That drawer was
+ *     getting swept into the content wrap along with the raw legacy markup
+ *     instead of staying a body-level overlay, breaking the conversion.
+ *     Now excluded alongside the topbar.
+ *   - Sitewide Chrome: the whole conversion was wrapped in one silent
+ *     try/catch, so any exception anywhere in it aborted the entire
+ *     conversion with zero trace. Now logs to console and shows a visible
+ *     crash banner (same pattern as the other SPA modules) so any future
+ *     failures on classic pages are actually diagnosable instead of just
+ *     looking like "nothing happened."
  *
  * v1.1.74
  *   - Sitewide Chrome: fixed a double-gap under the topbar on unclaimed
@@ -16112,6 +16129,15 @@ return {
         }
     `;
 
+    function showFatalError(err) {
+        try {
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fee2e2;color:#7f1d1d;font:14px monospace;padding:15px;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #dc2626;';
+            box.textContent = 'Sitewide Chrome conversion crashed:\n' + (err && err.stack ? err.stack : String(err));
+            document.body.insertBefore(box, document.body.firstChild);
+        } catch (e2) {}
+    }
+
     try {
         NeoUI.init();
 
@@ -16153,12 +16179,27 @@ return {
             const topbarEl = document.getElementById('nui-page-topbar');
             const contentWrap = document.createElement('div');
             contentWrap.id = 'nui-sitewide-content-wrap';
+            // Exclude any body-level chrome NeoUI.init() already created —
+            // not just the topbar. buildDrawer() (called inside init(), just
+            // above) appends the nav drawer directly to <body> as
+            // .nui-drawer-backdrop; without excluding it too, it was getting
+            // swept into the content wrap along with the raw legacy markup
+            // instead of staying a body-level overlay, which is what broke
+            // this fallback conversion on classic pages with no dedicated
+            // module of their own.
             Array.from(document.body.childNodes)
-                .filter(function (n) { return n !== topbarEl; })
+                .filter(function (n) {
+                    if (n === topbarEl) return false;
+                    if (n.classList && n.classList.contains('nui-drawer-backdrop')) return false;
+                    return true;
+                })
                 .forEach(function (n) { contentWrap.appendChild(n); });
             document.body.appendChild(contentWrap);
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error('NeoUI Sitewide Chrome: conversion failed', e);
+        showFatalError(e);
+    }
 })();
 
 // ==============================================================================
