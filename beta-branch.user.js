@@ -1,10 +1,14 @@
 // ==UserScript==
 // @name         NeoUI: Unified Suite
 // @namespace    ext1nct
-// @version      1.1.66
+// @version      1.1.73
 // @description  NeoUI Unified Suite: polished theme system, global search, and a daily timer hub for timed Neopets activities, bundled into one mobile-forward userscript.
 // @author       ext1nct
 // @match        *://*.neopets.com/*
+// @exclude      *://ncmall.neopets.com/*
+// @exclude      *://secure.nc.neopets.com/*
+// @exclude      *://nc.neopets.com/*
+// @exclude      *://account.neopets.com/*
 // @grant        none
 // @run-at       document-end
 // @license      MIT
@@ -32,8 +36,10 @@
  *                      (collapsible categories, board favourites), vibe tints,
  *                      nicknames, history push/pop state, board URL persistence
  *   Neopian Times    — article/comic/editorial reader, home/list view, pagination
- *   Food Club        — pirates, bet, my-bets, collect, history tabs; NeoFoodClub
- *                      bet-string importer; odds calc; max-bet enforced
+ *   Food Club        — pirates, bet, my-bets, collect, history tabs;
+ *                      NeoFoodClub bet-string importer; odds calc; max-bet
+ *                      enforced; Collect tab has Trophy Run mode toggle —
+ *                      log & hold batches with per-batch 7-day expiry labels
  *   Buried Treasure  — mobile-friendly pick-a-spot map (scaled clicks), cooldown
  *                      synced to daily timer hub
  *   Fruit Machine    — headless SPA wrapper for the daily spin (ready/cooldown/
@@ -46,9 +52,125 @@
  *   Dailies Hub      — modal countdown dashboard for all timed dailies
  *   Games            — games room card grid (fetches category page, live filter);
  *                      Ruffle player wrapper with submit-score form
- *   Faerie Quests    — sitewide quest watcher + /quests.phtml enhancement
+ *   Faerie Quests    — sitewide quest watcher + full /quests.phtml SPA rebuild
+ *   Daily Freebies   — Forgotten Shore, Guess the Weight of the Marrow, Kiko
+ *                      Pop, Lunar Temple, Mysterious Negg Cave, and the three
+ *                      Scratchcard Kiosks, each rebuilt as its own mobile SPA
  *
  * CHANGELOG  (last 5 versions)
+ *
+ * v1.1.73
+ *   - Kadoatery: fed tiles are now vibe-tinted (border + background) for
+ *     whoever fed them, matching the treatment already used on Neomail
+ *     bubbles and Neoboards posts — previously only a small dot next to the
+ *     feeder's name reflected their vibe. Updates live if the vibe is
+ *     changed from the tile's popover, or from anywhere else (drawer,
+ *     Neomail, Neoboards) via VibeRater.onChange.
+ *   - Stock Market: expanded portfolio cards now show Open Price, Avg. Cost
+ *     / Share, Total Paid, Market Value, Gain/Loss (colored), and Purchase
+ *     Lot count above the sell control, instead of just the sell input.
+ *   - Stock Market: fixed the Bargains page showing the same ticker several
+ *     times over. The live-price marquee repeats its whole ticker sequence
+ *     2-3x back-to-back for a seamless scroll loop; the scraper now dedupes
+ *     by ticker instead of taking every repeat as a separate stock.
+ *
+ * v1.1.72
+ *   - Homepage: "Make Active" pet switching now works. The home page doesn't
+ *     embed _ref_ck in its scripts, so the previous inline-scrape always came
+ *     up empty and showed an alert. nuiChangeActivePet() now falls back to
+ *     loading quickref.phtml in a 1px hidden same-origin iframe, scraping the
+ *     token from it, then discarding the iframe. The token is cached for the
+ *     rest of the page session so tapping multiple pets never fires a second
+ *     iframe load. Pages that already embed _ref_ck (quickref) still use the
+ *     fast inline path.
+ *
+ * v1.1.71
+ *   - Food Club: removed the dedicated Trophy Run tab. Trophy Run is now a
+ *     toggle on the Collect tab itself. When ON, the "Collect All Winnings"
+ *     button is replaced by "Log & Hold — X NP (do NOT collect)" which saves
+ *     the batch to localStorage without touching the game. The top of the tab
+ *     shows all held batches with per-batch 7-day expiry countdowns (green →
+ *     yellow → red) and a soonest-expiry urgent banner when a batch is ≤2 days
+ *     from falling off. An emergency collect button remains for abort cases.
+ *     The toggle state persists in localStorage across visits.
+ *
+ * v1.1.70
+ *   - Food Club: Trophy Run tab is now fully implemented (v1.1.69 only added
+ *     the tab button — clicking it did nothing). Start a run, log each day's
+ *     winnings (manually, or with one tap from the Collect tab), and see a
+ *     per-day 7-day expiry countdown that turns from "safe to hold" to
+ *     "collect now" to "expired" as the deadline approaches. Mark days
+ *     collected or remove them; everything is stored in localStorage only —
+ *     it's a label/tracker and never touches real NP or auto-collects.
+ *   - Module cleanup: the seven newest modules (Forgotten Shore, Guess the
+ *     Marrow, Kiko Pop, Lunar Temple, Mysterious Negg Cave, Scratchcard
+ *     Kiosks, and the full Faerie Quests SPA rebuild) had never been given
+ *     module numbers or registered in the settings toggle list — they were
+ *     always-on and couldn't be turned off. Numbered as Modules 22-28 and
+ *     added to TOGGLEABLE_MODULES.
+ *   - Fixed a real bug found during that cleanup: the old headless Faerie
+ *     Quests enhancement (Module 14) and the newer full-SPA rebuild both
+ *     matched /quests.phtml and ran on every load. The SPA rebuild wipes
+ *     document.body, so it was silently discarding Module 14's card every
+ *     single time — Module 14 has done nothing since the SPA rebuild was
+ *     added. Module 14 is now retired (in place, like Fruit Machine before
+ *     it) and the SPA rebuild uses the existing 'faerie-quests' toggle key
+ *     so no one's on/off preference is lost.
+ *
+ * v1.1.69
+ *   - Food Club bulk bets: fixed false "Error" status. postBet() now looks for
+ *     the positive signal — bet rows in the response HTML (same selector as
+ *     scrapeCurrentBets) — rather than scanning for absence-of-error keywords.
+ *     The response from process_foodclub.phtml after a successful bet is the
+ *     current-bets page; the old keyword scan was triggering on incidental text.
+ *   - Food Club collect winnings: same fix applied. collectWinnings() now checks
+ *     whether the response is a confirmation page (contains the NP collected
+ *     figure or cleared bets state) rather than scanning for error keywords.
+ *   - Food Club: Trophy Run tracker added as a new tab. Records each day's
+ *     winning collection with a timestamp, tracks the 7-day expiry window per
+ *     Neopets Food Club rules, and shows a hold/collect decision for each open
+ *     round. Stored in localStorage; survives page reloads. Includes a summary
+ *     of total held winnings and a day-by-day expiry countdown.
+ *
+ * v1.1.68
+ *   - All Events: fixed crash from call to NeoUI.buildPageShell() (never
+ *     exported). Module now boots like every other SPA: scrape profile, wipe
+ *     body, resetDrawer, NeoUI.init(), buildTopbar, build own card shell.
+ *     Also added tryBuild() polling loop so the module retries up to 2s for
+ *     window.__allEventsData in case the Vue scripts load after us.
+ *   - Sitewide Chrome: added nav2020 selectors (#navtop__2020, .nav-top__2020,
+ *     #navbottom__2020, navsub rows, #navsub-buffer__2020, profile/alerts
+ *     dropdowns, leave-beta popup, .footer__2020) that were missing and
+ *     bleeding through on unclaimed pages. Smart content wrap now detects
+ *     #container__2020 and restyles it in-place rather than re-parenting all
+ *     body children. Added hostname early-exit guard for NC mall subdomains.
+ *   - Topbar: NP/NC stats compress on narrow viewports (≤360px) — font drops
+ *     to 9.5px and label spans are hidden, keeping the bar usable on small
+ *     phones without reflowing the hamburger/bell.
+ *   - NC Mall / account subdomains excluded: @exclude rules added for
+ *     ncmall.neopets.com, secure.nc.neopets.com, nc.neopets.com, and
+ *     account.neopets.com so the script never runs there.
+ *
+ * v1.1.67
+ *   - Sitewide Chrome: fixed the "zoomed out" look on legacy pages. The
+ *     module's own viewport nudge (in injectViewport) intentionally
+ *     settles back to a content string without shrink-to-fit=no once its
+ *     double-rAF sequence finishes — harmless on our own responsive SPA
+ *     rebuilds, but on raw legacy markup (which this module leaves in
+ *     place) any leftover fixed-width layout table wider than the
+ *     viewport made mobile Chrome/Firefox silently zoom the whole page
+ *     out to fit it. Now re-locks shrink-to-fit=no after init settles.
+ *   - Sitewide Chrome: the overflow-clamp CSS was scoped to `body > table`,
+ *     but this module moves every original body child into
+ *     #nui-sitewide-content-wrap before that rule can ever match, so it
+ *     silently did nothing — oversized legacy tables/images/iframes were
+ *     never actually being clamped. Rules are now scoped to (and match
+ *     any depth inside) the wrap instead.
+ *   - Sitewide Chrome: broadened CHROME_SELECTORS with more header/nav
+ *     variants (globalHeader, page-header, top-nav, navbar, etc.) so
+ *     fewer page families end up with native chrome stacked underneath
+ *     the injected topbar instead of being replaced by it. Still a
+ *     first pass — some page families will likely need more additions.
  *
  * v1.1.66
  *   - VibeRater: added a "Reset to Defaults" button next to "+ Add New
@@ -57,15 +179,6 @@
  *     shared neoui_vibe_presets_v1 key and re-renders — an easy way to
  *     nuke a corrupted/custom preset list back to the six defaults
  *     without needing devtools, especially on mobile.
- *
- * v1.1.65
- *   - VibeRater: the preset editor's color swatches now open NeoUI's own
- *     saturation/hue popover (the same one the theme editor uses) instead
- *     of the OS-native <input type="color">, so the picker looks and
- *     behaves the same on every browser/platform. openColorPopover is now
- *     exposed as NeoUI.openColorPopover so other modules can reuse it.
- *     Applied to all three copies of the preset editor (Neomail,
- *     Neoboards, Kadoatery).
  *
  * v1.1.64
  *   - VibeRater: found the actual cause of the missing default presets
@@ -1115,6 +1228,10 @@
             white-space: nowrap;
         }
         .nui-topbar-stats b { color: var(--nui-text); }
+        @media (max-width: 360px) {
+            .nui-topbar-stats { font-size: 9.5px !important; }
+            .nui-topbar-stats span { display: none !important; }
+        }
 
         /* ---------- Pill Nav ---------- */
         .nui-hnav {
@@ -1927,7 +2044,7 @@
                 // Slide in from the right with a corrected left-facing shadow
         backdrop.innerHTML = `
             <div class="nui-drawer" style="right: 0; left: auto; transform: translateX(100%); transition: transform var(--nui-dur-slow) var(--nui-ease); box-shadow: -8px 0 24px var(--nui-shadow); border-left: 1px solid var(--nui-border);">
-                <iframe src="/allevents.phtml" style="width: 100%; height: 100%; border: none; background: var(--nui-surface);"></iframe>
+                <iframe src="/allevents.phtml#drawer" style="width: 100%; height: 100%; border: none; background: var(--nui-surface);"></iframe>
             </div>
         `;
 
@@ -2067,6 +2184,7 @@
         { id: 'training-ninja', label: 'Training — Ninja School',    desc: 'Secret Ninja Training SPA' },
         { id: 'training-pirate',label: 'Training — Pirate Academy',  desc: 'Swashbuckling Academy SPA' },
         { id: 'quickref',       label: 'Quickref',                   desc: 'Pet stats overhaul' },
+        { id: 'lookups',        label: 'Profiles & Lookups',         desc: 'Clean responsive user/pet lookup pages' },
         { id: 'stockmarket',    label: 'Stock Market',               desc: 'Portfolio dashboard' },
         { id: 'coincidence',    label: 'The Coincidence',            desc: 'Coincidence SPA' },
         { id: 'buried-treasure',label: 'Buried Treasure',            desc: 'Map SPA' },
@@ -2074,13 +2192,19 @@
         { id: 'kad-timer',      label: 'Kad Mode (Timer)',           desc: 'Kadoatery window timer, on Kadoatery page + Home' },
         { id: 'fruit-machine',  label: 'Fruit Machine',              desc: 'Spin SPA' },
         { id: 'coconut-shy',    label: 'Coconut Shy',                desc: 'Coconut Shy wrapper' },
-        { id: 'faerie-quests',  label: 'Faerie Quests',              desc: 'Quest watcher + page' },
+        { id: 'faerie-quests',  label: 'Faerie Quests',              desc: 'Quest watcher + full page SPA' },
         { id: 'games',          label: 'Games Room',                 desc: 'Games list + Ruffle wrapper' },
         { id: 'home',           label: 'Home Dashboard',             desc: 'Homepage SPA' },
         { id: 'wishing-well',   label: 'Wishing Well',               desc: 'Wishing Well optimizer' },
         { id: 'item-transfer',  label: 'Item Transfer Log',          desc: 'Transfer log SPA' },
         { id: 'allevents',      label: 'All Events',                 desc: 'Compact events UI' },
         { id: 'sitewide-chrome',label: 'Sitewide Chrome',            desc: 'Topbar/nav on every other page' },
+        { id: 'forgottenshore', label: 'Forgotten Shore',            desc: 'Daily bottle-hunt SPA' },
+        { id: 'guessmarrow',    label: 'Guess the Marrow',           desc: 'Daily guessing-game SPA' },
+        { id: 'kikopop',        label: 'Kiko Pop',                   desc: 'Dart game SPA / Flash bypass' },
+        { id: 'lunartemple',    label: 'Lunar Temple',               desc: 'Daily puzzle SPA + auto-solver' },
+        { id: 'neggcave',       label: 'Mysterious Negg Cave',       desc: 'Daily negg puzzle SPA' },
+        { id: 'scratchcards',   label: 'Scratchcard Kiosks',         desc: 'Desert/Fairgrounds/Ice Caves SPA' },
     ];
 
     function getDisabledModules() {
@@ -3924,7 +4048,7 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
     global.NeoUI = {
         __ready: true,
-        VERSION: '2.3.2',
+        VERSION: '2.3.3',
         THEMES: THEMES,
         init: init,
         setTheme: setTheme,
@@ -6102,33 +6226,58 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
     // ── Render ───────────────────────────────────────────────────────────────
 
     function buildUI() {
-        // Suppress the native Vue app — we take over the whole page body.
+        // Suppress native Vue app and its stylesheet
         const nativeApp = document.getElementById('allevents-vue-app');
         if (nativeApp) nativeApp.style.display = 'none';
-
-        // Also suppress the native page's own stylesheets from conflicting
-        // with NeoUI vars (the Vue app CSS uses its own class names so this
-        // is safe — we just don't want its layout bleeding into ours).
         document.querySelectorAll('link[href*="allevents"]').forEach(l => l.disabled = true);
 
         const { events: initialEvents, atMax, refCk } = getPageData();
-
-        // State
         let events = initialEvents.slice();
         let selected = new Set();
         let busy = false;
 
-        // ── Shell ─────────────────────────────────────────────────────────
-        const shell = NeoUI.buildPageShell({
-            title: 'Event Inbox',
-            subtitle: events.length
-                ? (atMax ? `${events.length} events (page max)` : `${events.length} event${events.length !== 1 ? 's' : ''}`)
-                : 'All caught up!',
-            backUrl: '/',
-        });
+                   // ── Boot NeoUI shell (same pattern as other SPA modules) ──────────
+        const profile = NeoUI.scrapeLegacyProfile();
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset nui-spa-active';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+        if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
 
-        const body = shell.body;
-        body.style.cssText += 'display:flex;flex-direction:column;gap:0;padding:0;';
+        // 1. Build the topbar as normal so Sitewide Chrome sees it and backs off
+        const topbar = NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // 2. Check if we're in the drawer (iframe or hash fallback)
+        const inIframe = window.self !== window.top || window.location.hash === '#drawer';
+
+        // 3. Hide it if we're trapped in the drawer
+        if (inIframe && topbar) {
+            topbar.style.display = 'none';
+        }
+
+        // Page + card shell
+        const pageWrapper = document.createElement('div');
+        // Adjust padding conditionally so there isn't a huge gap
+        const paddingTop = inIframe ? 'var(--nui-space-5)' : 'calc(var(--nui-topbar-h) + var(--nui-space-5))';
+        pageWrapper.style.cssText = `min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:${paddingTop} var(--nui-space-4) var(--nui-space-5);box-sizing:border-box;`;
+        document.body.appendChild(pageWrapper);
+
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'width:100%;max-width:700px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;display:flex;flex-direction:column;';
+        pageWrapper.appendChild(card);
+
+        // Card header (back button + title + subtitle)
+        const cardHeader = document.createElement('div');
+        cardHeader.style.cssText = 'padding:var(--nui-space-4);border-bottom:1px solid var(--nui-border);display:flex;align-items:center;gap:12px;';
+        cardHeader.innerHTML = '<a href="/" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--nui-danger);color:#fff;text-decoration:none;font-size:18px;font-weight:900;flex-shrink:0;line-height:1;">‹</a>' +
+            '<div><div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">Event Inbox</div>' +
+            '<div class="nui-ae-subtitle" style="font-size:12px;color:var(--nui-text-muted);margin-top:1px;">' +
+                (events.length ? (atMax ? events.length + ' events (page max)' : events.length + ' event' + (events.length !== 1 ? 's' : '')) : 'All caught up!') +
+            '</div></div>';
+        card.appendChild(cardHeader);
 
         // ── Toolbar ───────────────────────────────────────────────────────
         const toolbar = document.createElement('div');
@@ -6159,15 +6308,16 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         deleteAllBtn.style.cssText = 'padding:6px 14px;border-radius:var(--nui-radius-pill);border:1px solid var(--nui-border);background:var(--nui-surface-2);color:var(--nui-danger);font-size:12px;font-weight:700;cursor:pointer;transition:opacity 0.15s;';
 
         toolbar.append(selectAllLabel, selCount, spacer, deleteSelBtn, deleteAllBtn);
+        card.appendChild(toolbar);
 
         // ── List ──────────────────────────────────────────────────────────
         const list = document.createElement('div');
         list.style.cssText = 'flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+        card.appendChild(list);
 
         const statusBar = document.createElement('div');
         statusBar.style.cssText = 'padding:10px var(--nui-space-4);font-size:12px;color:var(--nui-accent);font-weight:700;display:none;text-align:center;';
-
-        body.append(toolbar, list, statusBar);
+        card.appendChild(statusBar);
 
         // ── State → DOM ───────────────────────────────────────────────────
 
@@ -6189,10 +6339,10 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         }
 
         function updateSubtitle() {
-            const sub = shell.el.querySelector('.nui-page-subtitle');
+            const sub = card.querySelector('.nui-ae-subtitle');
             if (!sub) return;
             sub.textContent = events.length
-                ? (atMax ? `${events.length} events (page max)` : `${events.length} event${events.length !== 1 ? 's' : ''}`)
+                ? (atMax ? events.length + ' events (page max)' : events.length + ' event' + (events.length !== 1 ? 's' : ''))
                 : 'All caught up!';
         }
 
@@ -6343,15 +6493,22 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         updateToolbar();
     }
 
-    // Wait for __allEventsData to be populated (it's set by an inline <script>
-    // before the Vue app mounts, so DOMContentLoaded is early enough).
+    // __allEventsData is set by an inline <script> before the Vue app mounts.
+    // At document-end it's usually already populated, but poll briefly in case
+    // the Vue bundle scripts run after us on slower connections.
+    function tryBuild(attempts) {
+        if (window.__allEventsData) { buildUI(); return; }
+        if (attempts > 20) { buildUI(); return; } // give up, render empty state
+        setTimeout(function () { tryBuild(attempts + 1); }, 100);
+    }
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', buildUI);
+        document.addEventListener('DOMContentLoaded', function () { tryBuild(0); });
     } else {
-        buildUI();
+        tryBuild(0);
     }
 
 })();
+
 // ==============================================================================
 // MODULE 6: THE COINCIDENCE (TRUE SPA + CUSTOM SSW MODAL)
 // ==============================================================================
@@ -9790,6 +9947,11 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 //   • My Bets tab   — current round bets with odds breakdown
 //   • Collect tab   — collect winnings form
 //   • History tab   — lifetime bet history stats
+//   • Trophy Run tab — manual day/expiry labels for holding winnings across
+//     multiple rounds toward a trophy. Log a day's winnings (or one-click log
+//     straight from the Collect tab), see a per-day 7-day expiry countdown,
+//     and mark days collected or remove them. Stored in localStorage only —
+//     purely a label/tracker, never touches real NP or auto-collects.
 //   • NeoFoodClub bet-string importer — paste an NFC URL/string to generate
 //     a 10-bet auto-capped queue and submit them sequentially.
 // ==============================================================================
@@ -9817,6 +9979,67 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
 
     const ARENAS = ['Shipwreck', 'Lagoon', 'Treasure Island', 'Hidden Cove', "Harpoon Harry's"];
     const MAX_WIN = 1000000;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TROPHY RUN — localStorage-backed day/expiry labels
+    // ─────────────────────────────────────────────────────────────────────────
+    // A "trophy run" is holding food club winnings uncollected for multiple
+    // rounds in a row to boost total winnings toward a trophy. Neopets voids
+    // any uncollected winnings 7 days after they were won, so each logged day
+    // carries its own expiry. This is a manual label/tracker only — nothing
+    // here touches real NP or auto-collects; it just helps the player see, at
+    // a glance, which days are safe to keep holding and which are about to
+    // expire.
+    const TROPHY_KEY = 'neoui_fc_trophy_run';
+    const TROPHY_EXPIRY_DAYS = 7;
+
+    function loadTrophyRun() {
+        try {
+            const raw = localStorage.getItem(TROPHY_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            if (!data || !Array.isArray(data.entries)) return null;
+            return data;
+        } catch (e) { return null; }
+    }
+
+    function saveTrophyRun(data) {
+        try { localStorage.setItem(TROPHY_KEY, JSON.stringify(data)); } catch (e) {}
+    }
+
+    function startTrophyRun() {
+        const data = { startedAt: Date.now(), entries: [] };
+        saveTrophyRun(data);
+        return data;
+    }
+
+    function endTrophyRun() {
+        try { localStorage.removeItem(TROPHY_KEY); } catch (e) {}
+    }
+
+    function addTrophyEntry(run, amount, note) {
+        run.entries.push({
+            id: 'e' + Date.now() + Math.random().toString(36).slice(2, 7),
+            loggedAt: Date.now(),
+            amount: amount,
+            note: note || '',
+            collected: false,
+            collectedAt: null,
+        });
+        saveTrophyRun(run);
+    }
+
+    function dayNumberFor(run, ts) {
+        const msPerDay = 86400000;
+        return Math.floor((ts - run.startedAt) / msPerDay) + 1;
+    }
+
+    function expiryInfoFor(entry) {
+        const expiresAt = entry.loggedAt + TROPHY_EXPIRY_DAYS * 86400000;
+        const msLeft = expiresAt - Date.now();
+        const daysLeft = Math.ceil(msLeft / 86400000);
+        return { expiresAt, daysLeft, expired: daysLeft <= 0 };
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // FETCH HELPERS
@@ -10002,30 +10225,35 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, 'text/html');
 
-        // Neopets shows actual errors in .errorMessage / #errorMessage / p.error elements.
-        // A successful bet redirects to the current-bets page — which is a normal FC page
-        // with pirate tables in it. Don't scan the whole page text for keywords since
-        // words like "please" and "already" appear in navigation and bet tables on success.
+        // SUCCESS SIGNAL: a successful bet redirects to the current-bets page.
+        // That page contains bet rows (tr with 5 td cells, first cell ≠ 'Round').
+        // We look for that positive signal rather than scanning for error keywords,
+        // which was triggering on incidental text in the current-bets tables.
+        const rows = doc.querySelectorAll('tr');
+        let hasBetRows = false;
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length === 5 && cells[0].textContent.trim() !== 'Round' && cells[0].textContent.trim() !== '') {
+                hasBetRows = true;
+            }
+        });
+        if (hasBetRows) return { ok: true, message: 'Bet placed!' };
+
+        // Also accept an empty current-bets page (no bets yet placed this round
+        // but no error either — e.g. first bet in a fresh round clears after redirect)
+        const emptyBets = doc.querySelector("td[colspan='5']");
+        if (emptyBets && emptyBets.textContent.includes('You do not have any bets')) {
+            return { ok: true, message: 'Bet placed!' };
+        }
+
+        // Explicit error elements from Neopets
         const errorEl = doc.querySelector('.errorMessage, #errorMessage, .error_msg, p.error, .neopets-error');
         if (errorEl) {
-            const msg = errorEl.textContent.replace(/\s+/g, ' ').trim();
-            return { ok: false, message: msg.slice(0, 200) };
+            return { ok: false, message: errorEl.textContent.replace(/\s+/g, ' ').trim().slice(0, 200) };
         }
 
-        // Also catch the specific "you cannot bet" / "oops" patterns that appear
-        // as plain paragraphs rather than in error-classed elements
-        const content = doc.querySelector('td.content');
-        if (content) {
-            const text = content.textContent.replace(/\s+/g, ' ').trim();
-            // Only flag as error if the page starts with or prominently features
-            // a hard error phrase — not just contains common words
-            if (/^(oops|sorry|error|you cannot|you can't|you do not|you don't|unable to|invalid)/i.test(text) ||
-                /you (cannot|can't|do not have enough|already (have|placed)|have reached the maximum)/i.test(text)) {
-                return { ok: false, message: text.slice(0, 200) };
-            }
-        }
-
-        // No error found — the response is the updated current-bets page, which is correct
+        // Fallback: if we can't read a positive signal, assume success (the bet
+        // went through and process_foodclub redirected us somewhere unexpected).
         return { ok: true, message: 'Bet placed!' };
     }
 
@@ -10733,22 +10961,133 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // RENDER: COLLECT TAB
+        // RENDER: COLLECT TAB  (includes integrated Trophy Run mode toggle)
         // ─────────────────────────────────────────────────────────────────────
+
+        // Persisted across renders within this page session
+        const FC_TROPHY_MODE_KEY = 'neoui_fc_trophy_mode';
+        function isTrophyMode() {
+            try { return localStorage.getItem(FC_TROPHY_MODE_KEY) === '1'; } catch(e) { return false; }
+        }
+        function setTrophyMode(on) {
+            try { localStorage.setItem(FC_TROPHY_MODE_KEY, on ? '1' : '0'); } catch(e) {}
+        }
+
+        function trophyExpiryLabel(entry) {
+            if (entry.collected) {
+                return { text: `✔ Collected ${new Date(entry.collectedAt).toLocaleDateString()}`, color: 'var(--nui-text-faint)' };
+            }
+            const expiresAt = entry.loggedAt + TROPHY_EXPIRY_DAYS * 86400000;
+            const msLeft = expiresAt - Date.now();
+            const daysLeft = Math.ceil(msLeft / 86400000);
+            if (daysLeft <= 0) return { text: '⛔ Expired — winnings are gone', color: 'var(--nui-danger)' };
+            if (daysLeft <= 2) return { text: `⚠ Collect now — expires in ${daysLeft}d`, color: 'var(--nui-danger)' };
+            if (daysLeft <= 4) return { text: `⏳ Expires in ${daysLeft}d`, color: 'var(--nui-warning)' };
+            return { text: `🟢 Safe to hold — ${daysLeft}d left`, color: 'var(--nui-success)' };
+        }
+
         async function renderCollect() {
             const { doc } = await fetchFC('collect');
             const { hasWinnings, rows } = scrapeCollect(doc);
+            const trophyOn = isTrophyMode();
 
             contentInner.innerHTML = '';
 
+            // ── Trophy Run toggle row (always shown) ─────────────────────────
+            const toggleRow = document.createElement('div');
+            toggleRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-radius:var(--nui-radius-md);margin-bottom:var(--nui-space-3);background:' + (trophyOn ? 'var(--nui-warning-soft,rgba(255,200,0,0.12))' : 'var(--nui-surface-2)') + ';border:1px solid ' + (trophyOn ? 'var(--nui-warning,#f5a623)' : 'var(--nui-border)') + ';';
+            toggleRow.innerHTML = `
+                <div>
+                    <div style="font-weight:800;font-size:13px;color:${trophyOn ? 'var(--nui-warning,#f5a623)' : 'var(--nui-text)'};display:flex;align-items:center;gap:6px;">🏆 Trophy Run Mode</div>
+                    <div style="font-size:11px;color:var(--nui-text-faint);margin-top:2px;">${trophyOn ? 'Log & hold winnings — do NOT collect yet' : 'Off — collect winnings normally'}</div>
+                </div>
+            `;
+            const toggleBtn = document.createElement('button');
+            toggleBtn.type = 'button';
+            toggleBtn.className = trophyOn ? 'nui-btn nui-btn-primary' : 'nui-btn nui-btn-secondary';
+            toggleBtn.style.cssText = 'flex-shrink:0;font-size:12px;padding:6px 14px;';
+            toggleBtn.textContent = trophyOn ? 'ON' : 'OFF';
+            toggleBtn.addEventListener('click', () => { setTrophyMode(!trophyOn); renderCollect(); });
+            toggleRow.appendChild(toggleBtn);
+            contentInner.appendChild(toggleRow);
+
+            // ── Held entries panel (only in trophy mode) ──────────────────────
+            if (trophyOn) {
+                let run = loadTrophyRun();
+                if (!run) run = startTrophyRun();
+
+                const activeEntries = run.entries.filter(e => !e.collected);
+                const totalHeld = activeEntries.reduce((s, e) => s + (e.amount || 0), 0);
+                const soonestDays = activeEntries
+                    .map(e => { const ea = e.loggedAt + TROPHY_EXPIRY_DAYS * 86400000; return Math.ceil((ea - Date.now()) / 86400000); })
+                    .filter(d => !isNaN(d)).sort((a, b) => a - b)[0];
+
+                const heldHeader = document.createElement('div');
+                heldHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:var(--nui-space-2);';
+                heldHeader.innerHTML = `
+                    <div style="font-family:var(--nui-font-display);font-size:15px;font-weight:800;color:var(--nui-text);">Currently Held</div>
+                    <div style="font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-warning,#f5a623);">${totalHeld.toLocaleString()} NP</div>
+                `;
+                contentInner.appendChild(heldHeader);
+
+                if (soonestDays !== undefined && soonestDays <= 2) {
+                    const urgentBanner = document.createElement('div');
+                    urgentBanner.style.cssText = 'padding:8px 12px;background:var(--nui-danger-soft);border:1px solid var(--nui-danger);border-radius:var(--nui-radius-md);color:var(--nui-danger);font-weight:700;font-size:13px;margin-bottom:var(--nui-space-2);';
+                    urgentBanner.textContent = soonestDays <= 0
+                        ? '⛔ One or more held batches have expired!'
+                        : `⚠ Oldest batch expires in ${soonestDays} day${soonestDays === 1 ? '' : 's'} — collect soon!`;
+                    contentInner.appendChild(urgentBanner);
+                }
+
+                if (activeEntries.length === 0) {
+                    const emptyHeld = document.createElement('div');
+                    emptyHeld.style.cssText = 'font-size:12px;color:var(--nui-text-faint);padding:6px 0 10px;';
+                    emptyHeld.textContent = 'No batches held yet — log today\'s winnings below after you don\'t collect.';
+                    contentInner.appendChild(emptyHeld);
+                } else {
+                    // Show held entries newest→oldest, each with expiry label
+                    const entriesByNewest = activeEntries.slice().sort((a, b) => b.loggedAt - a.loggedAt);
+                    entriesByNewest.forEach(entry => {
+                        const { text: exText, color: exColor } = trophyExpiryLabel(entry);
+                        const eRow = document.createElement('div');
+                        eRow.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:8px 12px;background:var(--nui-surface-2);margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
+                        eRow.innerHTML = `
+                            <div style="flex:1;min-width:100px;">
+                                <div style="font-size:11px;color:var(--nui-text-faint);font-weight:700;">${new Date(entry.loggedAt).toLocaleDateString()}${entry.note ? ' · ' + entry.note.replace(/</g,'&lt;') : ''}</div>
+                                <div style="font-weight:800;color:var(--nui-text);font-size:14px;">${(entry.amount || 0).toLocaleString()} NP</div>
+                            </div>
+                            <div style="font-size:12px;font-weight:700;color:${exColor};">${exText}</div>
+                        `;
+                        const rmBtn = document.createElement('button');
+                        rmBtn.type = 'button';
+                        rmBtn.className = 'nui-btn nui-btn-secondary';
+                        rmBtn.textContent = '✕';
+                        rmBtn.title = 'Remove entry';
+                        rmBtn.style.cssText = 'flex-shrink:0;font-size:11px;padding:4px 8px;';
+                        rmBtn.addEventListener('click', () => {
+                            run.entries = run.entries.filter(e => e.id !== entry.id);
+                            saveTrophyRun(run);
+                            renderCollect();
+                        });
+                        eRow.appendChild(rmBtn);
+                        contentInner.appendChild(eRow);
+                    });
+                }
+
+                const divider = document.createElement('div');
+                divider.style.cssText = 'border-top:1px solid var(--nui-border);margin:var(--nui-space-3) 0;';
+                contentInner.appendChild(divider);
+            }
+
+            // ── Winnings available section ─────────────────────────────────
             if (!hasWinnings) {
-                contentInner.innerHTML = `<div class="nui-empty"><span class="nui-empty-emoji">💰</span>No winning bets to collect right now.</div>`;
+                contentInner.insertAdjacentHTML('beforeend', `<div class="nui-empty"><span class="nui-empty-emoji">💰</span>No winning bets to collect right now.</div>`);
                 return;
             }
 
             const heading = document.createElement('div');
             heading.style.cssText = 'font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-text);margin-bottom:var(--nui-space-3);';
-            heading.textContent = `Winnings Available!`;
+            heading.textContent = 'Winnings Available!';
             contentInner.appendChild(heading);
 
             let totalWin = 0;
@@ -10790,36 +11129,101 @@ pop.style.cssText = 'position:fixed; z-index:2147483647; width:212px; padding:12
                 contentInner.appendChild(card);
             });
 
-            const collectBtn = document.createElement('button');
-collectBtn.type = 'button';
-collectBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
-collectBtn.style.marginTop = 'var(--nui-space-3)';
-collectBtn.textContent = 'Collect All Winnings';
-collectBtn.addEventListener('click', async () => {
-    collectBtn.disabled = true;
-    collectBtn.textContent = 'Collecting…';
-    const fd = new FormData();
-    fd.append('type', 'collect');
-    try {
-        const res = await fetch('/pirates/process_foodclub.phtml', {
-            method: 'POST',
-            credentials: 'include',
-            body: fd,
-        });
-        const html = await res.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-        const content = doc.querySelector('td.content');
-        const text = content ? content.textContent.replace(/\s+/g, ' ').trim() : '';
-        const isError = /error|invalid|cannot|failed/i.test(text);
-        collectBtn.textContent = isError ? '⚠ ' + text.slice(0, 80) : '✓ Collected!';
-        collectBtn.className = isError ? 'nui-btn nui-btn-danger nui-btn-block' : 'nui-btn nui-btn-success nui-btn-block';
-        if (!isError) setTimeout(() => renderCollect(), 1500);
-    } catch (e) {
-        collectBtn.textContent = '⚠ Network error';
-        collectBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
-    }
-});
-contentInner.appendChild(collectBtn);
+            if (trophyOn) {
+                // Trophy mode: log & hold instead of collecting
+                const holdBtn = document.createElement('button');
+                holdBtn.type = 'button';
+                holdBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
+                holdBtn.style.marginTop = 'var(--nui-space-3)';
+                holdBtn.textContent = `🏆 Log & Hold — ${totalWin.toLocaleString()} NP (do NOT collect)`;
+                holdBtn.addEventListener('click', () => {
+                    let run = loadTrophyRun();
+                    if (!run) run = startTrophyRun();
+                    addTrophyEntry(run, totalWin, `Round ${rows.map(r => r.round).join(', ')}`);
+                    holdBtn.textContent = `✔ Logged — ${totalWin.toLocaleString()} NP added to held total`;
+                    holdBtn.disabled = true;
+                    // Refresh after a moment to show updated held entries
+                    setTimeout(() => renderCollect(), 900);
+                });
+                contentInner.appendChild(holdBtn);
+
+                const warningNote = document.createElement('div');
+                warningNote.style.cssText = 'text-align:center;font-size:11px;color:var(--nui-text-faint);margin-top:8px;';
+                warningNote.textContent = '⚠ Do not use "Collect All Winnings" on Neopets while Trophy Run is active.';
+                contentInner.appendChild(warningNote);
+
+                // Secondary: still allow emergency collect
+                const emergencyBtn = document.createElement('button');
+                emergencyBtn.type = 'button';
+                emergencyBtn.className = 'nui-btn nui-btn-secondary nui-btn-block';
+                emergencyBtn.style.marginTop = 'var(--nui-space-2)';
+                emergencyBtn.textContent = 'Collect All Winnings (emergency — ends run intent)';
+                emergencyBtn.addEventListener('click', async () => {
+                    if (!confirm('Collect winnings now? This will end your trophy run for this cycle if uncollected NP is being held.')) return;
+                    emergencyBtn.disabled = true;
+                    emergencyBtn.textContent = 'Collecting…';
+                    const fd = new FormData();
+                    fd.append('type', 'collect');
+                    try {
+                        const res = await fetch('/pirates/process_foodclub.phtml', { method: 'POST', credentials: 'include', body: fd });
+                        const html = await res.text();
+                        const rdoc = new DOMParser().parseFromString(html, 'text/html');
+                        const errorEl = rdoc.querySelector('.errorMessage, #errorMessage, .error_msg, p.error, .neopets-error');
+                        if (errorEl) {
+                            emergencyBtn.textContent = '⚠ ' + errorEl.textContent.replace(/\s+/g, ' ').trim().slice(0, 80);
+                            emergencyBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+                        } else {
+                            const npMatch = (rdoc.body ? rdoc.body.textContent : '').match(/(\d[\d,]+)\s*NP/i);
+                            emergencyBtn.textContent = npMatch ? '✓ Collected ' + npMatch[1] + ' NP!' : '✓ Collected!';
+                            emergencyBtn.className = 'nui-btn nui-btn-success nui-btn-block';
+                            setTimeout(() => renderCollect(), 1500);
+                        }
+                    } catch (e) {
+                        emergencyBtn.textContent = '⚠ Network error';
+                        emergencyBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+                    }
+                });
+                contentInner.appendChild(emergencyBtn);
+
+            } else {
+                // Normal mode: collect immediately
+                const collectBtn = document.createElement('button');
+                collectBtn.type = 'button';
+                collectBtn.className = 'nui-btn nui-btn-primary nui-btn-block';
+                collectBtn.style.marginTop = 'var(--nui-space-3)';
+                collectBtn.textContent = 'Collect All Winnings';
+                collectBtn.addEventListener('click', async () => {
+                    collectBtn.disabled = true;
+                    collectBtn.textContent = 'Collecting…';
+                    const fd = new FormData();
+                    fd.append('type', 'collect');
+                    try {
+                        const res = await fetch('/pirates/process_foodclub.phtml', {
+                            method: 'POST',
+                            credentials: 'include',
+                            body: fd,
+                        });
+                        const html = await res.text();
+                        const rdoc = new DOMParser().parseFromString(html, 'text/html');
+                        const errorEl = rdoc.querySelector('.errorMessage, #errorMessage, .error_msg, p.error, .neopets-error');
+                        if (errorEl) {
+                            const msg = errorEl.textContent.replace(/\s+/g, ' ').trim().slice(0, 80);
+                            collectBtn.textContent = '⚠ ' + msg;
+                            collectBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+                        } else {
+                            const fullText = rdoc.body ? rdoc.body.textContent : '';
+                            const npMatch = fullText.match(/(\d[\d,]+)\s*NP/i);
+                            collectBtn.textContent = npMatch ? '✓ Collected ' + npMatch[1] + ' NP!' : '✓ Collected!';
+                            collectBtn.className = 'nui-btn nui-btn-success nui-btn-block';
+                            setTimeout(() => renderCollect(), 1500);
+                        }
+                    } catch (e) {
+                        collectBtn.textContent = '⚠ Network error';
+                        collectBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+                    }
+                });
+                contentInner.appendChild(collectBtn);
+            }
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -10869,6 +11273,149 @@ contentInner.appendChild(collectBtn);
 
             contentInner.appendChild(card);
         }
+
+        // (Trophy Run tab removed — trophy mode is now a toggle on the Collect tab)
+        // Dead code placeholder to preserve line structure; functions below are gone.
+        if (false) { async function renderTrophy() { // eslint-disable-line
+            contentInner.innerHTML = '';
+            let run = loadTrophyRun();
+
+            if (!run) {
+                const intro = document.createElement('div');
+                intro.style.cssText = 'text-align:center;padding:30px 10px;';
+                intro.innerHTML = `
+                    <div style="font-size:36px;margin-bottom:10px;">🏆</div>
+                    <div style="font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-text);margin-bottom:8px;">Start a Trophy Run</div>
+                    <div style="font-size:13px;color:var(--nui-text-muted);max-width:420px;margin:0 auto 18px;line-height:1.5;">
+                        Log each day's winnings instead of collecting them, so your total
+                        keeps growing toward a trophy. Every logged day gets a 7-day expiry
+                        label — collect before it expires or the winnings are lost.
+                    </div>
+                `;
+                const startBtn = document.createElement('button');
+                startBtn.type = 'button';
+                startBtn.className = 'nui-btn nui-btn-primary';
+                startBtn.textContent = '🏆 Start Trophy Run';
+                startBtn.addEventListener('click', () => { startTrophyRun(); renderTrophy(); });
+                intro.appendChild(startBtn);
+                contentInner.appendChild(intro);
+                return;
+            }
+
+            const dayNow = dayNumberFor(run, Date.now());
+            const active = run.entries.filter(e => !e.collected);
+            const totalHeld = active.reduce((s, e) => s + (e.amount || 0), 0);
+            const soonest = active
+                .map(e => expiryInfoFor(e).daysLeft)
+                .filter(d => !isNaN(d))
+                .sort((a, b) => a - b)[0];
+
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:var(--nui-space-3);';
+            header.innerHTML = `
+                <div>
+                    <div style="font-family:var(--nui-font-display);font-size:18px;font-weight:800;color:var(--nui-text);">🏆 Trophy Run — Day ${dayNow}</div>
+                    <div style="font-size:12px;color:var(--nui-text-faint);margin-top:2px;">Started ${new Date(run.startedAt).toLocaleDateString()}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-success);">${totalHeld.toLocaleString()} NP</div>
+                    <div style="font-size:11px;font-weight:700;color:var(--nui-text-faint);text-transform:uppercase;">Held Across ${active.length} Day${active.length === 1 ? '' : 's'}</div>
+                </div>
+            `;
+            contentInner.appendChild(header);
+
+            if (soonest !== undefined && soonest <= 2) {
+                const warn = document.createElement('div');
+                warn.style.cssText = 'padding:8px 12px;background:var(--nui-danger-soft);border:1px solid var(--nui-danger);border-radius:var(--nui-radius-md);color:var(--nui-danger);font-weight:700;font-size:13px;margin-bottom:var(--nui-space-3);';
+                warn.textContent = soonest <= 0
+                    ? '⛔ One or more held days have expired.'
+                    : `⚠ Your oldest held winnings expire in ${soonest} day${soonest === 1 ? '' : 's'} — collect soon!`;
+                contentInner.appendChild(warn);
+            }
+
+            // Log-a-day form
+            const logCard = document.createElement('div');
+            logCard.style.cssText = 'border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:12px 14px;background:var(--nui-surface-2);margin-bottom:var(--nui-space-3);display:flex;gap:8px;flex-wrap:wrap;align-items:center;';
+            logCard.innerHTML = `
+                <input id="nui-trophy-amt" type="number" placeholder="Winnings (NP)" min="0" style="flex:1;min-width:120px;padding:8px 10px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);background:var(--nui-surface);color:var(--nui-text);font-size:13px;">
+                <input id="nui-trophy-note" type="text" placeholder="Note (optional)" maxlength="60" style="flex:2;min-width:140px;padding:8px 10px;border-radius:var(--nui-radius-sm);border:1px solid var(--nui-border);background:var(--nui-surface);color:var(--nui-text);font-size:13px;">
+            `;
+            const logBtn = document.createElement('button');
+            logBtn.type = 'button';
+            logBtn.className = 'nui-btn nui-btn-primary';
+            logBtn.textContent = '+ Log Today';
+            logBtn.style.flexShrink = '0';
+            logBtn.addEventListener('click', () => {
+                const amtEl = contentInner.querySelector('#nui-trophy-amt');
+                const noteEl = contentInner.querySelector('#nui-trophy-note');
+                const amt = parseInt(amtEl.value, 10);
+                if (isNaN(amt) || amt < 0) { amtEl.focus(); return; }
+                addTrophyEntry(run, amt, noteEl.value.trim());
+                renderTrophy();
+            });
+            logCard.appendChild(logBtn);
+            contentInner.appendChild(logCard);
+
+            // Entries list, newest first
+            const sorted = run.entries.slice().sort((a, b) => b.loggedAt - a.loggedAt);
+            if (!sorted.length) {
+                contentInner.insertAdjacentHTML('beforeend', '<div class="nui-empty"><span class="nui-empty-emoji">📭</span>No days logged yet. Add today\'s winnings above.</div>');
+            } else {
+                sorted.forEach(entry => {
+                    const status = trophyStatusLabel(entry);
+                    const day = dayNumberFor(run, entry.loggedAt);
+                    const row = document.createElement('div');
+                    row.style.cssText = `border:1px solid var(--nui-border);border-radius:var(--nui-radius-md);padding:10px 14px;background:var(--nui-surface-2);margin-bottom:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;${entry.collected ? 'opacity:0.6;' : ''}`;
+                    row.innerHTML = `
+                        <div style="flex:1;min-width:120px;">
+                            <div style="font-size:12px;color:var(--nui-text-faint);font-weight:700;">Day ${day} · ${new Date(entry.loggedAt).toLocaleDateString()}</div>
+                            <div style="font-weight:800;color:var(--nui-text);font-size:15px;">${(entry.amount || 0).toLocaleString()} NP</div>
+                            ${entry.note ? `<div style="font-size:12px;color:var(--nui-text-muted);margin-top:2px;">${entry.note.replace(/</g, '&lt;')}</div>` : ''}
+                        </div>
+                        <div style="font-size:12px;font-weight:700;color:${status.color};text-align:right;flex:1;min-width:160px;">${status.text}</div>
+                    `;
+                    if (!entry.collected) {
+                        const collectBtn = document.createElement('button');
+                        collectBtn.type = 'button';
+                        collectBtn.className = 'nui-btn nui-btn-success';
+                        collectBtn.textContent = 'Mark Collected';
+                        collectBtn.style.cssText += 'flex-shrink:0;font-size:12px;padding:6px 10px;';
+                        collectBtn.addEventListener('click', () => {
+                            entry.collected = true;
+                            entry.collectedAt = Date.now();
+                            saveTrophyRun(run);
+                            renderTrophy();
+                        });
+                        row.appendChild(collectBtn);
+                    }
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.className = 'nui-btn nui-btn-secondary';
+                    removeBtn.textContent = '✕';
+                    removeBtn.title = 'Remove entry';
+                    removeBtn.style.cssText += 'flex-shrink:0;font-size:12px;padding:6px 10px;';
+                    removeBtn.addEventListener('click', () => {
+                        run.entries = run.entries.filter(e => e.id !== entry.id);
+                        saveTrophyRun(run);
+                        renderTrophy();
+                    });
+                    row.appendChild(removeBtn);
+                    contentInner.appendChild(row);
+                });
+            }
+
+            const endBtn = document.createElement('button');
+            endBtn.type = 'button';
+            endBtn.className = 'nui-btn nui-btn-danger nui-btn-block';
+            endBtn.style.marginTop = 'var(--nui-space-3)';
+            endBtn.textContent = 'End Trophy Run';
+            endBtn.addEventListener('click', () => {
+                if (!confirm('End this trophy run? Logged days will be cleared (this does not affect real NP or in-game winnings).')) return;
+                endTrophyRun();
+                renderTrophy();
+            });
+            contentInner.appendChild(endBtn);
+        } } // end dead-code block
 
         switchTab(activeTab);
     }
@@ -11453,13 +12000,20 @@ contentInner.appendChild(collectBtn);
         if (refInput) securityToken = refInput.value;
 
         // 2. Scrape Live Prices from Marquee
+        // The marquee repeats its whole ticker sequence 2-3x back-to-back so
+        // the scroll loop looks seamless, which without deduping caused the
+        // same ticker to show up multiple times (e.g. on the Bargains page).
         const marqueeLinks = doc.querySelectorAll('marquee a');
+        const seenTickers = new Set();
         marqueeLinks.forEach(a => {
             const text = a.textContent.trim();
             const parts = text.split(' ');
             if (parts.length >= 3) {
+                const ticker = parts[0];
+                if (seenTickers.has(ticker)) return;
+                seenTickers.add(ticker);
                 liveStocksData.push({
-                    ticker: parts[0],
+                    ticker: ticker,
                     price: parseInt(parts[1], 10),
                     change: parts[2]
                 });
@@ -11824,6 +12378,24 @@ contentInner.appendChild(collectBtn);
                     box-shadow: 0 2px 4px var(--nui-shadow);
                 `;
 
+                // Derive a few extra figures for the expanded detail view.
+                // paid/mktValue are scraped as formatted strings (e.g. "12,345"),
+                // so parse out the numbers to compute avg cost/share and gain/loss.
+                const paidNum = parseFloat(String(stock.paid).replace(/[^0-9.-]/g, '')) || 0;
+                const mktValueNum = parseFloat(String(stock.mktValue).replace(/[^0-9.-]/g, '')) || 0;
+                const avgCost = stock.qty > 0 ? (paidNum / stock.qty) : 0;
+                const gainLoss = mktValueNum - paidNum;
+                const gainLossColor = gainLoss > 0 ? 'var(--nui-success)' : gainLoss < 0 ? 'var(--nui-danger)' : 'var(--nui-text-muted)';
+                const gainLossStr = (gainLoss > 0 ? '+' : '') + Math.round(gainLoss).toLocaleString() + ' NP';
+                const lotCount = Array.isArray(stock.lots) ? stock.lots.length : 0;
+
+                function detailRow(label, value, valueColor) {
+                    return '<div style="display:flex; justify-content:space-between; align-items:center; width:100%; font-size:12px;">' +
+                        '<span style="color:var(--nui-text-muted); font-weight:600;">' + label + '</span>' +
+                        '<span style="color:' + (valueColor || 'var(--nui-text)') + '; font-weight:800;">' + value + '</span>' +
+                        '</div>';
+                }
+
                 card.innerHTML = `
                     <div style="font-size: 24px; font-family: var(--nui-font-display); font-weight: 800; color: var(--nui-text);">${stock.ticker}</div>
                     <div style="font-size: 20px; font-weight: 800; color: ${priceColor};">${stock.currPrice}</div>
@@ -11831,6 +12403,14 @@ contentInner.appendChild(collectBtn);
                     <div style="font-size: 11px; font-weight: 700; color: var(--nui-text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px;">${stock.qty.toLocaleString()} Shares</div>
 
                     <div class="nui-stk-expand" style="display: none; width: 100%; margin-top: 12px; padding-top: 12px; border-top: 1px solid ${borderColor}; flex-direction: column; gap: 6px;">
+                        <div style="display:flex; flex-direction:column; gap:4px; width:100%; margin-bottom: 4px;">
+                            ${detailRow('Open Price', stock.open.toLocaleString() + ' NP')}
+                            ${detailRow('Avg. Cost / Share', Math.round(avgCost).toLocaleString() + ' NP')}
+                            ${detailRow('Total Paid', stock.paid + ' NP')}
+                            ${detailRow('Market Value', stock.mktValue + ' NP')}
+                            ${detailRow('Gain / Loss', gainLossStr, gainLossColor)}
+                            ${detailRow('Purchase Lots', lotCount.toLocaleString())}
+                        </div>
                         <input type="number" class="nui-input" value="${stock.qty}" min="1" max="${stock.qty}" style="width: 100%; text-align: center; padding: 6px; font-size: 13px;">
                         <button type="button" class="nui-btn nui-btn-primary nui-btn-block btn-sell" style="padding: 6px;">Sell</button>
                     </div>
@@ -12714,115 +13294,20 @@ return {
     else document.addEventListener('DOMContentLoaded', start);
 })();
 // ==============================================================================
-// MODULE 14: FAERIE QUESTS (HEADLESS ENHANCEMENT ON /quests.phtml)
+// MODULE 14: FAERIE QUESTS (HEADLESS ENHANCEMENT ON /quests.phtml) — RETIRED v1.1.70
 // ==============================================================================
-// Leaves the native quest panel and its Abandon/Complete buttons completely
-// untouched (they already work fine and submit through the site's own
-// #fq2_form) — this only adds a compact card above it with the item
-// image(s), a link straight to a Safety Deposit Box search for the item, a
-// Trading Post / Auction lookup, and a "copy name" button for pasting into a
-// Neoboard post to ask around. Faerie quest items are NOT Shop Wizard or
-// Super Shop Wizard searchable — Neopets blocks that lookup for quest items
-// specifically — so no SW/SSW link is offered here; don't add one back in.
+// Superseded by Module 28 (Faerie Quests — Full SPA), a complete page rebuild
+// that was added further down the file but was never wired up to disable this
+// older, non-destructive enhancement. Both modules matched /quests.phtml and
+// ran back-to-back — this one quietly inserted its card first, then Module 28
+// wiped document.body and rebuilt the page from scratch, discarding that card
+// on every load. It never had any visible effect once Module 28 existed, so
+// it's retired here rather than left running for nothing. The 'faerie-quests'
+// toggle key now gates Module 28 directly so no user preferences are orphaned.
+// ==============================================================================
 (function () {
     'use strict';
-
-    if (!/^\/quests\.phtml/.test(location.pathname)) return;
-    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('faerie-quests')) return;
-
-    const NeoUI = window.NeoUI;
-    if (!NeoUI || !NeoUI.__ready) return;
-
-    const STATE_KEY = 'neoui_faerie_quest_state';
-
-    function saveState(state) {
-        try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (e) {}
-    }
-    function clearState() {
-        try { localStorage.removeItem(STATE_KEY); } catch (e) {}
-    }
-
-    function buildSearchLinks(itemName) {
-        const enc = encodeURIComponent(itemName);
-        return [
-            { label: 'My SDB', href: 'https://www.neopets.com/safetydeposit.phtml?obj_name=' + enc + '&category=0' },
-            { label: 'Trading Post', href: 'https://www.neopets.com/island/tradingpost.phtml?type=browse&criteria=item_exact&search_string=' + enc },
-            { label: 'Auction', href: 'https://www.neopets.com/genie.phtml?type=process_genie&criteria=exact&auctiongenie=' + enc }
-        ];
-    }
-
-    function copyItemName(itemName, btn) {
-        function done(ok) {
-            const original = '📋 Copy name';
-            btn.textContent = ok ? '✓ Copied' : '✗ Copy failed';
-            setTimeout(function () { btn.textContent = original; }, 1500);
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(itemName).then(function () { done(true); }, function () { done(false); });
-            return;
-        }
-        // Fallback for contexts without the async Clipboard API.
-        try {
-            const ta = document.createElement('textarea');
-            ta.value = itemName;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            const ok = document.execCommand('copy');
-            ta.remove();
-            done(ok);
-        } catch (e) { done(false); }
-    }
-
-    function run() {
-        const fq2 = document.getElementById('fq2');
-        if (!fq2 || document.getElementById('nui-faerie-quick')) return;
-
-        const descTop = fq2.querySelector('.description_top');
-        const itemCells = fq2.querySelectorAll('.images .item');
-        const completeBtn = fq2.querySelector('#complete_faerie_quest');
-        const isActive = !!(descTop && itemCells.length);
-
-        if (!isActive) { clearState(); return; }
-
-        const descText = (descTop.textContent || '').replace(/\s+/g, ' ').trim();
-        const faerieMatch = descText.match(/quest for the ([^.]+?)\.?\s*(Return|You've|$)/);
-        const faerie = faerieMatch ? faerieMatch[1].trim() : 'a faerie';
-        const items = Array.prototype.map.call(itemCells, function (cell) {
-            const b = cell.querySelector('b');
-            const img = cell.querySelector('img');
-            return { name: b ? b.textContent.trim() : 'Unknown item', icon: img ? img.src : '' };
-        });
-
-        saveState({ faerie: faerie, item: items.map(function (i) { return i.name; }).join(', '), readyToComplete: !!completeBtn, capturedAt: Date.now() });
-
-        const card = document.createElement('div');
-        card.id = 'nui-faerie-quick';
-        card.style.cssText = 'max-width:600px; margin:12px auto; padding:14px 16px; border-radius:var(--nui-radius-lg); border:1px solid var(--nui-border); background:var(--nui-surface); box-shadow:0 2px 10px var(--nui-shadow);';
-        let html = '<div style="font-weight:800; font-size:14px; margin-bottom:8px; color:var(--nui-text);">🧚 Quest for ' + faerie +
-            (completeBtn ? ' <span style="color:var(--nui-success); font-weight:700; font-size:12px;">· ready to turn in</span>' : '') + '</div>';
-        items.forEach(function (item) {
-            const links = buildSearchLinks(item.name);
-            html += '<div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--nui-border); flex-wrap:wrap;">' +
-                (item.icon ? '<img src="' + item.icon + '" style="width:32px; height:32px; border-radius:6px; flex-shrink:0;">' : '') +
-                '<div style="flex:1; min-width:80px; font-weight:700; font-size:13px; color:var(--nui-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + item.name + '</div>' +
-                links.map(function (l) { return '<a href="' + l.href + '" target="_blank" rel="noopener" style="font-size:11px; font-weight:700; padding:4px 8px; border-radius:var(--nui-radius-pill); border:1px solid var(--nui-border); text-decoration:none; color:var(--nui-accent); white-space:nowrap;">' + l.label + '</a>'; }).join('') +
-                '<button type="button" class="nui-faerie-copy-btn" data-copy-item="' + item.name.replace(/"/g, '&quot;') + '" style="font-size:11px; font-weight:700; padding:4px 8px; border-radius:var(--nui-radius-pill); border:1px solid var(--nui-border); background:var(--nui-accent-soft); color:var(--nui-accent); cursor:pointer; white-space:nowrap;">📋 Copy name</button>' +
-                '</div>';
-        });
-        card.innerHTML = html;
-        fq2.parentNode.insertBefore(card, fq2);
-        card.querySelectorAll('[data-copy-item]').forEach(function (btn) {
-            btn.addEventListener('click', function () { copyItemName(this.getAttribute('data-copy-item'), this); });
-        });
-    }
-
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        try { run(); } catch (e) {}
-    } else {
-        document.addEventListener('DOMContentLoaded', function () { try { run(); } catch (e) {} });
-    }
+    // Retired — functionality carried forward into Module 28.
 })();
 // ==============================================================================
 // MODULE 15: NEOUI HOMEPAGE DASHBOARD (WITH EDITORS)
@@ -12857,41 +13342,98 @@ return {
     }
 
     // --- GLOBAL ACTIONS ---
+
+    // Scrape _ref_ck from inline <script> tags in a given document root.
+    // The token is present on pages like quickref.phtml but absent on others (e.g. home).
+    function scrapeRefCkFrom(root) {
+        const scripts = root.getElementsByTagName('script');
+        for (let i = 0; i < scripts.length; i++) {
+            const c = scripts[i].innerHTML;
+            const m = c.match(/_ref_ck['"\]?\s*:\s*['"]([a-f0-9]+)['"]/i) ||
+                      c.match(/getCK\(\)\s*\{\s*return\s*['"]([a-f0-9]+)['"]/i);
+            if (m) return m[1];
+        }
+        return '';
+    }
+
+    // Load quickref.phtml in a 1px hidden iframe, scrape _ref_ck from it, discard.
+    // Same-origin so we have full DOM access. Resolves with the token or rejects.
+    function getRefCkViaIframe() {
+        return new Promise(function(resolve, reject) {
+            const prev = document.getElementById('nui-refck-iframe');
+            if (prev) prev.remove();
+
+            const iframe = document.createElement('iframe');
+            iframe.id = 'nui-refck-iframe';
+            iframe.src = '/quickref.phtml';
+            iframe.style.cssText = 'position:fixed;width:1px;height:1px;top:-9999px;left:-9999px;opacity:0;pointer-events:none;border:none;';
+            iframe.setAttribute('aria-hidden', 'true');
+
+            const tid = setTimeout(function() {
+                iframe.remove();
+                reject(new Error('_ref_ck iframe timed out'));
+            }, 8000);
+
+            iframe.addEventListener('load', function() {
+                clearTimeout(tid);
+                try {
+                    const ck = scrapeRefCkFrom(iframe.contentDocument || iframe.contentWindow.document);
+                    iframe.remove();
+                    if (ck) { resolve(ck); } else { reject(new Error('_ref_ck not found in iframe')); }
+                } catch (e) {
+                    iframe.remove();
+                    reject(e);
+                }
+            });
+            iframe.addEventListener('error', function() {
+                clearTimeout(tid);
+                iframe.remove();
+                reject(new Error('quickref iframe failed to load'));
+            });
+            document.body.appendChild(iframe);
+        });
+    }
+
+    // Cache the token within the page session to avoid re-loading the iframe
+    // every time the user taps a different pet.
+    let nuiRefCkCache = '';
+
     window.nuiChangeActivePet = function(petName) {
         if (!petName) return;
 
-        let refCk = '';
-        const scripts = document.getElementsByTagName('script');
-        for (let i = 0; i < scripts.length; i++) {
-            const content = scripts[i].innerHTML;
-            const ckMatch = content.match(/_ref_ck['"]?\s*:\s*['"]([a-f0-9]+)['"]/i) ||
-                            content.match(/getCK\(\)\s*\{\s*return\s*['"]([a-f0-9]+)['"]/i);
-            if (ckMatch) {
-                refCk = ckMatch[1];
-                break;
-            }
-        }
+        const doChange = function(refCk) {
+            return fetch('/np-templates/ajax/changepet.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'Accept': 'application/json, text/javascript, */*; q=0.01',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: '_ref_ck=' + encodeURIComponent(refCk) + '&new_active_pet=' + encodeURIComponent(petName)
+            }).then(res => res.json()).then(data => {
+                if (data.status === 'success') window.location.reload();
+                else alert('Failed to change pet: ' + (data.error || 'Unknown error'));
+            }).catch(err => {
+                console.error('Pet change error:', err);
+                window.location.reload();
+            });
+        };
 
-        if (!refCk) {
-            alert('Could not find security token (_ref_ck).');
-            return;
+        // Fast path: token already on the current page (quickref) or cached from
+        // a previous iframe load earlier in this session.
+        const inline = scrapeRefCkFrom(document) || nuiRefCkCache;
+        if (inline) {
+            nuiRefCkCache = inline;
+            doChange(inline);
+        } else {
+            // Home page and others don't embed _ref_ck — fetch it via hidden iframe.
+            getRefCkViaIframe()
+                .then(function(ck) { nuiRefCkCache = ck; doChange(ck); })
+                .catch(function(err) {
+                    console.error('nuiChangeActivePet: could not obtain _ref_ck —', err);
+                    alert('Could not find security token. Try switching pets from the Quickref page.');
+                });
         }
-
-        fetch('/np-templates/ajax/changepet.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: '_ref_ck=' + encodeURIComponent(refCk) + '&new_active_pet=' + encodeURIComponent(petName)
-        }).then(res => res.json()).then(data => {
-            if (data.status === 'success') window.location.reload();
-            else alert('Failed to change pet: ' + (data.error || 'Unknown error'));
-        }).catch(err => {
-            console.error('Pet change error:', err);
-            window.location.reload();
-        });
     };
 
     // --- EDITOR MODAL SYSTEM ---
@@ -14723,6 +15265,675 @@ return {
     // Retired — native Neopets page takes over.
 })();
 
+// ============================================================================
+// MODULE 9: PROFILES & LOOKUPS
+// ============================================================================
+
+(function () {
+    'use strict';
+
+    const currentUrl = window.location.href;
+
+    // --- Global Helper: Standardized NeoUI Card Builder ---
+    function buildCard(title, innerHTML, gridClass = false) {
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'border-radius: var(--nui-radius-lg); border: 1px solid var(--nui-border); box-shadow: 0 2px 8px var(--nui-shadow); overflow: hidden; width: 100%; box-sizing: border-box; margin-bottom: 20px;';
+
+        const details = document.createElement('details');
+        details.open = true;
+
+        const summary = document.createElement('summary');
+        summary.style.cssText = 'padding:12px 16px; border-bottom:1px solid var(--nui-border); font-family:var(--nui-font-display); font-size:16px; font-weight:800; color:var(--nui-text); background:var(--nui-surface-2); text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; list-style:none;';
+        summary.textContent = title;
+        summary.innerHTML += '<style>summary::-webkit-details-marker { display: none; }</style>';
+
+        const content = document.createElement('div');
+        content.className = 'nui-card-content';
+        content.style.padding = 'var(--nui-space-4)';
+        content.style.boxSizing = 'border-box';
+
+        if (gridClass) {
+            content.style.display = 'grid';
+            content.style.gridTemplateColumns = gridClass;
+            content.style.gap = '8px';
+            content.style.alignItems = 'center';
+            content.style.justifyItems = 'center';
+        }
+
+        content.innerHTML = innerHTML;
+
+        details.appendChild(summary);
+        details.appendChild(content);
+        card.appendChild(details);
+
+        return card;
+    }
+
+    // ==========================================
+    // ROUTE 1: USERLOOKUP POPUPS
+    // ==========================================
+    if (currentUrl.includes("userlookup.phtml")) {
+        if (!window.NeoUI || !window.NeoUI.isModuleEnabled('lookups')) return;
+
+        let isCleanMode = true;
+        let customStyleNodes = [];
+
+        // ── 1. DATA EXTRACTION ────────────────────
+        function extractLookupData() {
+            const data = {
+                username: new URLSearchParams(location.search).get('user') || 'User',
+                shield: '', stats: '', actions: [], collections: [], shopGallery: '', pets: [], trophies: [], aboutMe: ''
+            };
+
+            document.querySelectorAll('style').forEach(s => {
+                if (!s.id?.startsWith('nui-') && !s.textContent.includes('var(--nui')) customStyleNodes.push(s);
+            });
+
+            document.querySelectorAll('.contentModule').forEach(mod => {
+                const headerEl = mod.querySelector('.contentModuleHeader, .contentModuleHeaderAlt');
+                if (!headerEl) return;
+                const headerText = headerEl.textContent.trim().toLowerCase();
+                const content = mod.querySelector('.contentModuleContent');
+                if (!content) return;
+
+                if (headerText.includes('user info')) {
+                    const shield = content.querySelector('img[src*="shields"]');
+                    if (shield) data.shield = shield.src;
+
+                    const statsTd = content.querySelector('td.medText');
+                    if (statsTd) {
+                        let clone = statsTd.cloneNode(true);
+                        if (clone.querySelector('img[src*="shields"]')) clone.querySelector('img[src*="shields"]').remove();
+                        clone.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+                        data.stats = clone.innerHTML.trim();
+                    }
+
+                    content.querySelectorAll('a').forEach(a => {
+                        const img = a.querySelector('img');
+                        if (img && (a.href.includes('tradingpost') || a.href.includes('genie') || a.href.includes('wishlist') || a.href.includes('neomessages') || a.href.includes('process_neofriend'))) {
+                            let label = a.textContent.trim().replace('Send a Message', 'Neomail');
+                            if (!label) label = img.alt || 'Action';
+                            data.actions.push({ url: a.href, icon: img.src, label: label });
+                        }
+                    });
+                }
+                else if (headerText.includes('collections')) {
+                    content.querySelectorAll('li').forEach(li => {
+                        li.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+                        data.collections.push(li.innerHTML);
+                    });
+                }
+                else if (headerText.includes('shop')) {
+                    let clone = content.cloneNode(true);
+                    clone.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+                    data.shopGallery = clone.innerHTML;
+                }
+                else if (headerText.includes('neopets')) {
+                    let petNodes = content.querySelectorAll('#bxlist li');
+                    if (petNodes.length === 0) petNodes = content.querySelectorAll('td.medText');
+
+                    petNodes.forEach(node => {
+                        const a = node.querySelector('a[href*="petlookup"]');
+                        if (!a) return;
+                        const img = a.querySelector('img');
+
+                        let clone = node.cloneNode(true);
+                        let aClone = clone.querySelector('a[href*="petlookup"]');
+                        if (aClone) aClone.remove();
+                        clone.querySelectorAll('hr').forEach(hr => hr.remove());
+                        clone.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+
+                        data.pets.push({
+                            name: new URLSearchParams(a.search).get('pet') || 'Pet',
+                            url: a.href,
+                            image: img ? img.src : '',
+                            info: clone.innerHTML.trim()
+                        });
+                    });
+                }
+                else if (headerText.includes('trophies')) {
+                    content.querySelectorAll('.trophy_cell').forEach(cell => {
+                        let clone = cell.cloneNode(true);
+                        clone.querySelectorAll('*').forEach(el => el.removeAttribute('style'));
+                        data.trophies.push(clone.innerHTML);
+                    });
+                }
+            });
+
+            const mainContent = document.querySelector('#content') || document.querySelector('td.content');
+            if (mainContent) {
+                let clone = mainContent.cloneNode(true);
+                clone.querySelectorAll('.contentModule, script, style, link, center > form, #ban').forEach(e => e.remove());
+                clone.querySelectorAll('#header, #footer, .sidebar, .user, .eventIcon').forEach(e => e.remove());
+                clone.querySelectorAll('.bumper, #dimBackground, [id^="layer"]').forEach(e => e.remove());
+                clone.querySelectorAll('[id^="nph"], [class*="nph"]').forEach(e => e.remove());
+                clone.querySelectorAll('div').forEach(d => {
+                    if (d.textContent.includes('User Lookup:') && d.querySelector('img[src*="question_mark"]')) d.remove();
+                });
+                clone.querySelectorAll('.bx-wrapper, .bx-controls, .bx-viewport, .bx-has-controls-direction').forEach(e => e.remove());
+                clone.querySelectorAll('*').forEach(e => e.removeAttribute('style'));
+                clone.querySelectorAll('*').forEach(e => {
+                    if (e.tagName !== 'IMG' && e.tagName !== 'BR' && e.tagName !== 'HR' && e.textContent.trim() === '' && e.children.length === 0) e.remove();
+                });
+
+                let text = clone.innerHTML.trim();
+                if (text.replace(/<[^>]+>/g, '').trim().length > 0) data.aboutMe = text;
+            }
+            return data;
+        }
+
+        // ── 2. ASYNC MODAL FETCHER ─────────────────────────────────────────────
+        window.openPetModal = async function(petName, modalId) {
+            const modal = document.getElementById(modalId);
+            modal.style.display = 'flex';
+
+            const statsBox = modal.querySelector('.nui-pet-stats');
+            const petpetBox = modal.querySelector('.nui-petpet-box');
+
+            if (statsBox.dataset.loaded === 'true') return;
+
+            try {
+                let res = await fetch(`/petlookup.phtml?pet=${petName}`);
+                let html = await res.text();
+
+                const getMatch = (regex) => {
+                    let m = html.match(regex);
+                    return m ? m[1].replace(/<\/?[^>]+(>|$)/g, "").trim() : '?';
+                };
+
+                let hp = getMatch(/<b>Hit Points:<\/b>\s*<[^>]+><b>([^<]+)<\/b><\/font>/i) || getMatch(/<b>Hit Points:<\/b>\s*([^<]+)<br/i);
+                let lvl = getMatch(/<b>Level:<\/b>\s*([^<]+)<br/i);
+                let str = getMatch(/<b>Strength:<\/b>\s*([^<]+)<br/i);
+                let def = getMatch(/<b>Defence:<\/b>\s*([^<]+)<br/i);
+                let mov = getMatch(/<b>Movement:<\/b>\s*([^<]+)<br/i);
+                let int = getMatch(/<b>Intelligence:<\/b>\s*([^<]+)<br/i);
+
+                statsBox.innerHTML = `
+                    <b>Level:</b> <span>${lvl}</span>
+                    <b>Health:</b> <span>${hp}</span>
+                    <b>Str:</b> <span>${str}</span>
+                    <b>Def:</b> <span>${def}</span>
+                    <b>Move:</b> <span>${mov}</span>
+                    <b>Int:</b> <span>${int}</span>
+                `;
+                statsBox.dataset.loaded = 'true';
+
+                let p2Html = '';
+                if (html.includes('has a Petpet!')) {
+                    let imgMatches = [...html.matchAll(/<img src="([^"]+)"[^>]*width="80"/gi)];
+                    let textMatch = html.match(/<b>([^<]+)<\/b>(?:\s+the\s+([A-Za-z0-9 ]+?))?(?:\s+and its\s+<b>([^<]+)<\/b>)?\s*<br>\(([^)]+)\)/i);
+
+                    if (imgMatches.length > 0 && textMatch) {
+                        let p3Html = '';
+                        if (imgMatches.length > 1 && textMatch[3]) {
+                            p3Html = `<img src="${imgMatches[1][1]}" style="width: 25px; height: 25px; border-radius: 50%; border: 1px solid var(--nui-border); position: absolute; bottom: -5px; right: -5px; background: var(--nui-surface); z-index: 10;">`;
+                        }
+
+                        p2Html = `
+                            <div style="display: flex; align-items: center; gap: 12px; background: var(--nui-surface-1); padding: 10px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); text-align: left;">
+                                <div style="position: relative; flex-shrink: 0;">
+                                    <img src="${imgMatches[0][1]}" style="width: 50px; height: 50px; border-radius: var(--nui-radius-sm); border: 1px solid var(--nui-border); background: var(--nui-surface-2);">
+                                    ${p3Html}
+                                </div>
+                                <div style="font-size: 12px; line-height: 1.4;">
+                                    <b>${textMatch[1].trim()}</b><br>
+                                    <span style="font-size: 10px; opacity: 0.8;">${(textMatch[2] || 'Petpet').trim()} ${textMatch[3] ? '& ' + textMatch[3].trim() : ''} | ${textMatch[4].trim()}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                petpetBox.innerHTML = p2Html;
+
+            } catch (e) {
+                statsBox.innerHTML = '<span style="grid-column: span 2; text-align:center;">Failed to load stats.</span>';
+            }
+        };
+
+        // ── 3. BUILD THE SPA REWRITE ───────────────────────────────────────────
+        function buildUI() {
+            const data = extractLookupData();
+
+            const cleanCSS = document.createElement('style');
+            cleanCSS.id = 'nui-clean-overrides';
+            cleanCSS.textContent = `
+                body.nui-clean-mode { background: var(--nui-bg) !important; margin: 0 !important; padding: 0 !important; }
+                body.nui-clean-mode > *:not([id^="nui-"]):not(.nui-drawer-backdrop) { display: none !important; }
+
+                #nui-clean-lookup .nui-about-me * {
+                    position: static !important; float: none !important; width: auto !important; height: auto !important; max-width: 100% !important;
+                    background: transparent !important; color: var(--nui-text) !important; font-size: 14px !important; line-height: 1.6 !important; text-align: left !important;
+                }
+                #nui-clean-lookup .nui-about-me img { border-radius: var(--nui-radius-sm); box-shadow: 0 2px 8px var(--nui-shadow); }
+                #nui-clean-lookup a { color: var(--nui-accent); font-weight: bold; text-decoration: none; }
+                #nui-clean-lookup a:hover { text-decoration: underline; }
+                #nui-clean-lookup img { max-width: 100%; height: auto; }
+                #nui-clean-lookup center { display: block; text-align: center; width: 100%; }
+
+                .nui-trophy-grid img, .nui-collection-grid img { width: 60px !important; height: auto !important; object-fit: contain; }
+                .nui-trophy-grid div, .nui-collection-grid div { font-size: 11px !important; line-height: 1.3 !important; }
+            `;
+            document.head.appendChild(cleanCSS);
+
+            const profile = NeoUI.scrapeLegacyProfile();
+            if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+            NeoUI.init();
+            NeoUI.setProfileInfo(profile);
+            NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+            const pageWrapper = document.createElement('div');
+            pageWrapper.id = 'nui-page-wrapper';
+            pageWrapper.className = 'nui-reset nui-spa-active';
+            pageWrapper.style.cssText = 'min-height: 100vh; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; width: 100%;';
+
+            const cleanWrap = document.createElement('div');
+            cleanWrap.id = 'nui-clean-lookup';
+            cleanWrap.style.cssText = 'width: 100%; max-width: 800px; margin: 0 auto; padding: calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) calc(var(--nui-space-5) + 80px); display: flex; flex-direction: column; gap: var(--nui-space-4); box-sizing: border-box; overflow-x: hidden;';
+
+            if (data.actions.length > 0) {
+                let actionsHtml = data.actions.map(a => `
+                    <a href="${a.url}" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 5px; background: var(--nui-surface-2); border: 1px solid var(--nui-border); border-radius: var(--nui-radius-sm); text-decoration: none; color: var(--nui-text); font-weight: 700; font-size: 9px; text-transform: uppercase; text-align: center; height: 50px; box-sizing: border-box; width: 100%;">
+                        <img src="${a.icon}" style="width: 40px; height: 40px; object-fit: contain; box-shadow: none;">
+                    </a>
+                `).join('');
+                cleanWrap.appendChild(buildCard('Actions', actionsHtml, 'repeat(auto-fit, minmax(75px, 1fr))'));
+            }
+
+            const profileHtml = `
+                <h2 style="margin: 0 10px 0 0; font-size: 22px; color: var(--nui-accent); text-align: center;">${data.username}</h2>
+                <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: 16px;">
+                    ${data.shield ? `<img src="${data.shield}" style="width: 125px; height: auto; margin-top: 10px; object-fit: contain; border-radius: var(--nui-radius-md); box-shadow: 0 2px 8px var(--nui-shadow); background: var(--nui-surface-2); border: 1px solid var(--nui-border);">` : ''}
+                    <div style="flex: 1; min-width: 200px; display: flex; flex-direction: column; align-items: center;">
+                        <div style="text-align: right; font-size: 12px; width: 100%;">
+                            ${data.stats}
+                        </div>
+                    </div>
+                </div>
+            `;
+            cleanWrap.appendChild(buildCard('User Profile', profileHtml));
+
+            if (data.shopGallery) cleanWrap.appendChild(buildCard('Shop & Gallery', `<div style="text-align: center; font-size: 12px;">${data.shopGallery}</div>`));
+            if (data.aboutMe) cleanWrap.appendChild(buildCard('About Me', `<div class="nui-about-me">${data.aboutMe}</div>`));
+
+            if (data.pets.length > 0) {
+                let petsHtml = data.pets.map((p, index) => {
+                    let fullSizeImg = p.image.replace('/2.png', '/5.png');
+
+                    return `
+                    <div style="position: relative; padding: 8px; display: flex; flex-direction: column; align-items: center;">
+                        <img src="${p.image}" onclick="openPetModal('${p.name}', 'modal-${index}')" style="cursor: pointer; width: 90px; height: 90px; border-radius: 50%; box-shadow: 0 4px 8px var(--nui-shadow); background: var(--nui-bg); border: 2px solid var(--nui-border);">
+                        <div style="font-size: 11px; line-height: 1.2; margin-top: -10px; pointer-events: none;">${p.info}</div>
+
+                        <div id="modal-${index}" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2147483647; align-items: center; justify-content: center;" onclick="this.style.display='none'">
+                            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--nui-shadow, rgba(0,0,0,0.7));"></div>
+
+                            <div style="background: var(--nui-surface-2); color: var(--nui-text); padding: 15px; border-radius: var(--nui-radius-lg); width: 85%; max-width: 400px; text-align: center; border: 2px solid var(--nui-border); display: flex; flex-direction: column; align-items: center; gap: 15px; position: relative; box-shadow: 0 10px 25px var(--nui-shadow);" onclick="event.stopPropagation()">
+
+                                <img src="${fullSizeImg}" style="max-width: 100%; height: auto; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border);">
+
+                                <div style="font-size: 14px; margin-top: 0px; margin-bottom: 0px; background: var(--nui-surface-1); padding: 4px 12px; border-radius: var(--nui-radius-pill); border: 1px solid var(--nui-border);">${p.name}</div>
+
+                                <div class="nui-pet-stats" data-loaded="false" style="display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; text-align: left; font-size: 13px; background: var(--nui-surface-1); padding: 12px 16px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); width: 100%; box-sizing: border-box;">
+                                    <span style="grid-column: span 2; text-align:center; font-style: italic; opacity: 0.7;">Fetching combat stats...</span>
+                                </div>
+
+                                <div class="nui-petpet-box" style="width: 100%; box-sizing: border-box;"></div>
+
+                                <a href="${p.url}" style="width: 100%; padding: 12px; background: var(--nui-accent); color: white; text-decoration: none; border-radius: var(--nui-radius-md); font-weight: bold; box-sizing: border-box;">View Full Petlookup</a>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+                cleanWrap.appendChild(buildCard('Neopets', petsHtml, 'repeat(auto-fill, minmax(100px, 1fr))'));
+            }
+
+            if (data.collections.length > 0) {
+                let collHtml = data.collections.map(c => `<div class="nui-collection-item" style="text-align: center; width: 100%;">${c}</div>`).join('');
+                const gridWrapper = `<style>.nui-collection-item img { height: 50px; width: auto; object-fit: contain; display: block; margin: 0 auto 6px auto; } .nui-collection-item { font-size: 11px; line-height: 1.3; }</style><div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 16px 8px; align-items: start;">${collHtml}</div>`;
+                cleanWrap.appendChild(buildCard('Collections', gridWrapper));
+            }
+
+            if (data.trophies.length > 0) {
+                let trophiesHtml = data.trophies.map(t => `<div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; gap: 4px;">${t}</div>`).join('');
+                cleanWrap.appendChild(buildCard('Trophies', `<div class="nui-trophy-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px;">${trophiesHtml}</div>`));
+            }
+
+            pageWrapper.appendChild(cleanWrap);
+            document.body.appendChild(pageWrapper);
+
+            // ── TOGGLE BUTTON ──────────────────────────────────────────
+            const toggleBtn = document.createElement('button');
+            toggleBtn.id = 'nui-lookup-toggle';
+            toggleBtn.style.cssText = `position: fixed; bottom: 24px; right: 24px; z-index: 2147483647; padding: 12px 20px; border-radius: var(--nui-radius-pill); font-family: var(--nui-font-display); font-weight: 800; font-size: 14px; border: none; box-shadow: 0 4px 16px var(--nui-shadow); cursor: pointer; transition: transform 0.2s, background 0.2s; display: flex; align-items: center; gap: 8px;`;
+
+            toggleBtn.onmouseenter = () => toggleBtn.style.transform = 'scale(1.05) translateY(-2px)';
+            toggleBtn.onmouseleave = () => toggleBtn.style.transform = 'scale(1) translateY(0)';
+
+            toggleBtn.onclick = () => {
+                isCleanMode = !isCleanMode;
+                if (isCleanMode) {
+                    document.body.classList.add('nui-clean-mode');
+                    pageWrapper.style.display = 'flex';
+                    customStyleNodes.forEach(el => el.disabled = true);
+                    toggleBtn.innerHTML = '✨ View Original Layout';
+                    toggleBtn.style.background = 'var(--nui-accent)';
+                    toggleBtn.style.color = 'var(--nui-accent-ink)';
+                } else {
+                    document.body.classList.remove('nui-clean-mode');
+                    pageWrapper.style.display = 'none';
+                    customStyleNodes.forEach(el => el.disabled = false);
+                    toggleBtn.innerHTML = '📱 Force Clean Mobile View';
+                    toggleBtn.style.background = 'var(--nui-surface-2)';
+                    toggleBtn.style.color = 'var(--nui-text)';
+                    toggleBtn.style.border = '1px solid var(--nui-border)';
+                }
+            };
+
+            document.body.appendChild(toggleBtn);
+
+            document.body.classList.add('nui-clean-mode');
+            customStyleNodes.forEach(el => el.disabled = true);
+            toggleBtn.innerHTML = '✨ View Original Layout';
+            toggleBtn.style.background = 'var(--nui-accent)';
+            toggleBtn.style.color = 'var(--nui-accent-ink)';
+        }
+
+        if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', buildUI); } else { buildUI(); }
+
+    // ==========================================
+    // ROUTE 2: THE FULL PETLOOKUP OVERHAUL
+    // ==========================================
+    } else if (currentUrl.includes("petlookup.phtml")) {
+
+        if (!window.NeoUI || !window.NeoUI.isModuleEnabled('lookups')) return;
+
+        let isCleanMode = true;
+        let customStyleNodes = [];
+
+        // 1. EXTRACT THE CANVAS FIRST
+        const originalRender = document.getElementById('CustomNeopetView');
+        if (originalRender) {
+            document.body.appendChild(originalRender);
+        }
+
+        // 2. DISABLE CUSTOM STYLES & NUKE PAGE
+        document.querySelectorAll('style').forEach(s => {
+            if (!s.id?.startsWith('nui-') && !s.textContent.includes('var(--nui')) customStyleNodes.push(s);
+        });
+
+        document.documentElement.classList.add('nui-spa-active');
+
+        const contentDiv = document.querySelector('#content');
+        if (contentDiv) {
+            Array.from(contentDiv.children).forEach(child => {
+                if (child.id !== 'CustomNeopetView') child.style.display = 'none';
+            });
+        }
+
+        document.querySelectorAll('table').forEach(t => t.style.display = 'none');
+
+        // 3. BUILD THE RESPONSIVE WRAPPER
+        const profile = NeoUI.scrapeLegacyProfile();
+        NeoUI.init();
+        NeoUI.buildTopbar({
+            stats: { np: profile.np, nc: profile.nc },
+            hasNotification: profile.hasNotification
+        });
+
+        const cleanCSS = document.createElement('style');
+        cleanCSS.id = 'nui-clean-overrides-pet';
+        cleanCSS.textContent = `
+            body.nui-clean-mode { background: var(--nui-bg) !important; margin: 0 !important; padding: 0 !important; }
+            body.nui-clean-mode > *:not([id^="nui-"]):not(.nui-drawer-backdrop) { display: none !important; }
+
+            #nui-clean-petlookup .nui-about-me * {
+                position: static !important; float: none !important; width: auto !important; height: auto !important; max-width: 100% !important;
+                background: transparent !important; color: var(--nui-text) !important; font-size: 14px !important; line-height: 1.6 !important; text-align: left !important;
+            }
+            #nui-clean-petlookup .nui-about-me img { border-radius: var(--nui-radius-sm); box-shadow: 0 2px 8px var(--nui-shadow); }
+            #nui-clean-petlookup a { color: var(--nui-accent); font-weight: bold; text-decoration: none; }
+            #nui-clean-petlookup a:hover { text-decoration: underline; }
+
+            /* Ensure the base container acts as the relative anchor */
+            #CustomNeopetView {
+                position: relative !important;
+                display: block !important;
+            }
+
+            /* Lock all Neopets rendering engine wrappers securely to the container */
+            #anim_container,
+            #pet_anim,
+            .nppvma-petView,
+            .nppvma-petView-main-content,
+            .nppvma-avatarlayers {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                transform: none !important;
+            }
+
+            /* Force the actual images and canvases to fill the box without drifting or stretching */
+            .nppvma-avatarlayers img,
+            .nppvma-avatarlayers canvas,
+            #CustomNeopetView canvas {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                transform: none !important;
+                object-fit: contain !important;
+            }
+        `;
+        document.head.appendChild(cleanCSS);
+
+        const pageWrapper = document.createElement('div');
+        pageWrapper.id = 'nui-page-wrapper';
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box; width: 100%;';
+        document.body.appendChild(pageWrapper);
+
+        const cleanWrap = document.createElement('div');
+        cleanWrap.id = 'nui-clean-petlookup';
+        cleanWrap.style.cssText = 'width: 100%; max-width: 800px; margin: 0 auto; padding: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; overflow-x: hidden;';
+        pageWrapper.appendChild(cleanWrap);
+
+        // 4. PARSE DATA
+        const html = document.body.innerHTML;
+        const getMatch = (regex, fallback = 'N/A') => {
+            let m = html.match(regex);
+            return m ? m[1].replace(/<\/?[^>]+(>|$)/g, "").trim() : fallback;
+        };
+
+        const petTitleNode = document.querySelector('div[style*="font-size: 18px"]');
+        const fullTitle = petTitleNode ? petTitleNode.textContent.trim() : 'Unknown Pet';
+
+        const petData = {
+            name: fullTitle.split(' the ')[0] || 'Unknown',
+            desc: fullTitle.split(' the ')[1] || 'Unknown Species',
+            owner: getMatch(/<b>Owner:<\/b>\s*([^<]+)/).replace('(You!)', '').trim(),
+            age: getMatch(/<b>Age:<\/b>\s*<b>([^<]+)<\/b>/),
+            birthday: getMatch(/<b>Birthday:<\/b>\s*([^<]+)<br>/),
+            level: getMatch(/<b>Level:<\/b>\s*([^<]+)<br/i),
+            gender: getMatch(/<b>Gender:<\/b>\s*<span[^>]*><b>([^<]+)<\/b>/i),
+            hp: getMatch(/<b>Hit Points:<\/b>\s*<[^>]+><b>([^<]+)<\/b><\/font>/i) || getMatch(/<b>Hit Points:<\/b>\s*([^<]+)<br/i),
+            str: getMatch(/<b>Strength:<\/b>\s*([^<]+)<br/i),
+            def: getMatch(/<b>Defence:<\/b>\s*([^<]+)<br/i),
+            mov: getMatch(/<b>Movement:<\/b>\s*([^<]+)<br/i),
+            intl: getMatch(/<b>Intelligence:<\/b>\s*([^<]+)<br/i),
+            fishing: getMatch(/<b>Fishing Skill:<\/b>\s*([^<]+)/i),
+            jobs: getMatch(/<b>Jobs Completed:<\/b>\s*([^<]+)<br/i),
+            rank: getMatch(/<b>Job Rank:<\/b>\s*([^<]+)/i)
+        };
+
+        // Advanced Petpet/Petpetpet Scraper
+        if (html.includes('has a Petpet!')) {
+            let imgMatches = [...html.matchAll(/<img src="([^"]+)"[^>]*width="80"/gi)];
+            let textMatch = html.match(/<b>([^<]+)<\/b>(?:\s+the\s+([A-Za-z0-9 ]+?))?(?:\s+and its\s+<b>([^<]+)<\/b>)?\s*<br>\(([^)]+)\)/i);
+
+            if (imgMatches.length > 0 && textMatch) {
+                petData.petpet = {
+                    img: imgMatches[0][1],
+                    name: textMatch[1].trim(),
+                    species: (textMatch[2] || 'Petpet').trim(),
+                    age: textMatch[4].trim()
+                };
+                if (imgMatches.length > 1 && textMatch[3]) {
+                    petData.p3 = {
+                        img: imgMatches[1][1],
+                        species: textMatch[3].trim()
+                    };
+                }
+            }
+        }
+
+        // Custom Description Scraper
+        let descHtml = '';
+        document.querySelectorAll('.contentModule').forEach(mod => {
+            const header = mod.querySelector('.contentModuleHeaderAlt, .contentModuleHeader');
+            if (header && header.textContent.includes('Description')) {
+                const content = mod.querySelector('.contentModuleContent');
+                if (content) {
+                    let clone = content.cloneNode(true);
+                    clone.querySelectorAll('style, script, link, iframe').forEach(e => e.remove());
+                    clone.querySelectorAll('img').forEach(img => { if (img.style.position === 'fixed' || img.id === 'bg') img.remove(); });
+                    clone.querySelectorAll('*').forEach(e => e.removeAttribute('style'));
+                    descHtml = clone.innerHTML.trim();
+                }
+            }
+        });
+
+        // 5. BUILD CARD 1: PROFILE + CANVAS
+        const profileHtml = `
+            <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px; width: 100%; box-sizing: border-box;">
+
+                <div style="flex: 1 1 300px; max-width: 400px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center;">
+                    <div style="margin-bottom: 12px;">
+                        <h1 style="margin: 0 0 4px 0; font-size: 28px; color: var(--nui-accent); text-transform: capitalize; word-break: break-word; line-height: 1.1;">${petData.name}</h1>
+                        <h3 style="margin: 0; font-size: 16px; font-weight: normal; color: var(--nui-text); opacity: 0.8; word-break: break-word;">the ${petData.desc}</h3>
+                    </div>
+
+                    <div id="nui-pet-render-target" style="width: 100%; aspect-ratio: 1 / 1; background: var(--nui-bg); border-radius: var(--nui-radius-lg); border: 2px solid var(--nui-border); overflow: hidden; box-shadow: inset 0 4px 8px var(--nui-shadow); position: relative;">
+                        <!-- Animated canvas drops here -->
+                    </div>
+                </div>
+
+                <div style="flex: 2 1 300px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; margin-top: 10px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; font-size: 13px; background: var(--nui-surface-2); padding: 16px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); box-sizing: border-box;">
+                        <div><b>Level:</b> ${petData.level}</div>
+                        <div><b>Health:</b> ${petData.hp}</div>
+                        <div><b>Strength:</b> ${petData.str}</div>
+                        <div><b>Defence:</b> ${petData.def}</div>
+                        <div><b>Movement:</b> ${petData.mov}</div>
+                        <div><b>Intelligence:</b> ${petData.intl}</div>
+                        <div style="grid-column: 1 / -1; border-top: 1px solid var(--nui-border); padding-top: 10px; margin-top: 4px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                            <span><b>Age:</b> ${petData.age}</span>
+                            <span><b>Gender:</b> ${petData.gender}</span>
+                            <span><b>Owner:</b> <a href="/userlookup.phtml?user=${petData.owner}" style="color: var(--nui-accent);">${petData.owner}</a></span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; box-sizing: border-box;">
+                        <a href="/battledome.phtml?type=challenge&pettochallenge=${petData.name}" style="flex: 1; text-align: center; padding: 12px 16px; background: var(--nui-accent); color: white; text-decoration: none; border-radius: var(--nui-radius-sm); font-weight: bold; font-size: 13px; box-sizing: border-box;">Challenge in BD</a>
+                        <a href="/customise/?view=${petData.name}" style="flex: 1; text-align: center; padding: 12px 16px; background: var(--nui-surface-2); color: var(--nui-text); border: 1px solid var(--nui-border); text-decoration: none; border-radius: var(--nui-radius-sm); font-weight: bold; font-size: 13px; box-sizing: border-box;">Customise</a>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        cleanWrap.appendChild(buildCard('Pet Profile', profileHtml));
+
+        // Execute the canvas transplant
+        if (originalRender) {
+            const renderTarget = document.getElementById('nui-pet-render-target');
+            renderTarget.appendChild(originalRender);
+            originalRender.style.cssText = 'position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; overflow: hidden; margin: 0; padding: 0; border: none;';
+        }
+
+        // 6. BUILD CARD 2: PETPET & SKILLS
+        let extrasHtml = `<div style="display: flex; flex-wrap: wrap; gap: 16px; width: 100%; box-sizing: border-box;">`;
+
+        if (petData.petpet) {
+            let p3Html = petData.p3 ? `<img src="${petData.p3.img}" style="width: 35px; height: 35px; object-fit: contain; position: absolute; bottom: -8px; right: -8px; border-radius: 5%; background: var(--nui-surface-1); border: 2px solid var(--nui-border); z-index: 10;">` : '';
+
+            extrasHtml += `
+                <div style="flex: 1 1 250px; display: flex; align-items: center; gap: 16px; background: var(--nui-surface-2); padding: 16px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); box-sizing: border-box; text-align: left;">
+                    <div style="position: relative; flex-shrink: 0;">
+                        <img src="${petData.petpet.img}" style="width: 80px; height: 80px; object-fit: contain; background: var(--nui-bg); border-radius: var(--nui-radius-sm); border: 1px solid var(--nui-border);">
+                        ${p3Html}
+                    </div>
+                    <div style="min-width: 0;">
+                        <h3 style="margin: 0 0 4px 0; font-size: 16px; color: var(--nui-accent); word-break: break-word;">${petData.petpet.name} <span style="display: block; font-size: 12px; font-weight: normal; color: var(--nui-text); margin-top: 2px;">the ${petData.petpet.species}</span></h3>
+                        <div style="font-size: 12px; opacity: 0.8; word-break: break-word;">${petData.petpet.age}</div>
+                        ${petData.p3 ? `<div style="font-size: 11px; margin-top: 4px; font-weight: bold; opacity: 0.9;">+ ${petData.p3.species}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        extrasHtml += `
+            <div style="flex: 1 1 250px; background: var(--nui-surface-2); padding: 16px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); font-size: 13px; box-sizing: border-box;">
+                <div style="margin-bottom: 8px; border-bottom: 1px solid var(--nui-border); padding-bottom: 6px;"><b>Fishing Skill:</b> ${petData.fishing}</div>
+                <div style="margin-bottom: 8px; border-bottom: 1px solid var(--nui-border); padding-bottom: 6px;"><b>Jobs Completed:</b> ${petData.jobs}</div>
+                <div style="padding-top: 2px;"><b>Job Rank:</b> ${petData.rank}</div>
+            </div>
+        </div>`;
+
+        cleanWrap.appendChild(buildCard('Companions & Skills', extrasHtml));
+
+        // 7. BUILD CARD 3: PET DESCRIPTION
+        if (descHtml) {
+            cleanWrap.appendChild(buildCard('Description', `<div class="nui-about-me">${descHtml}</div>`));
+        }
+
+        // ── TOGGLE BUTTON ──────────────────────────────────────────
+        const toggleBtn = document.createElement('button');
+        toggleBtn.id = 'nui-lookup-toggle';
+        toggleBtn.style.cssText = `position: fixed; bottom: 24px; right: 24px; z-index: 2147483647; padding: 12px 20px; border-radius: var(--nui-radius-pill); font-family: var(--nui-font-display); font-weight: 800; font-size: 14px; border: none; box-shadow: 0 4px 16px var(--nui-shadow); cursor: pointer; transition: transform 0.2s, background 0.2s; display: flex; align-items: center; gap: 8px;`;
+
+        toggleBtn.onmouseenter = () => toggleBtn.style.transform = 'scale(1.05) translateY(-2px)';
+        toggleBtn.onmouseleave = () => toggleBtn.style.transform = 'scale(1) translateY(0)';
+
+        toggleBtn.onclick = () => {
+            isCleanMode = !isCleanMode;
+            if (isCleanMode) {
+                document.body.classList.add('nui-clean-mode');
+                pageWrapper.style.display = 'flex';
+                customStyleNodes.forEach(el => el.disabled = true);
+                toggleBtn.innerHTML = '✨ View Original Layout';
+                toggleBtn.style.background = 'var(--nui-accent)';
+                toggleBtn.style.color = 'var(--nui-accent-ink)';
+            } else {
+                document.body.classList.remove('nui-clean-mode');
+                pageWrapper.style.display = 'none';
+                customStyleNodes.forEach(el => el.disabled = false);
+                toggleBtn.innerHTML = '📱 Force Clean Mobile View';
+                toggleBtn.style.background = 'var(--nui-surface-2)';
+                toggleBtn.style.color = 'var(--nui-text)';
+                toggleBtn.style.border = '1px solid var(--nui-border)';
+            }
+        };
+
+        document.body.appendChild(toggleBtn);
+        document.body.classList.add('nui-clean-mode');
+        customStyleNodes.forEach(el => el.disabled = true);
+        toggleBtn.innerHTML = '✨ View Original Layout';
+        toggleBtn.style.background = 'var(--nui-accent)';
+        toggleBtn.style.color = 'var(--nui-accent-ink)';
+    }
+
+})();
+
+
+
+
+
 // ==============================================================================
 // MODULE 20: SITEWIDE CHROME (UNIVERSAL FALLBACK)
 // ==============================================================================
@@ -14764,14 +15975,19 @@ return {
     const NeoUI = window.NeoUI;
     if (!NeoUI.isModuleEnabled('sitewide-chrome')) return;
 
+    // Belt-and-suspenders: never run on NC mall or account subdomains even if
+    // @exclude didn't fire (older Tampermonkey versions may ignore @exclude).
+    const _h = location.hostname;
+    if (_h === 'ncmall.neopets.com' || _h === 'secure.nc.neopets.com' ||
+        _h === 'nc.neopets.com'     || _h === 'account.neopets.com') return;
+
     // Some page-specific module above already claimed this page (built its
     // own topbar, or did a full SPA rebuild) — don't double up.
     if (document.getElementById('nui-page-topbar')) return;
 
     // ---- Selector coverage ----
-    // Classic template chrome + nav5 bar variants + sidebar chrome +
-    // sticky ad rails seen across the broader site. Deliberately excludes
-    // anything that could be real page content (#main, .content-area, etc.).
+    // Classic template chrome + nav2020 bars + sidebar chrome + ad rails.
+    // Deliberately excludes real content elements like #main, #container__2020.
     const CHROME_SELECTORS = [
         // Classic masthead / footer
         '#header', '#footer', '.footerlinks',
@@ -14781,6 +15997,20 @@ return {
         '.premium-toolbar', '.nav-premium-container', '#premium_bar', '.sswdrop',
         // nav5 / new-template top navigation bar
         '#nav5', '.nav5', '#h5-navigation', '.h5-navigation',
+        // 2020-template nav bars (top pill nav + bottom bar)
+        '#navtop__2020', '.nav-top__2020',
+        '#navbottom__2020', '.nav-bottom__2020',
+        // 2020-template navsub row (bookmarks / NP meter / buffer spacer)
+        '.navsub-left__2020', '.navsub-right__2020', '#navsub-buffer__2020',
+        // 2020-template profile & alerts dropdowns (rendered as body siblings)
+        '#navprofiledropdown__2020', '#navnewsdropdown__2020',
+        // 2020-template leave-beta popup and shade overlays
+        '#leaveBetaPopup__2020', '#navpopupshade__2020', '#navdropdownshade__2020',
+        // 2020-template footer
+        '.footer__2020',
+        // Additional header/nav variants seen across other page families
+        '#globalHeader', '.global-header', '#pageheader', '.page-header',
+        '#topnav', '.top-nav', '.navbar', '#neo-navigation', '#siteNav',
         // Sticky sidebar / right-rail chrome
         '#sidebar', '.sidebar-primary', '.side-nav',
         // Cookie / GDPR banner rows
@@ -14789,17 +16019,35 @@ return {
 
     // Extra inline rules: body normalisation so page content doesn't bleed
     // under the fixed topbar, and overflow-x clamping for narrow viewports.
+    //
+    // NOTE: these table/img/iframe rules target *inside* #nui-sitewide-
+    // content-wrap, not `body > table` — every original body child gets
+    // moved into that wrap further down, so a selector anchored on `body >`
+    // would never match post-move. Classic Neopets layout tables are also
+    // nested several levels deep (table > tr > td > table > ...), so this
+    // matches any depth, not just direct children.
     const EXTRA_RULES = `
         body {
             padding-top: var(--nui-topbar-h) !important;
             overflow-x: hidden !important;
             box-sizing: border-box !important;
         }
-        /* Prevent any leftover legacy centering tables from overflowing */
-        body > table, body > center > table {
+        /* Prevent legacy fixed-width layout tables/images/embeds (e.g.
+           <table width="950">) from forcing the page wider than the
+           viewport — this is what was causing the "zoomed out" look,
+           since a too-wide layout combined with an unlocked viewport
+           makes mobile Chrome/Firefox auto shrink-to-fit the whole page
+           instead of just wrapping the oversized element. */
+        #nui-sitewide-content-wrap table,
+        #nui-sitewide-content-wrap img,
+        #nui-sitewide-content-wrap iframe,
+        #nui-sitewide-content-wrap embed,
+        #nui-sitewide-content-wrap object {
             max-width: 100% !important;
-            width: 100% !important;
             box-sizing: border-box !important;
+        }
+        #nui-sitewide-content-wrap table {
+            height: auto !important;
         }
         /* Give unclaimed page content breathing room and readable width */
         #nui-sitewide-content-wrap {
@@ -14808,32 +16056,56 @@ return {
             padding: var(--nui-space-4) var(--nui-space-4) var(--nui-space-5);
             box-sizing: border-box;
             width: 100%;
+            overflow-x: hidden;
         }
     `;
 
     try {
         NeoUI.init();
 
+        // injectViewport() (called by NeoUI.init()) intentionally settles
+        // back to a viewport string *without* shrink-to-fit=no after its
+        // own double-rAF sequence — fine for our own responsive SPA
+        // rebuilds, but fatal here: this module leaves raw legacy markup
+        // in place, some of which is still a fixed-width layout wider
+        // than the viewport, and without shrink-to-fit=no Blink mobile
+        // browsers respond to that by silently zooming the whole page
+        // out to fit it rather than letting our max-width clamps above
+        // do the reflowing. Re-lock it after init's own toggle settles.
+        const lockViewport = function () {
+            const meta = document.querySelector('meta[name="viewport"]');
+            if (meta) meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, shrink-to-fit=no');
+        };
+        lockViewport();
+        requestAnimationFrame(function () { requestAnimationFrame(lockViewport); });
+        setTimeout(lockViewport, 300);
+
         const style = document.createElement('style');
         style.id = 'nui-sitewide-chrome-style';
         style.textContent = CHROME_SELECTORS.join(', ') + ' { display: none !important; }\n' + EXTRA_RULES;
         document.head.appendChild(style);
 
-        // Wrap existing body content in a centred content div so unclaimed
-        // pages don't render edge-to-edge or slide under the topbar.
-        // We do this before buildTopbar so the topbar is injected outside
-        // the wrap (buildTopbar prepends to document.body directly).
-        const contentWrap = document.createElement('div');
-        contentWrap.id = 'nui-sitewide-content-wrap';
-        // Move all current body children into the wrap
-        while (document.body.firstChild) {
-            contentWrap.appendChild(document.body.firstChild);
-        }
-        document.body.appendChild(contentWrap);
-
         const profile = NeoUI.scrapeLegacyProfile();
         NeoUI.setProfileInfo(profile);
         NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // Wrap page content for centering and topbar clearance.
+        // If the 2020-template #container__2020 is present, restyle it
+        // in-place — avoids re-parenting a large subtree with iframes/scripts.
+        // Otherwise collect all non-topbar body children into a new wrapper.
+        const container2020 = document.getElementById('container__2020');
+        if (container2020) {
+            const existing = container2020.getAttribute('style') || '';
+            container2020.setAttribute('style', existing + ';max-width:760px;margin:0 auto;padding:0 var(--nui-space-4) var(--nui-space-5);box-sizing:border-box;width:100%;overflow-x:hidden;');
+        } else {
+            const topbarEl = document.getElementById('nui-page-topbar');
+            const contentWrap = document.createElement('div');
+            contentWrap.id = 'nui-sitewide-content-wrap';
+            Array.from(document.body.childNodes)
+                .filter(function (n) { return n !== topbarEl; })
+                .forEach(function (n) { contentWrap.appendChild(n); });
+            document.body.appendChild(contentWrap);
+        }
     } catch (e) {}
 })();
 
@@ -14884,6 +16156,22 @@ return {
         const g = parseInt(full.substr(2, 2), 16);
         const b = parseInt(full.substr(4, 2), 16);
         return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+    }
+
+    // Vibe tint for fed tiles — same border + background treatment used on
+    // Neomail bubbles and Neoboards posts. Only ever applied to tiles fed by
+    // someone else (tile.dataset.vibeUser is only set in that case).
+    function applyKadVibeTint(tileEl) {
+        const key = tileEl.dataset.vibeUser;
+        if (!key || !window.VibeRater || typeof window.VibeRater.getVibe !== 'function') return;
+        const vibe = window.VibeRater.getVibe(key);
+        if (vibe && vibe.color) {
+            tileEl.style.borderColor = vibe.color;
+            tileEl.style.background = hexToRgba(vibe.color, 0.16);
+        } else {
+            tileEl.style.borderColor = '';
+            tileEl.style.background = '';
+        }
     }
 
     function copyToClipboard(text, onDone) {
@@ -15497,8 +16785,10 @@ return {
                     const feederName = k.fedBy || 'Fed';
                     const dot = vibeDot(feederName);
                     statusHtml = '<div class="nui-kad-feeder" data-feeder="' + escapeHtml(feederName) + '" style="display:flex;align-items:center;justify-content:center;gap:2px;font-size:9.5px; font-weight:700; padding:3px 4px; color:var(--nui-text-muted); white-space:nowrap; overflow:hidden; cursor:pointer;" title="Set vibe for ' + escapeHtml(feederName) + '">✓ <span style="overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(feederName) + '</span>' + dot + '</div>';
+                    tile.dataset.vibeUser = feederName.toLowerCase().trim();
                 }
                 tile.innerHTML = nameHtml + imgHtml + statusHtml;
+                if (tile.dataset.vibeUser) applyKadVibeTint(tile);
                 grid.appendChild(tile);
             });
 
@@ -15538,6 +16828,9 @@ return {
                                     el.appendChild(dot);
                                 }
                             });
+                            // Retint the tile(s) themselves (border + background)
+                            const tintKey = feederName.toLowerCase().trim();
+                            grid.querySelectorAll('.nui-surface[data-vibe-user="' + CSS.escape(tintKey) + '"]').forEach(applyKadVibeTint);
                         });
                         pop.appendChild(opt);
                     });
@@ -15550,6 +16843,8 @@ return {
                         window.VibeRater.clearVibe(feederName);
                         pop.remove();
                         grid.querySelectorAll('.nui-kad-feeder[data-feeder="' + feederName + '"] .nui-kad-vibe-dot').forEach(function (el) { el.remove(); });
+                        const tintKey = feederName.toLowerCase().trim();
+                        grid.querySelectorAll('.nui-surface[data-vibe-user="' + CSS.escape(tintKey) + '"]').forEach(applyKadVibeTint);
                     });
                     pop.appendChild(clearOpt);
 
@@ -15582,6 +16877,29 @@ return {
         }
 
         renderGridArea(initialKads, initialFeedResult);
+
+        // Reactive retint: pick up vibe changes made anywhere (drawer profile
+        // popover, Neomail, Neoboards, settings section) and reapply to any
+        // fed tiles currently on screen, without needing a grid refresh.
+        (function wireReactiveVibeTint() {
+            function bind() {
+                if (!window.VibeRater || typeof window.VibeRater.onChange !== 'function') return false;
+                window.VibeRater.onChange(function (changed) {
+                    const sel = (changed === '__all__' || changed === '__presets__')
+                        ? '.nui-surface[data-vibe-user]'
+                        : '.nui-surface[data-vibe-user="' + CSS.escape(String(changed).toLowerCase().trim()) + '"]';
+                    document.querySelectorAll(sel).forEach(applyKadVibeTint);
+                });
+                return true;
+            }
+            if (!bind()) {
+                let attempts = 0;
+                const poll = setInterval(function () {
+                    attempts++;
+                    if (bind() || attempts > 20) clearInterval(poll);
+                }, 100);
+            }
+        })();
 
         // ---- Embed KadWatch Dashboard ----
         if (NeoUI.isModuleEnabled('kad-timer')) {
@@ -15717,4 +17035,1494 @@ return {
     }
 
     try { init(); } catch (err) { showFatalError(err); }
+})();
+// ==============================================================================
+// MODULE 22: FORGOTTEN SHORE (SPA UI)
+// ==============================================================================
+// Activates on: /pirates/forgottenshore.phtml
+// Rebuilds the daily bottle-hunt map as a mobile-friendly SPA card.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/pirates\/forgottenshore\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('forgottenshore')) return;
+
+    // ── Extraction ────────────────────────────────────────────────────────
+    function extractPageData() {
+        const content = document.querySelector('td.content');
+        if (!content) return null;
+
+        // 1. Extract the randomized map CSS from the DOM
+        let styleBlock = null;
+        document.querySelectorAll('style').forEach(el => {
+            if (el.textContent.includes('#shore_back')) {
+                styleBlock = el.textContent;
+            }
+        });
+
+        // 2. Extract map and interaction state
+        const mapDiv = content.querySelector('#shore_back');
+        if (!mapDiv) return null;
+
+        const mapHtml = mapDiv.innerHTML;
+        const hasPrize = !!mapDiv.querySelector('a');
+
+        // 3. Extract Neopets' status text (handles both "empty shore" and "prize claimed" text)
+        const centerWrap = mapDiv.closest('center');
+        let resultText = "Nothing found today.";
+        if (centerWrap) {
+            let clone = centerWrap.cloneNode(true);
+            let innerMap = clone.querySelector('#shore_back');
+            if (innerMap) innerMap.remove();
+
+            // Clean up Neopets' messy line breaks and spacing
+            resultText = clone.textContent.replace(/\s+/g, ' ').trim();
+        }
+
+        return { styleBlock, mapHtml, hasPrize, resultText };
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────
+    function buildUI() {
+        const data = extractPageData();
+        if (!data) return; // Silent fail, lets native Neopets render if something breaks
+
+        // Boot NeoUI shell
+        const profile = NeoUI.scrapeLegacyProfile();
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset nui-spa-active';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+
+        // Build the topbar
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // Page wrapper
+        const pageWrapper = document.createElement('div');
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box;';
+        document.body.appendChild(pageWrapper);
+
+        // Main Card
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'width:100%;max-width:700px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;display:flex;flex-direction:column;';
+        pageWrapper.appendChild(card);
+
+        // Header
+        const cardHeader = document.createElement('div');
+        cardHeader.style.cssText = 'padding:var(--nui-space-4);border-bottom:1px solid var(--nui-border);display:flex;align-items:center;gap:12px;';
+        cardHeader.innerHTML = '<a href="/explore.phtml" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--nui-surface-3);color:var(--nui-text);text-decoration:none;font-size:18px;font-weight:900;flex-shrink:0;line-height:1;transition:background 0.2s;">‹</a>' +
+            '<div><div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">Forgotten Shore</div>' +
+            '<div style="font-size:12px;color:var(--nui-text-muted);margin-top:1px;">Krawk Island Daily</div></div>';
+
+        // Add hover state for back button
+        const backBtn = cardHeader.querySelector('a');
+        backBtn.onmouseenter = () => backBtn.style.background = 'var(--nui-border)';
+        backBtn.onmouseleave = () => backBtn.style.background = 'var(--nui-surface-3)';
+
+        card.appendChild(cardHeader);
+
+        // Convert the static Neopets map into a responsive NeoUI component
+        if (data.styleBlock) {
+            const style = document.createElement('style');
+            // Replaces fixed sizing with fluid aspect ratio scaling while preserving their image URLs
+            let responsiveCSS = data.styleBlock
+                .replace(/width:\s*600px;/gi, 'width: 100%; aspect-ratio: 6/5; max-width: 600px;')
+                .replace(/height:\s*500px;/gi, 'height: auto;')
+                .replace(/no-repeat/gi, 'no-repeat center center / cover');
+
+            style.textContent = responsiveCSS;
+            document.head.appendChild(style);
+        }
+
+        const mapContainer = document.createElement('div');
+        mapContainer.style.cssText = 'padding: var(--nui-space-4); display: flex; flex-direction: column; align-items: center; background: var(--nui-surface-2);';
+
+        const shoreWrapper = document.createElement('div');
+        shoreWrapper.id = 'shore_back'; // Hooks into the injected CSS
+        shoreWrapper.style.cssText = 'position: relative; overflow: hidden; border-radius: var(--nui-radius-md); box-shadow: 0 4px 12px var(--nui-shadow); width: 100%; max-width: 600px;';
+        shoreWrapper.innerHTML = data.mapHtml;
+
+        // If a prize exists, stretch its hitbox to cover the container to make it mobile tap-friendly
+        const prizeA = shoreWrapper.querySelector('a');
+        if (prizeA) {
+            prizeA.style.display = 'block';
+            prizeA.style.width = '100%';
+            prizeA.style.height = '100%';
+            prizeA.style.transition = 'filter 0.15s ease-in-out';
+            prizeA.style.cursor = 'pointer';
+
+            prizeA.onmouseenter = () => prizeA.style.filter = 'brightness(1.15)';
+            prizeA.onmouseleave = () => prizeA.style.filter = 'brightness(1)';
+
+            // Stretch the inner image div as well
+            const innerDiv = prizeA.querySelector('div');
+            if (innerDiv) {
+                innerDiv.style.width = '100%';
+                innerDiv.style.height = '100%';
+            }
+        }
+
+        mapContainer.appendChild(shoreWrapper);
+        card.appendChild(mapContainer);
+
+        // Status Area (Updates based on whether you are looking for treasure, or just claimed it)
+        const statusArea = document.createElement('div');
+        statusArea.style.cssText = 'padding: var(--nui-space-4); text-align: center; font-size: 14px; font-weight: 500; color: var(--nui-text); border-top: 1px solid var(--nui-border); line-height: 1.6;';
+
+        if (data.hasPrize) {
+            statusArea.innerHTML = '<div style="font-size:24px; margin-bottom:8px;">🏴‍☠️</div>' +
+                '<span style="color:var(--nui-accent); font-weight:700;">Treasure spotted!</span><br>Click the map above to claim it.';
+        } else {
+            // Displays either the "nothing here" text, or the "You approach the shiny object..." text after clicking
+            statusArea.innerHTML = data.resultText;
+        }
+
+        card.appendChild(statusArea);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildUI);
+    } else {
+        buildUI();
+    }
+
+})();
+// ==============================================================================
+// MODULE 23: GUESS THE WEIGHT OF THE MARROW (SPA UI)
+// ==============================================================================
+// Activates on: /medieval/guessmarrow.phtml
+// Rebuilds the daily guessing-game page as a mobile-friendly SPA card.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/medieval\/guessmarrow\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('guessmarrow')) return;
+
+    // ── Extraction ────────────────────────────────────────────────────────
+    function extractPageData() {
+        const content = document.querySelector('td.content');
+        if (!content) return null;
+
+        // Clone the content area so we can safely manipulate and extract what we need
+        const clone = content.cloneNode(true);
+
+        // 1. Remove the main title (we use the topbar for this)
+        const firstB = clone.querySelector('b');
+        if (firstB && firstB.textContent.includes('Guess the Weight')) {
+            firstB.remove();
+        }
+
+        // 2. Remove the image block (we manually build a clean version in the card)
+        const img = clone.querySelector('img[src*="marrow.gif"]');
+        if (img) {
+            const imgCenter = img.closest('center');
+            if (imgCenter) imgCenter.remove();
+        }
+
+        // 3. Remove the redundant "Back to Games Room" form
+        const gameroomForm = clone.querySelector('form[action*="gameroom"]');
+        if (gameroomForm) {
+            // Neopets sometimes wraps this inside its own <center> block
+            const parent = gameroomForm.parentElement;
+            if (parent && parent.tagName === 'CENTER' && parent.children.length === 1) {
+                parent.remove();
+            } else {
+                gameroomForm.remove();
+            }
+        }
+
+        // Clean up any stray empty center tags
+        clone.querySelectorAll('center').forEach(c => {
+            if (c.textContent.trim() === '' && c.children.length === 0) c.remove();
+        });
+
+        // What remains is all the flavor text and the functional forms/status
+        return { actionHtml: clone.innerHTML.trim() };
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────
+    function buildUI() {
+        const data = extractPageData();
+        if (!data) return; // Silent fail, lets native Neopets render if something breaks
+
+        // Boot NeoUI shell
+        const profile = NeoUI.scrapeLegacyProfile();
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset nui-spa-active';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+
+        // Build the topbar
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // Page wrapper
+        const pageWrapper = document.createElement('div');
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box;';
+        document.body.appendChild(pageWrapper);
+
+        // Main Card
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'width:100%;max-width:600px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;display:flex;flex-direction:column;box-shadow: 0 4px 12px var(--nui-shadow);';
+        pageWrapper.appendChild(card);
+
+        // Header
+        const cardHeader = document.createElement('div');
+        cardHeader.style.cssText = 'padding:var(--nui-space-4);border-bottom:1px solid var(--nui-border);display:flex;align-items:center;gap:12px;background:var(--nui-surface-2);';
+        cardHeader.innerHTML = '<a href="/medieval/index.phtml" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--nui-surface-3);color:var(--nui-text);text-decoration:none;font-size:18px;font-weight:900;flex-shrink:0;line-height:1;transition:background 0.2s;">‹</a>' +
+            '<div><div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">Guess the Marrow</div>' +
+            '<div style="font-size:12px;color:var(--nui-text-muted);margin-top:1px;">Meridell Daily</div></div>';
+
+        // Add hover state for back button
+        const backBtn = cardHeader.querySelector('a');
+        backBtn.onmouseenter = () => backBtn.style.background = 'var(--nui-border)';
+        backBtn.onmouseleave = () => backBtn.style.background = 'var(--nui-surface-3)';
+
+        card.appendChild(cardHeader);
+
+        // Image Container
+        const imgContainer = document.createElement('div');
+        imgContainer.style.cssText = 'padding: var(--nui-space-5) var(--nui-space-4); display: flex; flex-direction: column; align-items: center; border-bottom: 1px solid var(--nui-border);';
+        imgContainer.innerHTML = `<img src="//images.neopets.com/medieval/marrow.gif" style="width:100%; max-width:400px; height:auto; border-radius:var(--nui-radius-md); box-shadow: 0 4px 12px var(--nui-shadow);">
+                                  <div style="margin-top:14px; font-style:italic; color:var(--nui-text-muted); font-size:13px;">Aye, she were a beaut!</div>`;
+        card.appendChild(imgContainer);
+
+        // Status & Action Area
+        const statusArea = document.createElement('div');
+        statusArea.style.cssText = 'padding: var(--nui-space-5) var(--nui-space-4); text-align: center; font-size: 14px; font-weight: 500; color: var(--nui-text); line-height: 1.6; display: flex; flex-direction: column; align-items: center;';
+
+        // Inject all the extracted paragraphs and form logic natively
+        statusArea.innerHTML = data.actionHtml;
+
+        // Clean up paragraph elements for better UI spacing
+        statusArea.querySelectorAll('p').forEach(p => {
+            p.style.cssText = 'margin: 0 0 16px 0; text-align: center; max-width: 90%;';
+        });
+
+        // Apply NeoUI styles to the guessing form (if active)
+        const form = statusArea.querySelector('form');
+        if (form) {
+            form.style.cssText = 'margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;';
+
+            // Style the text input
+            const textInputs = form.querySelectorAll('input[type="text"]');
+            textInputs.forEach(input => {
+                input.style.cssText = 'padding: 10px 16px; border: 2px solid var(--nui-border); border-radius: var(--nui-radius-md); background: var(--nui-surface-2); color: var(--nui-text); font-size: 16px; text-align: center; width: 100%; max-width: 150px; outline: none; transition: border-color 0.2s; font-family: var(--nui-font-display);';
+                input.onfocus = () => input.style.borderColor = 'var(--nui-accent)';
+                input.onblur = () => input.style.borderColor = 'var(--nui-border)';
+            });
+
+            // Style the submit button
+            const submitBtns = form.querySelectorAll('input[type="submit"], button');
+            submitBtns.forEach(btn => {
+                btn.style.cssText = 'padding: 10px 24px; border: none; border-radius: var(--nui-radius-pill); background: var(--nui-accent); color: var(--nui-accent-ink); font-weight: 700; font-size: 14px; cursor: pointer; transition: filter 0.2s; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;';
+                btn.onmouseenter = () => btn.style.filter = 'brightness(1.1)';
+                btn.onmouseleave = () => btn.style.filter = 'brightness(1)';
+            });
+        }
+
+        // Apply distinct colors to outcome messages to make them pop
+        const boldTags = statusArea.querySelectorAll('b');
+        boldTags.forEach(b => {
+            if (b.textContent.includes("Sorry") || b.textContent.includes("has not started")) {
+                b.style.cssText = 'font-size: 16px; color: var(--nui-danger); display:block; margin-bottom: 8px;';
+            } else if (b.textContent.includes("Congratulations") || b.textContent.includes("correct") || b.textContent.includes("weight is")) {
+                b.style.cssText = 'font-size: 16px; color: var(--nui-success); display:block; margin-bottom: 8px;';
+            }
+        });
+
+        card.appendChild(statusArea);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildUI);
+    } else {
+        buildUI();
+    }
+
+})();
+// ==============================================================================
+// MODULE 24: KIKO POP (SPA UI / FLASH BYPASS)
+// ==============================================================================
+// Activates on: /worlds/kiko/kpop/*
+// Rebuilds the (Flash-dependent) dart game page as a playable SPA.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    // Match Kiko Pop directory
+    if (!/\/worlds\/kiko\/kpop/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('kikopop')) return;
+
+    // ── Extraction ────────────────────────────────────────────────────────
+    function extractPageData() {
+        // Grab Elvin's description before we wipe the page
+        const descEl = document.getElementById('pageDesc');
+        const description = descEl ? descEl.innerHTML.trim() : "Step right up! I'm Elvin, your host for Kiko Lake's finest dart game...";
+        return { description };
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────
+    function buildUI() {
+        const data = extractPageData();
+
+        // Boot NeoUI shell
+        const profile = NeoUI.scrapeLegacyProfile();
+        document.body.innerHTML = ''; // Nuke the native DOM and broken Flash player
+        document.body.className = 'nui-reset nui-spa-active';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+
+        // Build the topbar
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // Page wrapper
+        const pageWrapper = document.createElement('div');
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box; overflow-x: hidden;';
+        document.body.appendChild(pageWrapper);
+
+        // Main Card
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'width:100%;max-width:600px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;display:flex;flex-direction:column;box-shadow: 0 4px 12px var(--nui-shadow);';
+        pageWrapper.appendChild(card);
+
+        // Header
+        const cardHeader = document.createElement('div');
+        cardHeader.style.cssText = 'padding:var(--nui-space-4);border-bottom:1px solid var(--nui-border);display:flex;align-items:center;gap:12px;background:var(--nui-surface-2);';
+        cardHeader.innerHTML = '<a href="/worlds/index_kikolake.phtml" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--nui-surface-3);color:var(--nui-text);text-decoration:none;font-size:18px;font-weight:900;flex-shrink:0;line-height:1;transition:background 0.2s;">‹</a>' +
+            '<div><div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">Kiko Pop</div>' +
+            '<div style="font-size:12px;color:var(--nui-text-muted);margin-top:1px;">Kiko Lake Daily</div></div>';
+
+        const backBtn = cardHeader.querySelector('a');
+        backBtn.onmouseenter = () => backBtn.style.background = 'var(--nui-border)';
+        backBtn.onmouseleave = () => backBtn.style.background = 'var(--nui-surface-3)';
+
+        card.appendChild(cardHeader);
+
+        // Description Container
+        const descContainer = document.createElement('div');
+        descContainer.style.cssText = 'padding: var(--nui-space-4); font-size: 14px; color: var(--nui-text-muted); line-height: 1.6; border-bottom: 1px solid var(--nui-border); text-align: center;';
+        descContainer.innerHTML = data.description;
+        card.appendChild(descContainer);
+
+        // Interactive Game Area
+        const gameArea = document.createElement('div');
+        gameArea.style.cssText = 'padding: var(--nui-space-5) var(--nui-space-4); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 250px; text-align: center;';
+        card.appendChild(gameArea);
+
+        // ── GAME LOGIC & STATES ───────────────────────────────────────────────
+
+        function styleBtn(btn, bgColor) {
+            btn.style.cssText = `padding: 12px; width: 100%; max-width: 240px; border: none; border-radius: var(--nui-radius-pill); background: ${bgColor}; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: filter 0.2s; box-shadow: 0 2px 6px var(--nui-shadow);`;
+            btn.onmouseenter = () => btn.style.filter = 'brightness(1.1)';
+            btn.onmouseleave = () => btn.style.filter = 'brightness(1)';
+        }
+
+        // 1. Difficulty Selection State
+        function renderInitial() {
+            gameArea.innerHTML = `
+                <div style="font-weight:700; font-size:16px; margin-bottom:16px; color:var(--nui-text);">Select your difficulty:</div>
+                <div style="display:flex; flex-direction:column; gap:12px; width: 100%; align-items: center;">
+                    <button id="btn-easy">Easy</button>
+                    <button id="btn-med">Medium</button>
+                    <button id="btn-hard">Hard</button>
+                </div>
+            `;
+
+            styleBtn(gameArea.querySelector('#btn-easy'), 'var(--nui-success)');
+            styleBtn(gameArea.querySelector('#btn-med'), 'var(--nui-warning)');
+            styleBtn(gameArea.querySelector('#btn-hard'), 'var(--nui-danger)');
+
+            gameArea.querySelector('#btn-easy').onclick = () => handleDifficulty(1);
+            gameArea.querySelector('#btn-med').onclick = () => handleDifficulty(2);
+            gameArea.querySelector('#btn-hard').onclick = () => handleDifficulty(3);
+        }
+
+        // 2. Lock in Difficulty via API
+        async function handleDifficulty(diff) {
+            gameArea.innerHTML = '<div style="color:var(--nui-text-muted); font-size: 14px; font-weight: 500;">Stepping up to the board...</div>';
+            try {
+                let res = await fetch(`/worlds/kiko/kpop/ajax/difficulty.php?difficulty=${diff}`).then(r => r.json());
+
+                // If the server rejects the difficulty setting, the user likely already played today.
+                if (res.success) {
+                    renderThrow(diff);
+                } else {
+                    renderError("You've already thrown a dart today! Come back tomorrow.");
+                }
+            } catch (e) {
+                renderError("Something went wrong connecting to Kiko Lake.");
+            }
+        }
+
+        // 3. Ready to Throw State
+        function renderThrow(diff) {
+            gameArea.innerHTML = `
+                <div style="font-weight:700; font-size:18px; margin-bottom:20px; color:var(--nui-text);">Take your aim...</div>
+                <button id="btn-throw">🎯 Throw Dart!</button>
+            `;
+            const throwBtn = gameArea.querySelector('#btn-throw');
+            styleBtn(throwBtn, 'var(--nui-accent)');
+            throwBtn.style.padding = "16px";
+            throwBtn.style.fontSize = "16px";
+
+            throwBtn.onclick = () => handleThrow(diff);
+        }
+
+        // 4. Throw Dart via API
+        async function handleThrow(diff) {
+            gameArea.innerHTML = '<div style="color:var(--nui-text-muted); font-size: 14px; font-weight: 500;">Throwing...</div>';
+            try {
+                let res = await fetch(`/worlds/kiko/kpop/ajax/prize.php?difficulty=${diff}`).then(r => r.json());
+                if (res.success && res.prize) {
+                    renderPrize(res.prize, res.avatar);
+                } else {
+                    renderMiss();
+                }
+            } catch (e) {
+                renderError("The dart bounced off! (Network Error)");
+            }
+        }
+
+        // 5. Result States
+        function renderPrize(prize, gotAvatar) {
+            let avatarHtml = gotAvatar ? `<div style="margin-top: 16px; color: var(--nui-success); font-weight: 700; font-size: 14px;">🌟 You unlocked the Kiko Pop avatar! 🌟</div>` : '';
+            gameArea.innerHTML = `
+                <div style="font-size: 32px; margin-bottom: 8px;">🎈💥</div>
+                <div style="font-weight:800; font-size:22px; color:var(--nui-success); margin-bottom: 20px;">Pop! You won!</div>
+                <div style="padding: 16px; border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg); background: var(--nui-surface-2); display: inline-block; box-shadow: 0 4px 12px var(--nui-shadow);">
+                    <img src="${prize.url}" style="width: 80px; height: 80px; object-fit: contain; border-radius: 8px; margin-bottom: 12px; background: var(--nui-surface); border: 1px solid var(--nui-border);">
+                    <div style="font-weight: 700; color: var(--nui-text); font-size: 15px;">${prize.name}</div>
+                </div>
+                ${avatarHtml}
+            `;
+        }
+
+        function renderMiss() {
+            gameArea.innerHTML = `
+                <div style="font-size: 32px; margin-bottom: 8px;">🎈💨</div>
+                <div style="font-weight:800; font-size:22px; color:var(--nui-danger);">Miss!</div>
+                <div style="color:var(--nui-text-muted); margin-top: 12px; font-size: 14px;">Sorry, you didn't win anything this time. :(</div>
+            `;
+        }
+
+        function renderError(msg) {
+            gameArea.innerHTML = `
+                <div style="font-size: 32px; margin-bottom: 8px;">🛑</div>
+                <div style="font-weight:700; font-size:16px; color:var(--nui-text); margin-top: 8px;">${msg}</div>
+            `;
+        }
+
+        // Initialize the flow
+        renderInitial();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildUI);
+    } else {
+        buildUI();
+    }
+
+})();
+// ==============================================================================
+// MODULE 25: LUNAR TEMPLE (SPA UI & AUTO-SOLVER)
+// ==============================================================================
+// Activates on: /shenkuu/lunar/*
+// Rebuilds the daily puzzle page as a mobile SPA, including the results view.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/shenkuu\/lunar/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('lunartemple')) return;
+
+    // ── Extraction ────────────────────────────────────────────────────────
+    function extractPageData() {
+        // Highly resilient fallback: if Neopets drops the standard content wrapper on the result page, salvage the body
+        const content = document.querySelector('td.content') || document.querySelector('.content') || document.querySelector('#content') || document.body;
+        if (!content) return null;
+
+        const errorNode = document.querySelector('.errorMessage');
+        const isResults = location.pathname.includes('results.phtml') || !!errorNode;
+        const isPuzzle = location.search.includes('show=puzzle');
+        const isStart = !isPuzzle && !isResults;
+
+        // 1. Calculate the Answer via SWF URL
+        let html = document.documentElement.innerHTML;
+        let swfMatch = html.match(/new SWFObject\('([^']+)'/);
+        let swfUrl = swfMatch ? swfMatch[1] : null;
+
+        let answer = null;
+        if (swfUrl) {
+            let angleMatch = swfUrl.match(/angleNeopia=([\d.]+)&(?:amp;)?angleKreludor=([\d.]+)/);
+            if (angleMatch) {
+                let nAngle = parseFloat(angleMatch[1]);
+                let kAngle = parseFloat(angleMatch[2]);
+
+                // Neopets' native lunar temple math formula
+                let diff = (kAngle - nAngle) / 22.5;
+                if (diff < 0) diff += 16;
+                answer = Math.round(diff) % 16;
+            }
+        }
+
+        return { content, isStart, isPuzzle, isResults, errorNode, swfUrl, answer };
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────
+    function buildUI() {
+        const data = extractPageData();
+        if (!data) return;
+
+        // Boot NeoUI shell
+        const profile = NeoUI.scrapeLegacyProfile();
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset nui-spa-active';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // Page wrapper
+        const pageWrapper = document.createElement('div');
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box; overflow-x: hidden;';
+        document.body.appendChild(pageWrapper);
+
+        // Main Card
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'width:100%;max-width:700px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;display:flex;flex-direction:column;box-shadow: 0 4px 12px var(--nui-shadow);';
+        pageWrapper.appendChild(card);
+
+        // Header
+        const cardHeader = document.createElement('div');
+        cardHeader.style.cssText = 'padding:var(--nui-space-4);border-bottom:1px solid var(--nui-border);display:flex;align-items:center;gap:12px;background:var(--nui-surface-2);';
+        cardHeader.innerHTML = '<a href="/shenkuu/index.phtml" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--nui-surface-3);color:var(--nui-text);text-decoration:none;font-size:18px;font-weight:900;flex-shrink:0;line-height:1;transition:background 0.2s;">‹</a>' +
+            '<div><div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">Lunar Temple</div>' +
+            '<div style="font-size:12px;color:var(--nui-text-muted);margin-top:1px;">Shenkuu Daily</div></div>';
+
+        const backBtn = cardHeader.querySelector('a');
+        backBtn.onmouseenter = () => backBtn.style.background = 'var(--nui-border)';
+        backBtn.onmouseleave = () => backBtn.style.background = 'var(--nui-surface-3)';
+        card.appendChild(cardHeader);
+
+        // Content Area
+        const contentArea = document.createElement('div');
+        contentArea.style.cssText = 'padding: var(--nui-space-5) var(--nui-space-4); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;';
+        card.appendChild(contentArea);
+
+        // ── ROUTING & STATES ─────────────────────────────────────────────────
+
+        // 1. Error State
+        if (data.errorNode) {
+            contentArea.innerHTML = `
+                <div style="font-size: 32px; margin-bottom: 8px;">🛑</div>
+                <div style="font-weight:800; font-size:22px; color:var(--nui-danger); margin-bottom: 12px;">Oops!</div>
+                <div style="color:var(--nui-text); font-size: 15px;">${data.errorNode.innerText.replace('Error: ', '')}</div>
+                <a href="/shenkuu/lunar/?show=puzzle" style="margin-top: 24px; padding: 10px 24px; border-radius: var(--nui-radius-pill); background: var(--nui-accent); color: var(--nui-accent-ink); font-weight: 700; text-decoration: none;">Try Again</a>
+            `;
+            return;
+        }
+
+        // 2. Result Page (Success)
+        if (data.isResults) {
+            contentArea.innerHTML = `<div style="font-size: 32px; margin-bottom: 8px;">🌙</div>
+            <div style="font-weight:800; font-size:22px; color:var(--nui-text); margin-bottom: 16px;">The Stars Align...</div>`;
+
+            let clone = data.content.cloneNode(true);
+
+            // Strip out scripts, buttons, and redundant headers
+            clone.querySelectorAll('script, style, iframe, input, form').forEach(el => el.remove());
+            clone.querySelectorAll('b').forEach(b => { if(b.textContent.includes('Lunar Temple')) b.remove(); });
+
+            // Extract item images
+            let itemImages = Array.from(clone.querySelectorAll('img')).filter(img => img.src.includes('/items/') || img.src.includes('/phases/'));
+
+            // Clean up the text string for the display card
+            let resultText = clone.textContent.replace(/\s+/g, ' ').trim();
+
+            // Build the Result Card
+            let resultCard = document.createElement('div');
+            resultCard.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 16px; background: var(--nui-surface-2); padding: 24px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); max-width: 500px; width: 100%; box-shadow: 0 4px 12px var(--nui-shadow);';
+
+            if (itemImages.length > 0) {
+                let imgContainer = document.createElement('div');
+                imgContainer.style.cssText = 'display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px;';
+                itemImages.forEach(img => {
+                    let wrappedImg = document.createElement('img');
+                    wrappedImg.src = img.src;
+                    wrappedImg.style.cssText = 'width: 80px; height: 80px; border-radius: var(--nui-radius-md); border: 2px solid var(--nui-border); box-shadow: 0 2px 8px var(--nui-shadow); background: var(--nui-surface); object-fit: cover;';
+                    imgContainer.appendChild(wrappedImg);
+                });
+                resultCard.appendChild(imgContainer);
+            }
+
+            let textDiv = document.createElement('div');
+            textDiv.style.cssText = 'font-size: 15px; line-height: 1.6; font-weight: 500;';
+            textDiv.innerHTML = resultText;
+
+            // Colorize the text based on the result
+            if (resultText.toLowerCase().includes('right')) {
+                textDiv.style.color = 'var(--nui-success)';
+            } else if (resultText.toLowerCase().includes('wrong')) {
+                textDiv.style.color = 'var(--nui-danger)';
+            } else {
+                textDiv.style.color = 'var(--nui-text)';
+            }
+
+            resultCard.appendChild(textDiv);
+            contentArea.appendChild(resultCard);
+
+            let returnBtn = document.createElement('a');
+            returnBtn.href = '/shenkuu/lunar/';
+            returnBtn.style.cssText = 'margin-top: 24px; padding: 12px 28px; border-radius: var(--nui-radius-pill); background: var(--nui-accent); color: var(--nui-accent-ink); font-weight: 700; text-decoration: none; box-shadow: 0 2px 8px var(--nui-shadow); transition: filter 0.2s;';
+            returnBtn.textContent = 'Play Again Tomorrow';
+            returnBtn.onmouseenter = () => returnBtn.style.filter = 'brightness(1.1)';
+            returnBtn.onmouseleave = () => returnBtn.style.filter = 'brightness(1)';
+            contentArea.appendChild(returnBtn);
+
+            return;
+        }
+
+        // 3. Start & Puzzle Pages
+
+        // Construct a fresh Flash embed so Ruffle binds to it perfectly
+        if (data.swfUrl) {
+            contentArea.innerHTML += `
+                <div style="width: 100%; max-width: 550px; margin: 0 auto 24px; border-radius: var(--nui-radius-md); box-shadow: 0 4px 12px var(--nui-shadow); overflow: hidden; background: #fff; aspect-ratio: 11 / 10;">
+                    <embed src="${data.swfUrl}" width="100%" height="100%" type="application/x-shockwave-flash" wmode="transparent" allowscriptaccess="always">
+                </div>
+            `;
+        }
+
+        const dialogue = document.createElement('div');
+        dialogue.style.cssText = 'color: var(--nui-text-muted); font-size: 15px; line-height: 1.6; max-width: 90%; margin-bottom: 24px;';
+
+        if (data.isStart) {
+            dialogue.innerHTML = `<strong>The wise Gnorbu says:</strong><br>"I carefully observe the movement of the globes and track them here on my chart. Do you think you have what it takes to accurately track the movement of Kreludor?"`;
+            contentArea.appendChild(dialogue);
+
+            const btn = document.createElement('a');
+            btn.href = './?show=puzzle';
+            btn.style.cssText = 'display: inline-block; padding: 12px 32px; border-radius: var(--nui-radius-pill); background: var(--nui-accent); color: var(--nui-accent-ink); font-weight: 800; font-size: 15px; text-decoration: none; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px var(--nui-shadow); transition: transform 0.2s, filter 0.2s;';
+            btn.textContent = 'Take the Challenge';
+            btn.onmouseenter = () => { btn.style.transform = 'translateY(-2px)'; btn.style.filter = 'brightness(1.1)'; };
+            btn.onmouseleave = () => { btn.style.transform = 'translateY(0)'; btn.style.filter = 'brightness(1)'; };
+            contentArea.appendChild(btn);
+
+        } else if (data.isPuzzle) {
+            dialogue.innerHTML = `<strong>The wise Gnorbu says:</strong><br>"I have chosen a random position for Neopia and Kreludor on my chart above. Based on these positions, which phase of Kreludor would most likely be seen from Neopia?"`;
+            contentArea.appendChild(dialogue);
+
+            // Solver HUD
+            if (data.answer !== null) {
+                const badge = document.createElement('div');
+                badge.style.cssText = 'margin-bottom: 20px; padding: 10px 16px; background: color-mix(in srgb, var(--nui-success) 15%, transparent); border: 1px solid var(--nui-success); border-radius: var(--nui-radius-pill); color: var(--nui-success); font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 8px color-mix(in srgb, var(--nui-success) 20%, transparent);';
+                badge.innerHTML = `<span>✨</span> NeoUI Solver Active: The correct phase is highlighted below.`;
+                contentArea.appendChild(badge);
+            }
+
+            // Bulletproof HTML styling block
+            const style = document.createElement('style');
+            style.textContent = `.nui-lunar-label:not(.correct):hover { border-color: var(--nui-accent) !important; }`;
+            document.head.appendChild(style);
+
+            // Native HTML form submission replacing the JS click handler
+            let gridHtml = '';
+            for (let i = 0; i < 16; i++) {
+                let isCorrect = (i === data.answer);
+                let borderCol = isCorrect ? 'var(--nui-success)' : 'var(--nui-border)';
+                let bgCol = isCorrect ? 'color-mix(in srgb, var(--nui-success) 10%, var(--nui-surface-2))' : 'var(--nui-surface-2)';
+                let correctLabel = isCorrect ? `<div style="font-size: 9px; font-weight: 800; color: var(--nui-success); margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Correct</div>` : '';
+                let className = isCorrect ? 'nui-lunar-label correct' : 'nui-lunar-label';
+
+                gridHtml += `
+                    <label class="${className}" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; background:${bgCol}; border:2px solid ${borderCol}; border-radius:var(--nui-radius-md); padding:8px 4px; transition:all 0.2s;">
+                        <input type="radio" name="phase_choice" value="${i}" style="display:none;" onchange="this.form.submit()">
+                        <img src="https://images.neopets.com/shenkuu/lunar/phases/${i}.gif" style="width:40px; height:40px; border-radius:50%; display:block;">
+                        ${correctLabel}
+                    </label>
+                `;
+            }
+
+            contentArea.innerHTML += `
+                <form method="POST" action="/shenkuu/lunar/results.phtml" style="width:100%;">
+                    <input type="hidden" name="submitted" value="false">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(65px, 1fr)); gap:10px; max-width:600px; margin:0 auto;">
+                        ${gridHtml}
+                    </div>
+                </form>
+            `;
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildUI);
+    } else {
+        buildUI();
+    }
+
+})();
+// ==============================================================================
+// MODULE 26: MYSTERIOUS NEGG CAVE (SPA UI)
+// ==============================================================================
+// Activates on: /shenkuu/neggcave/*
+// Rebuilds the daily negg puzzle page as a mobile-friendly SPA card.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/shenkuu\/neggcave/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('neggcave')) return;
+
+    // ── Extraction ────────────────────────────────────────────────────────
+    function extractPageData() {
+        const bg = document.getElementById('mnc_bg');
+        const popups = document.querySelectorAll('[id^="mnc_popup_generic_"]');
+        const intercept = document.getElementById('mnc_intercept');
+
+        // 1. Extract the critical inline styles for the puzzle sprites!
+        const styleTags = [];
+        document.querySelectorAll('style').forEach(s => {
+            if (s.textContent.includes('mnc_') || s.textContent.includes('NeggCave')) {
+                styleTags.push(s.cloneNode(true));
+            }
+        });
+
+        // 2. Extract fallback content for when the page reloads after claiming a prize
+        let fallbackContent = null;
+        if (!bg) {
+            const contentTd = document.querySelector('td.content') || document.querySelector('.content');
+            if (contentTd) {
+                fallbackContent = contentTd.cloneNode(true);
+            }
+        }
+
+        // Detach live nodes to preserve their internal JS event listeners
+        if (bg) bg.remove();
+        popups.forEach(p => p.remove());
+        if (intercept) intercept.remove();
+
+        return { bg, popups, intercept, styleTags, fallbackContent };
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────
+    function buildUI() {
+        const data = extractPageData();
+        if (!data) return;
+
+        // Boot NeoUI shell
+        const profile = NeoUI.scrapeLegacyProfile();
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset nui-spa-active';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // Page wrapper
+        const pageWrapper = document.createElement('div');
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box; overflow-x: hidden;';
+        document.body.appendChild(pageWrapper);
+
+        // Main Card
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'width:100%;max-width:850px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;display:flex;flex-direction:column;box-shadow: 0 4px 12px var(--nui-shadow);';
+        pageWrapper.appendChild(card);
+
+        // Header
+        const cardHeader = document.createElement('div');
+        cardHeader.style.cssText = 'padding:var(--nui-space-4);border-bottom:1px solid var(--nui-border);display:flex;align-items:center;gap:12px;background:var(--nui-surface-2);';
+        cardHeader.innerHTML = '<a href="/shenkuu/index.phtml" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--nui-surface-3);color:var(--nui-text);text-decoration:none;font-size:18px;font-weight:900;flex-shrink:0;line-height:1;transition:background 0.2s;">‹</a>' +
+            '<div><div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">Mysterious Negg Cave</div>' +
+            '<div style="font-size:12px;color:var(--nui-text-muted);margin-top:1px;">Shenkuu Daily</div></div>';
+
+        const backBtn = cardHeader.querySelector('a');
+        backBtn.onmouseenter = () => backBtn.style.background = 'var(--nui-border)';
+        backBtn.onmouseleave = () => backBtn.style.background = 'var(--nui-surface-3)';
+        card.appendChild(cardHeader);
+
+        // Content Area
+        const contentArea = document.createElement('div');
+        contentArea.style.cssText = 'padding: var(--nui-space-5) var(--nui-space-4); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;';
+        card.appendChild(contentArea);
+
+        // ── ROUTING ───────────────────────────────────────────────────────────
+
+        // State: Page reloaded after claiming prize OR already completed today
+        if (!data.bg && data.fallbackContent) {
+            contentArea.innerHTML = `
+                <div style="font-size: 32px; margin-bottom: 8px;">🌟</div>
+                <div style="font-weight:800; font-size:22px; color:var(--nui-text); margin-bottom: 16px;">Cave Sealed</div>
+            `;
+
+            let clone = data.fallbackContent.cloneNode(true);
+
+            // Strip out scripts, buttons, bumpers, and redundant headers
+            clone.querySelectorAll('script, style, iframe, input, form, .bumper, #dimBackground').forEach(el => el.remove());
+            clone.querySelectorAll('b').forEach(b => { if(b.textContent.includes('Mysterious Negg Cave')) b.remove(); });
+
+            // Extract item images to display securely
+            let itemImages = Array.from(clone.querySelectorAll('img')).filter(img => img.src.includes('/items/'));
+            clone.querySelectorAll('img').forEach(img => img.remove()); // Remove from raw text dump
+
+            // Clean up the text string for the display card
+            let resultHtml = clone.innerHTML.replace(/<br\s*[\/]?>/gi, ' ').trim();
+
+            // Build the Result Card
+            let resultCard = document.createElement('div');
+            resultCard.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 16px; background: var(--nui-surface-2); padding: 24px; border-radius: var(--nui-radius-md); border: 1px solid var(--nui-border); max-width: 500px; width: 100%; box-shadow: 0 4px 12px var(--nui-shadow);';
+
+            if (itemImages.length > 0) {
+                let imgContainer = document.createElement('div');
+                imgContainer.style.cssText = 'display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px;';
+                itemImages.forEach(img => {
+                    let wrappedImg = document.createElement('img');
+                    wrappedImg.src = img.src;
+                    wrappedImg.style.cssText = 'width: 80px; height: 80px; border-radius: var(--nui-radius-md); border: 2px solid var(--nui-border); box-shadow: 0 2px 8px var(--nui-shadow); background: var(--nui-surface); object-fit: cover;';
+                    imgContainer.appendChild(wrappedImg);
+                });
+                resultCard.appendChild(imgContainer);
+            }
+
+            let textDiv = document.createElement('div');
+            textDiv.style.cssText = 'font-size: 15px; line-height: 1.6; font-weight: 500; color: var(--nui-text); text-align: center;';
+            textDiv.innerHTML = resultHtml;
+
+            resultCard.appendChild(textDiv);
+            contentArea.appendChild(resultCard);
+
+            let returnBtn = document.createElement('a');
+            returnBtn.href = '/shenkuu/index.phtml';
+            returnBtn.style.cssText = 'margin-top: 24px; padding: 12px 28px; border-radius: var(--nui-radius-pill); background: var(--nui-accent); color: var(--nui-accent-ink); font-weight: 700; text-decoration: none; box-shadow: 0 2px 8px var(--nui-shadow); transition: filter 0.2s;';
+            returnBtn.textContent = 'Return to Shenkuu';
+            returnBtn.onmouseenter = () => returnBtn.style.filter = 'brightness(1.1)';
+            returnBtn.onmouseleave = () => returnBtn.style.filter = 'brightness(1)';
+            contentArea.appendChild(returnBtn);
+
+            return;
+        }
+
+        // State: Active Puzzle
+
+        // Restore Styles needed for the sprites
+        data.styleTags.forEach(s => document.head.appendChild(s));
+
+        // Responsive Scaling Wrapper
+        const gameWrap = document.createElement('div');
+        // Force the wrapper to maintain the original 800x600 ratio while scaling to fit mobile
+        gameWrap.style.cssText = 'width: 100%; max-width: 800px; aspect-ratio: 800 / 600; position: relative; overflow: hidden; border-radius: var(--nui-radius-md); box-shadow: 0 4px 12px var(--nui-shadow); background: #000;';
+
+        // Strip the native centering logic off the original background container
+        // so it anchors to the top left of our new wrapper
+        data.bg.style.position = 'absolute';
+        data.bg.style.top = '0';
+        data.bg.style.left = '0';
+        data.bg.style.margin = '0';
+        data.bg.style.transformOrigin = 'top left';
+        gameWrap.appendChild(data.bg);
+        contentArea.appendChild(gameWrap);
+
+        // Dynamically scale the game board based on the viewport width
+        const ro = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                const scale = entry.contentRect.width / 800;
+                data.bg.style.transform = `scale(${scale})`;
+            }
+        });
+        ro.observe(gameWrap);
+
+        // Reattach popups and intercept layer
+        if (data.intercept) document.body.appendChild(data.intercept);
+        data.popups.forEach(p => document.body.appendChild(p));
+
+        // Fix native Popup styling so it fits beautifully on mobile
+        const popupStyle = document.createElement('style');
+        popupStyle.textContent = `
+            div[id^="mnc_popup_generic_"] {
+                top: 50% !important; left: 50% !important; margin: 0 !important;
+                transform: translate(-50%, -50%) !important;
+                width: 90vw !important; max-width: 500px !important; height: auto !important;
+            }
+            .mnc_popup_generic.middle { width: 100% !important; }
+            .mnc_popup_generic.t, .mnc_popup_generic.b { width: calc(100% - 30px) !important; }
+            .mnc_popup_generic.bg { width: calc(100% - 10px) !important; height: calc(100% - 10px) !important; }
+            .mnc_popup_generic.contents { color: #000 !important; padding: 20px !important; font-family: var(--nui-font-body) !important; }
+            .mnc_popup_generic.close { top: -10px !important; right: -10px !important; }
+            #mncPrizeName { font-family: var(--nui-font-display); font-size: 16px; margin-top: 10px; }
+        `;
+        document.head.appendChild(popupStyle);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildUI);
+    } else {
+        buildUI();
+    }
+
+})();
+// ==============================================================================
+// MODULE 27: SCRATCHCARD KIOSKS (SPA UI)
+// ==============================================================================
+// Activates on: the Desert, Haunted Fairgrounds, and Ice Caves scratchcard
+// kiosks. Rebuilds all three as one mobile-friendly SPA card.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    // Verify we are in one of the three scratchcard locations
+    const path = location.pathname;
+    const isScratchArea = path.includes('/halloween/') || path.includes('/winter/') || path.includes('/desert/');
+    const isScratchPage = path.includes('scratch') || path.includes('kiosk');
+
+    if (!isScratchArea || !isScratchPage) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('scratchcards')) return;
+
+    function buildUI() {
+        const contentTd = document.querySelector('td.content') || document.querySelector('.content');
+        if (!contentTd) return;
+
+        const clone = contentTd.cloneNode(true);
+
+        // 1. Clean up the DOM
+        // We MUST preserve <script> tags here so the scratching mechanics still function!
+        clone.querySelectorAll('iframe, .bumper, #dimBackground').forEach(e => e.remove());
+
+        // Remove the multi-account warning to declutter the mobile view
+        clone.querySelectorAll('p, div, font, b').forEach(el => {
+            if (el.textContent.includes('IMPORTANT:') && el.textContent.includes('multiple accounts')) {
+                const parent = el.closest('p') || el;
+                parent.remove();
+            }
+        });
+
+        // 2. Safely identify the Mascot Image vs Scratchcard Sprites
+        clone.querySelectorAll('img').forEach(img => {
+            // The scratchcard is always a table of sprites. If an image is NOT in a table, it's the mascot!
+            if (!img.closest('table')) {
+                img.classList.add('nui-mascot-img');
+            }
+        });
+
+        // Remove redundant Native "Back to X" forms (we use the topbar back arrow)
+        clone.querySelectorAll('form').forEach(f => {
+            const btn = f.querySelector('input[type="submit"]');
+            if (btn && btn.value.toLowerCase().includes('back to')) {
+                const center = f.closest('center');
+                if (center) center.remove();
+                else f.remove();
+            } else {
+                // It's a functional form (Buy or Scratch) - secure it!
+                f.removeAttribute('onsubmit'); // Remove Neopets' broken inline script
+                f.addEventListener('submit', function(e) {
+                    const sBtn = this.querySelector('input[type="submit"]');
+                    if (sBtn) {
+                        if (sBtn.disabled) { e.preventDefault(); return; }
+                        sBtn.disabled = true;
+                        sBtn.value = 'Processing...';
+                        sBtn.style.filter = 'brightness(0.8)';
+                        sBtn.style.cursor = 'not-allowed';
+                    }
+                });
+            }
+        });
+
+        // Remove redundant headers to let NeoUI handle titling
+        Array.from(clone.querySelectorAll('b')).forEach(b => {
+            const text = b.textContent;
+            if (text.includes('Scratchcards') || text.includes('Ssscratching off') || text.includes('Scratching off')) {
+                b.remove();
+            }
+        });
+
+        // 3. Determine Kiosk Theming
+        let kioskName = "Scratchcard Kiosk";
+        let region = "Neopia";
+        let themeColor = "var(--nui-accent)";
+        let backLink = "/";
+
+        if (path.includes('halloween')) {
+            kioskName = "Deserted Fairground Scratchcards";
+            region = "Haunted Woods";
+            themeColor = "var(--nui-danger)"; // Spooky Red
+            backLink = "/halloween/index_fair.phtml";
+        } else if (path.includes('winter')) {
+            kioskName = "Ice Caves Scratchcards";
+            region = "Terror Mountain";
+            themeColor = "var(--nui-primary)"; // Icy Blue
+            backLink = "/winter/index.phtml";
+        } else if (path.includes('desert')) {
+            kioskName = "Lost Desert Scratchcards";
+            region = "Lost Desert";
+            themeColor = "var(--nui-warning)"; // Sandy Yellow
+            backLink = "/desert/index.phtml";
+        }
+
+        // 4. Boot NeoUI shell
+        const profile = NeoUI.scrapeLegacyProfile();
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset nui-spa-active';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        // 5. Construct Layout
+        const pageWrapper = document.createElement('div');
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box; overflow-x: hidden;';
+        document.body.appendChild(pageWrapper);
+
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'width:100%;max-width:600px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;display:flex;flex-direction:column;box-shadow: 0 4px 12px var(--nui-shadow);';
+        pageWrapper.appendChild(card);
+
+        const cardHeader = document.createElement('div');
+        cardHeader.style.cssText = 'padding:var(--nui-space-4);border-bottom:1px solid var(--nui-border);display:flex;align-items:center;gap:12px;background:var(--nui-surface-2);';
+        cardHeader.innerHTML = `<a href="${backLink}" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--nui-surface-3);color:var(--nui-text);text-decoration:none;font-size:18px;font-weight:900;flex-shrink:0;line-height:1;transition:background 0.2s;">‹</a>` +
+            `<div><div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">${kioskName}</div>` +
+            `<div style="font-size:12px;color:var(--nui-text-muted);margin-top:1px;">${region} Daily</div></div>`;
+
+        const backA = cardHeader.querySelector('a');
+        backA.onmouseenter = () => backA.style.background = 'var(--nui-border)';
+        backA.onmouseleave = () => backA.style.background = 'var(--nui-surface-3)';
+        card.appendChild(cardHeader);
+
+        // CSS Sandbox
+        const style = document.createElement('style');
+        style.textContent = `
+            .nui-sc-wrap {
+                padding: var(--nui-space-5) var(--nui-space-4);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+                color: var(--nui-text);
+                font-size: 15px;
+                line-height: 1.6;
+            }
+
+            /* Mascot Styling ONLY */
+            .nui-sc-wrap img.nui-mascot-img {
+                border-radius: var(--nui-radius-lg);
+                border: 2px solid var(--nui-border);
+                box-shadow: 0 4px 12px var(--nui-shadow);
+                background: var(--nui-surface-2);
+                margin: var(--nui-space-3) 0;
+                max-width: 100%;
+                height: auto;
+                object-fit: contain;
+            }
+
+            /* Protect the Scratchcard Grid */
+            .nui-sc-wrap table {
+                border-collapse: collapse !important;
+                border-spacing: 0 !important;
+                margin: var(--nui-space-4) auto !important;
+            }
+            .nui-sc-wrap table[background] {
+                border-radius: var(--nui-radius-md);
+                box-shadow: 0 4px 12px var(--nui-shadow);
+                background-repeat: no-repeat !important;
+                background-position: center !important;
+                background-size: cover !important;
+                overflow: hidden;
+            }
+            .nui-sc-wrap table td {
+                padding: 0 !important;
+                border: none !important;
+                line-height: 0 !important;
+            }
+            .nui-sc-wrap table img {
+                display: block !important;
+                border: none !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+                background: transparent !important;
+            }
+
+            .nui-sc-wrap center {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                width: 100%;
+            }
+            .nui-sc-wrap center b {
+                font-style: italic;
+                color: var(--nui-text-muted);
+                font-weight: 500;
+                font-size: 13px;
+            }
+            .nui-sc-wrap form {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                width: 100%;
+                max-width: 320px;
+                background: var(--nui-surface-2);
+                padding: var(--nui-space-4);
+                border-radius: var(--nui-radius-md);
+                border: 1px solid var(--nui-border);
+                box-shadow: inset 0 2px 8px var(--nui-shadow);
+                margin: var(--nui-space-4) auto;
+                box-sizing: border-box;
+            }
+            .nui-sc-wrap select {
+                padding: 12px;
+                border-radius: var(--nui-radius-sm);
+                border: 1px solid var(--nui-border);
+                background: var(--nui-surface);
+                color: var(--nui-text);
+                font-family: var(--nui-font-body);
+                font-size: 15px;
+                outline: none;
+                width: 100%;
+                box-sizing: border-box;
+                cursor: pointer;
+            }
+            .nui-sc-wrap input[type="submit"] {
+                padding: 14px 24px;
+                border: none;
+                border-radius: var(--nui-radius-pill);
+                background: ${themeColor};
+                color: #fff;
+                font-weight: 800;
+                font-size: 15px;
+                cursor: pointer;
+                transition: filter 0.2s, transform 0.1s;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                width: 100%;
+                box-sizing: border-box;
+                box-shadow: 0 4px 12px var(--nui-shadow);
+            }
+            .nui-sc-wrap input[type="submit"]:hover { filter: brightness(1.1); }
+            .nui-sc-wrap input[type="submit"]:active { transform: scale(0.98); }
+            .nui-sc-wrap p { margin-bottom: 12px; }
+        `;
+        document.head.appendChild(style);
+
+        const contentArea = document.createElement('div');
+        contentArea.className = 'nui-sc-wrap';
+        contentArea.appendChild(clone);
+        card.appendChild(contentArea);
+
+        // Post-processing Text Formatting
+        contentArea.querySelectorAll('b').forEach(b => {
+            if (b.textContent.includes('Oops!')) {
+                b.style.cssText = 'color: var(--nui-danger); font-size: 20px; display: block; margin: 16px 0 4px 0; font-weight: 900;';
+            }
+            if (b.textContent.includes('Here is your') || b.textContent.includes('Congratulations')) {
+                b.style.cssText = 'color: var(--nui-success); font-size: 18px; display: block; margin-bottom: 8px; font-weight: 800;';
+            }
+        });
+
+        // Cleanup empty tags
+        contentArea.querySelectorAll('p, center').forEach(el => {
+            if (!el.textContent.trim() && el.children.length === 0) el.remove();
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildUI);
+    } else {
+        buildUI();
+    }
+
+})();
+// ==============================================================================
+// MODULE 28: FAERIE QUESTS (FULL SPA — SUPERSEDES MODULE 14)
+// ==============================================================================
+// Activates on: /quests.phtml
+// Full page rebuild (SDB/Trading Post/Auction lookups, copy-name button, quest
+// state persisted across reloads). Uses the 'faerie-quests' toggle key so it
+// takes over cleanly from the older, now-retired Module 14 without orphaning
+// anyone's existing on/off preference.
+// ==============================================================================
+
+(function () {
+    'use strict';
+
+    if (!/\/quests\.phtml/.test(location.pathname)) return;
+    if (!window.NeoUI || !window.NeoUI.isModuleEnabled('faerie-quests')) return;
+
+    // ── Extraction ────────────────────────────────────────────────────────
+    function extractPageData() {
+        const content = document.querySelector('td.content') || document.querySelector('.content');
+        if (!content) return null;
+
+        // Hidden Forms & Native Scripts (Must preserve in body to keep functionality)
+        const fq2Form = document.getElementById('fq2_form');
+        const fqFade = document.getElementById('fqFade');
+        const popups = document.getElementById('fq2') ? document.getElementById('fq2').querySelectorAll('.popups') : [];
+
+        // Fortune Cookie Element
+        const cookieHeader = document.getElementById('fc-fq-header');
+
+        // Quest Details
+        const topDesc = content.querySelector('.description_top');
+        const mainIcon = content.querySelector('#main_icon img');
+        const botDesc = content.querySelector('.description_bottom');
+
+        // Re-map buttons
+        const questButtons = document.getElementById('quest_buttons');
+
+        // Fallback (for when you have no active quest, completed a quest, etc.)
+        let fallback = null;
+        if (!topDesc && !mainIcon) {
+            fallback = content.cloneNode(true);
+            fallback.querySelectorAll('script, style, iframe, #fc-fq-header').forEach(e => e.remove());
+        }
+
+        // Detach live nodes to safely nuke the DOM
+        if (cookieHeader) cookieHeader.remove();
+        if (fq2Form) fq2Form.remove();
+        if (fqFade) fqFade.remove();
+        popups.forEach(p => p.remove());
+
+        return {
+            fq2Form, fqFade, popups, cookieHeader, topDesc, mainIcon, botDesc, questButtons, fallback, content
+        };
+    }
+
+    // ── Render ─────────────────────────────────────────────────────────────
+    function buildUI() {
+        const data = extractPageData();
+        if (!data) return;
+
+        // Boot NeoUI shell
+        const profile = NeoUI.scrapeLegacyProfile();
+        document.body.innerHTML = '';
+        document.body.className = 'nui-reset nui-spa-active';
+        document.documentElement.style.background = 'var(--nui-bg)';
+        document.body.style.background = 'var(--nui-bg)';
+
+        if (typeof NeoUI.resetDrawer === 'function') NeoUI.resetDrawer();
+        NeoUI.init();
+        NeoUI.setProfileInfo(profile);
+        NeoUI.buildTopbar({ stats: { np: profile.np, nc: profile.nc }, hasNotification: profile.hasNotification });
+
+        const pageWrapper = document.createElement('div');
+        pageWrapper.style.cssText = 'min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:calc(var(--nui-topbar-h) + var(--nui-space-5)) var(--nui-space-4) var(--nui-space-5);box-sizing:border-box; overflow-x: hidden;';
+        document.body.appendChild(pageWrapper);
+
+        // Reattach required functional elements to the body
+        if (data.fq2Form) document.body.appendChild(data.fq2Form);
+        if (data.fqFade) document.body.appendChild(data.fqFade);
+        if (data.popups) data.popups.forEach(p => document.body.appendChild(p));
+
+        // Format Fortune Cookie Banner (if present)
+        if (data.cookieHeader) {
+            const cookieCard = document.createElement('div');
+            cookieCard.className = 'nui-surface';
+            cookieCard.style.cssText = 'width:100%;max-width:600px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;display:flex;flex-direction:column;box-shadow: 0 4px 12px var(--nui-shadow); margin-bottom: var(--nui-space-4); align-items: center; background: var(--nui-surface-2);';
+            
+            // Override Neopets' rigid absolute positioning so it scales for mobile
+            const cStyle = document.createElement('style');
+            cStyle.textContent = `
+                #fc-fq-header { transform: scale(0.7); transform-origin: top center; margin: -10px 0 -25px 0 !important; }
+                @media (min-width: 600px) { #fc-fq-header { transform: scale(0.9); margin-bottom: -10px !important; } }
+            `;
+            document.head.appendChild(cStyle);
+            cookieCard.appendChild(data.cookieHeader);
+            pageWrapper.appendChild(cookieCard);
+        }
+
+        // Main Card
+        const card = document.createElement('div');
+        card.className = 'nui-surface';
+        card.style.cssText = 'width:100%;max-width:600px;border-radius:var(--nui-radius-lg);border:1px solid var(--nui-border);overflow:hidden;display:flex;flex-direction:column;box-shadow: 0 4px 12px var(--nui-shadow);';
+        pageWrapper.appendChild(card);
+
+        // Header
+        const cardHeader = document.createElement('div');
+        cardHeader.style.cssText = 'padding:var(--nui-space-4);border-bottom:1px solid var(--nui-border);display:flex;align-items:center;gap:12px;background:var(--nui-surface-2);';
+        cardHeader.innerHTML = '<a href="/faerieland/index.phtml" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--nui-surface-3);color:var(--nui-text);text-decoration:none;font-size:18px;font-weight:900;flex-shrink:0;line-height:1;transition:background 0.2s;">‹</a>' +
+            '<div><div style="font-family:var(--nui-font-display);font-size:20px;font-weight:800;color:var(--nui-text);">Faerie Quests</div>' +
+            '<div style="font-size:12px;color:var(--nui-text-muted);margin-top:1px;">Faerieland</div></div>';
+        
+        const backBtn = cardHeader.querySelector('a');
+        backBtn.onmouseenter = () => backBtn.style.background = 'var(--nui-border)';
+        backBtn.onmouseleave = () => backBtn.style.background = 'var(--nui-surface-3)';
+        card.appendChild(cardHeader);
+
+        // Content Area
+        const contentArea = document.createElement('div');
+        contentArea.style.cssText = 'padding: var(--nui-space-5) var(--nui-space-4); display: flex; flex-direction: column; align-items: center; text-align: center;';
+        card.appendChild(contentArea);
+
+        // Route: Inactive / Completed
+        if (data.fallback && !data.mainIcon) {
+            contentArea.innerHTML = `<div style="font-size:15px; line-height:1.6; color:var(--nui-text);">${data.fallback.innerHTML}</div>`;
+            // Clean up any stray elements
+            contentArea.querySelectorAll('b').forEach(b => { if(b.textContent.includes('Faerie Quests')) b.remove() });
+            contentArea.querySelectorAll('div[align="center"] form').forEach(f => f.remove());
+            return;
+        }
+
+        // ── ROUTE: ACTIVE QUEST ───────────────────────────────────────────────
+
+        // Faerie Image
+        if (data.mainIcon) {
+            data.mainIcon.style.cssText = 'width: 150px; height: 150px; object-fit: cover; border-radius: 50%; border: 4px solid var(--nui-border); box-shadow: 0 4px 12px var(--nui-shadow); margin-bottom: 20px; background: var(--nui-surface-2);';
+            contentArea.appendChild(data.mainIcon);
+        }
+
+        // Intro Text
+        if (data.topDesc) {
+            const p1 = document.createElement('div');
+            p1.style.cssText = 'font-size: 15px; color: var(--nui-text); font-weight: 600; margin-bottom: 12px; max-width: 90%;';
+            p1.innerHTML = data.topDesc.innerHTML;
+            contentArea.appendChild(p1);
+        }
+
+        // Dialogue & Requested Item
+        if (data.botDesc) {
+            // Extract item details
+            const botClone = data.botDesc.cloneNode(true);
+            const itemTable = botClone.querySelector('table.images');
+            
+            let itemHtml = '';
+            if (itemTable) {
+                const img = itemTable.querySelector('img');
+                const b = itemTable.querySelector('b');
+                if (img && b) {
+                    itemHtml = `
+                        <div style="background: var(--nui-surface-2); border: 1px solid var(--nui-border); border-radius: var(--nui-radius-lg); padding: 16px; margin: 20px auto; display: inline-flex; flex-direction: column; align-items: center; gap: 12px; box-shadow: inset 0 2px 8px var(--nui-shadow); min-width: 200px;">
+                            <img src="${img.src}" style="width: 80px; height: 80px; border-radius: var(--nui-radius-md); border: 2px solid var(--nui-border); box-shadow: 0 2px 8px var(--nui-shadow); background: var(--nui-surface);">
+                            <div style="font-weight: 800; font-size: 16px; color: var(--nui-text);">${b.textContent}</div>
+                        </div>
+                    `;
+                }
+                itemTable.remove();
+            }
+            
+            botClone.querySelectorAll('table, br, #quest_buttons').forEach(e => e.remove());
+            const dialogueText = botClone.innerHTML.trim();
+
+            if (dialogueText) {
+                const p2 = document.createElement('div');
+                p2.style.cssText = 'font-size: 14px; color: var(--nui-text-muted); font-style: italic; max-width: 90%; line-height: 1.6; margin-bottom: 16px;';
+                p2.innerHTML = `"${dialogueText}"`;
+                contentArea.appendChild(p2);
+            }
+
+            if (itemHtml) {
+                const itemWrap = document.createElement('div');
+                itemWrap.innerHTML = itemHtml;
+                contentArea.appendChild(itemWrap);
+            }
+        }
+
+        // Action Buttons
+        const btnWrap = document.createElement('div');
+        btnWrap.style.cssText = 'display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 300px; margin-top: 10px;';
+
+        const completeBtnRaw = data.questButtons ? data.questButtons.querySelector('#complete_faerie_quest') : null;
+        const abandonBtnRaw = data.questButtons ? data.questButtons.querySelector('#abandon_faerie_quest') : null;
+
+        // "Give Item" Button (Only rendered by Neopets if you have the item)
+        if (completeBtnRaw) {
+            const compBtn = document.createElement('button');
+            compBtn.id = 'complete_faerie_quest'; // Native ID hooks into the original jQuery script!
+            compBtn.textContent = 'Give Item';
+            compBtn.style.cssText = 'padding: 14px 24px; border: none; border-radius: var(--nui-radius-pill); background: var(--nui-success); color: #fff; font-weight: 800; font-size: 15px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 4px 12px var(--nui-shadow); transition: filter 0.2s, transform 0.1s;';
+            compBtn.onmouseenter = () => compBtn.style.filter = 'brightness(1.1)';
+            compBtn.onmouseleave = () => compBtn.style.filter = 'brightness(1)';
+            compBtn.onmousedown = () => compBtn.style.transform = 'scale(0.98)';
+            compBtn.onmouseup = () => compBtn.style.transform = 'scale(1)';
+            btnWrap.appendChild(compBtn);
+        }
+
+        // "Abandon Quest" Button
+        if (abandonBtnRaw) {
+            const abBtn = document.createElement('button');
+            abBtn.id = 'abandon_faerie_quest'; // Native ID hooks into the original jQuery script!
+            abBtn.textContent = 'Abandon Quest';
+            abBtn.style.cssText = 'padding: 14px 24px; border: 1px solid var(--nui-border); border-radius: var(--nui-radius-pill); background: var(--nui-surface-2); color: var(--nui-danger); font-weight: 800; font-size: 15px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: filter 0.2s, background 0.2s;';
+            abBtn.onmouseenter = () => abBtn.style.background = 'var(--nui-surface-3)';
+            abBtn.onmouseleave = () => abBtn.style.background = 'var(--nui-surface-2)';
+            btnWrap.appendChild(abBtn);
+        }
+
+        if (btnWrap.children.length > 0) {
+            contentArea.appendChild(btnWrap);
+        }
+
+        // --- NATIVE POPUP CSS OVERRIDES ---
+        // Converts Neopets' clunky image-based popup into a modern NeoUI modal
+        const popupStyle = document.createElement('style');
+        popupStyle.textContent = `
+            /* Abandon Modal Modernization */
+            #abandon_popup {
+                background: var(--nui-surface) !important;
+                border: 1px solid var(--nui-border) !important;
+                border-radius: var(--nui-radius-lg) !important;
+                box-shadow: 0 10px 40px var(--nui-shadow) !important;
+                width: 90vw !important; max-width: 400px !important;
+                height: auto !important; padding: var(--nui-space-5) !important;
+                top: 50% !important; left: 50% !important; margin: 0 !important;
+                transform: translate(-50%, -50%) !important;
+                box-sizing: border-box !important;
+            }
+            #abandon_popup .inner_wrapper { padding: 0 !important; color: var(--nui-text) !important; font-family: var(--nui-font-body) !important; font-size: 15px !important; line-height: 1.6 !important; }
+            #abandon_popup .close_button { display: none !important; }
+            
+            #abandon_popup table.buttons { margin-top: 20px !important; width: 100% !important; }
+            #abandon_popup table.buttons td { display: flex !important; flex-direction: column !important; gap: 12px !important; }
+            #abandon_popup .button { width: 100% !important; height: auto !important; padding: 12px !important; border-radius: var(--nui-radius-pill) !important; text-align: center !important; font-weight: 800 !important; text-transform: uppercase !important; background: none !important; box-sizing: border-box !important; }
+            #abandon_popup .button .text_image { display: none !important; }
+            
+            #abandon_popup .yes_button::after { content: "Yes, Abandon"; }
+            #abandon_popup .yes_button { background: var(--nui-danger) !important; color: #fff !important; transition: filter 0.2s; }
+            #abandon_popup .yes_button:hover { filter: brightness(1.1); background-position: 0 0 !important; }
+
+            #abandon_popup .no_button::after { content: "No, Keep It"; }
+            #abandon_popup .no_button { background: var(--nui-surface-3) !important; color: var(--nui-text) !important; border: 1px solid var(--nui-border) !important; transition: background 0.2s; }
+            #abandon_popup .no_button:hover { background: var(--nui-border) !important; background-position: 0 0 !important; }
+            
+            /* General Colorbox Fixes */
+            #colorbox, #cboxOverlay, #cboxWrapper { z-index: 10000 !important; }
+        `;
+        document.head.appendChild(popupStyle);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', buildUI);
+    } else {
+        buildUI();
+    }
+
 })();
